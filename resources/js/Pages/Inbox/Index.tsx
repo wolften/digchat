@@ -322,6 +322,8 @@ export default function InboxIndex({
     const [attachmentName, setAttachmentName] = useState<string | null>(null);
     const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState<string | null>(null);
     const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
+    const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+    const [closing, setClosing] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
     const [isRecording, setIsRecording] = useState(false);
@@ -783,8 +785,13 @@ export default function InboxIndex({
     }, [isRecording]);
 
     useEffect(() => {
-        if (!composer.data.body && composerTextareaRef.current) {
-            composerTextareaRef.current.style.height = '';
+        const el = composerTextareaRef.current;
+        if (!el) return;
+        if (!composer.data.body) {
+            el.style.height = '';
+        } else {
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
         }
     }, [composer.data.body]);
 
@@ -889,10 +896,21 @@ export default function InboxIndex({
             return;
         }
 
+        if (name === 'inbox.close') setClosing(true);
+
         router.post(
             route(name, selected.id),
             {},
-            { preserveScroll: true, preserveState: true },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => {
+                    if (name === 'inbox.close') {
+                        setClosing(false);
+                        setCloseConfirmOpen(false);
+                    }
+                },
+            },
         );
     };
 
@@ -1332,7 +1350,7 @@ export default function InboxIndex({
                                             {/* ── Divisor visual (só quando há botões de ação) ── */}
                                             {(canAssignSelected && selected.status !== 'open') ||
                                              (canTransferSelected && sectors.length > 0) ||
-                                             (canActSelected && selected.status !== 'closed') ? (
+                                             (canActSelected && selected.status !== 'closed' && selected.status !== 'surveying') ? (
                                                 <div className="h-5 w-px bg-ink/[0.12]" />
                                             ) : null}
 
@@ -1354,12 +1372,13 @@ export default function InboxIndex({
                                                     <ArrowRightLeft /> Transferir
                                                 </Button>
                                             )}
-                                            {canActSelected && selected.status !== 'closed' && (
+                                            {canActSelected && selected.status !== 'closed' && selected.status !== 'surveying' && (
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
                                                     className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-950/30"
-                                                    onClick={() => action('inbox.close')}
+                                                    onClick={() => setCloseConfirmOpen(true)}
+                                                    disabled={closing}
                                                 >
                                                     Encerrar
                                                 </Button>
@@ -2034,6 +2053,36 @@ export default function InboxIndex({
                             }
                         >
                             Transferir
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog: encerrar conversa */}
+            <Dialog open={closeConfirmOpen} onOpenChange={(open) => { if (!closing) setCloseConfirmOpen(open); }}>
+                <DialogContent className="gap-5 p-5 sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Encerrar conversa</DialogTitle>
+                        <DialogDescription>
+                            Tem certeza que deseja encerrar esta conversa?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:space-x-0">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCloseConfirmOpen(false)}
+                            disabled={closing}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            size="sm"
+                            className="bg-red-600 text-white hover:bg-red-700"
+                            onClick={() => action('inbox.close')}
+                            disabled={closing}
+                        >
+                            {closing ? 'Encerrando...' : 'Encerrar'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
