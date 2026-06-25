@@ -61,7 +61,7 @@ class ProcessTelegramMessage implements ShouldQueue
             ($msg['from']['first_name'] ?? '') . ' ' . ($msg['from']['last_name'] ?? '')
         ) ?: ($msg['from']['username'] ?? null);
 
-        $contact = $this->resolveContact($chatId, $profileName, $channel);
+        $contact = $this->resolveContact($chatId, $profileName, $channel, $telegram);
         $conversation = $this->resolveConversation($contact, $channel);
 
         [$type, $body] = $this->extractContent($msg);
@@ -130,7 +130,7 @@ class ProcessTelegramMessage implements ShouldQueue
             }
         }
 
-        $contact = $this->resolveContact($chatId, $profileName ?: null, $channel);
+        $contact = $this->resolveContact($chatId, $profileName ?: null, $channel, $telegram);
         $conversation = $this->resolveConversation($contact, $channel);
 
         $message = $conversation->messages()->create([
@@ -179,12 +179,19 @@ class ProcessTelegramMessage implements ShouldQueue
         }
     }
 
-    private function resolveContact(string $chatId, ?string $profileName, Channel $channel): Contact
+    private function resolveContact(string $chatId, ?string $profileName, Channel $channel, TelegramService $telegram): Contact
     {
         $contact = Contact::firstOrNew(['wa_id' => $chatId, 'channel_id' => $channel->id]);
 
         if ($profileName && ! $contact->profile_name) {
             $contact->profile_name = $profileName;
+        }
+
+        if (! data_get($contact->meta, 'avatar_url')) {
+            $photoUrl = $telegram->getProfilePhotoUrl($chatId);
+            if ($photoUrl) {
+                $contact->meta = array_merge($contact->meta ?? [], ['avatar_url' => $photoUrl]);
+            }
         }
 
         $contact->last_message_at = now();

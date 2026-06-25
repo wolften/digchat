@@ -182,6 +182,55 @@ class TelegramService implements MessagingChannel
         ];
     }
 
+    /**
+     * Busca a URL da foto de perfil do usuário via getUserProfilePhotos + getFile.
+     * Retorna null se o usuário não tiver foto ou a privacidade bloquear o acesso.
+     */
+    public function getProfilePhotoUrl(string $chatId): ?string
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        try {
+            $response = Http::acceptJson()
+                ->timeout(10)
+                ->get($this->apiUrl('getUserProfilePhotos'), [
+                    'user_id' => $chatId,
+                    'limit'   => 1,
+                ]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        // result.photos é array de arrays de tamanhos; pega o maior tamanho da primeira foto
+        $sizes = $response->json('result.photos.0');
+        if (empty($sizes) || ! is_array($sizes)) {
+            return null;
+        }
+
+        $largest = end($sizes);
+        $fileId  = $largest['file_id'] ?? null;
+        if (! is_string($fileId) || $fileId === '') {
+            return null;
+        }
+
+        try {
+            $fileResponse = Http::acceptJson()
+                ->timeout(10)
+                ->get($this->apiUrl('getFile'), ['file_id' => $fileId]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $filePath = $fileResponse->json('result.file_path');
+        if (! is_string($filePath) || $filePath === '') {
+            return null;
+        }
+
+        return "https://api.telegram.org/file/bot{$this->botToken}/{$filePath}";
+    }
+
     public function sendChatAction(string $chatId, string $action = 'typing'): void
     {
         $this->callApi('sendChatAction', [

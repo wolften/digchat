@@ -75,11 +75,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/pesquisas', [SurveyController::class, 'index'])->name('pesquisas.index');
         Route::post('/pesquisas', [SurveyController::class, 'store'])->name('pesquisas.store');
+        Route::get('/pesquisas/create', [SurveyController::class, 'create'])->name('pesquisas.create');
+        Route::get('/pesquisas/response/{response}', [SurveyController::class, 'responseDetail'])->name('pesquisas.response.detail');
+        Route::get('/pesquisas/{survey}', [SurveyController::class, 'show'])->name('pesquisas.show');
         Route::put('/pesquisas/{survey}', [SurveyController::class, 'update'])->name('pesquisas.update');
         Route::delete('/pesquisas/{survey}', [SurveyController::class, 'destroy'])->name('pesquisas.destroy');
         Route::post('/pesquisas/{survey}/questions', [SurveyController::class, 'syncQuestions'])->name('pesquisas.questions.sync');
         Route::get('/pesquisas/{survey}/responses', [SurveyController::class, 'responses'])->name('pesquisas.responses');
-        Route::get('/pesquisas/response/{response}', [SurveyController::class, 'responseDetail'])->name('pesquisas.response.detail');
 
         Route::get('/respostas-rapidas', [QuickReplyController::class, 'index'])->name('respostas-rapidas.index');
         Route::post('/respostas-rapidas', [QuickReplyController::class, 'store'])->name('respostas-rapidas.store');

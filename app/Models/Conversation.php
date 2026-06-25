@@ -45,6 +45,7 @@ class Conversation extends Model
     {
         return [
             'last_message_at' => 'datetime',
+            'last_read_at'    => 'datetime',
         ];
     }
 

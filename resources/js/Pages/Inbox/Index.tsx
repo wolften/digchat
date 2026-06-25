@@ -88,6 +88,7 @@ interface ConversationSummary {
     last_message_type?: string | null;
     last_message_at: string | null;
     last_message_direction?: string | null;
+    unread_count: number;
 }
 
 interface Msg {
@@ -1075,13 +1076,16 @@ export default function InboxIndex({
                                             ? Math.max(0, Math.floor((convExpiresAt - Date.now()) / 1000))
                                             : null;
 
+                                    const isSelected = selected?.id === c.id;
+                                    const unread = isSelected ? 0 : c.unread_count;
+
                                     return (
                                         <button
                                             key={c.id}
                                             onClick={() => selectConversation(c.id)}
                                             className={cn(
                                                 'group w-full border-b border-ink/[0.07] px-4 py-3 text-left text-ink transition hover:bg-ink/[0.05]',
-                                                selected?.id === c.id && 'bg-accent/10',
+                                                isSelected && 'bg-accent/10',
                                             )}
                                         >
                                             <div className="flex items-start gap-3">
@@ -1102,27 +1106,34 @@ export default function InboxIndex({
 
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center justify-between gap-3">
-                                                    <span className="truncate font-medium">
+                                                    <span className={cn("truncate font-medium", unread > 0 && "font-semibold")}>
                                                         {contactName}
                                                     </span>
-                                                    {convCountdown !== null ? (
-                                                        <span
-                                                            className={cn(
-                                                                'inline-flex shrink-0 items-center gap-1 text-xs font-medium',
-                                                                convCountdown <= 120
-                                                                    ? 'text-red-500 dark:text-red-400'
-                                                                    : 'text-amber-600 dark:text-amber-400',
-                                                            )}
-                                                            title="Tempo restante para encerramento automático por inatividade"
-                                                        >
-                                                            <Clock className="h-3 w-3" />
-                                                            {formatCountdown(convCountdown)}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="shrink-0 text-xs text-ink/40">
-                                                            {formatTime(c.last_message_at)}
-                                                        </span>
-                                                    )}
+                                                    <div className="flex shrink-0 flex-col items-end gap-1">
+                                                        {convCountdown !== null ? (
+                                                            <span
+                                                                className={cn(
+                                                                    'inline-flex items-center gap-1 text-xs font-medium',
+                                                                    convCountdown <= 120
+                                                                        ? 'text-red-500 dark:text-red-400'
+                                                                        : 'text-amber-600 dark:text-amber-400',
+                                                                )}
+                                                                title="Tempo restante para encerramento automático por inatividade"
+                                                            >
+                                                                <Clock className="h-3 w-3" />
+                                                                {formatCountdown(convCountdown)}
+                                                            </span>
+                                                        ) : (
+                                                            <span className={cn("text-xs", unread > 0 ? "font-semibold text-green-600 dark:text-green-400" : "text-ink/40")}>
+                                                                {formatTime(c.last_message_at)}
+                                                            </span>
+                                                        )}
+                                                        {unread > 0 && (
+                                                            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-green-500 px-1.5 text-[10px] font-bold text-white dark:bg-green-600">
+                                                                {unread > 99 ? '99+' : unread}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div className={cn("text-sm text-ink/48", preview && PreviewIcon ? "flex items-center overflow-hidden" : "line-clamp-1")}>
                                                     {preview && PreviewIcon ? (

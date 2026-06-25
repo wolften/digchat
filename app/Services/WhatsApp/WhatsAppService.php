@@ -655,10 +655,12 @@ class WhatsAppService implements MessagingChannel
         $code = data_get($response->json(), 'error.code');
         $type = data_get($response->json(), 'error.type');
 
+        // Only code 190 (invalid/expired token) or HTTP 401 are real auth errors.
+        // Other OAuthException codes (e.g. 100 = nonexistent field, 200 = permission denied)
+        // are feature/config errors and should not block avatar_fetch_attempted from being set.
         if (
             $response->status() === 401 ||
-            (is_numeric($code) && (int) $code === 190) ||
-            $type === 'OAuthException'
+            (is_numeric($code) && (int) $code === 190)
         ) {
             return 'WhatsApp recusou a autenticação: token inválido ou expirado. Gere um novo token permanente de System User com permissão whatsapp_business_messaging, salve em Configurações e rode o teste de conexão novamente.';
         }

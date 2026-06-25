@@ -26,7 +26,7 @@ use Inertia\Response;
 
 class InboxController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $filter = $request->string('filter', 'all')->toString();
         $sectorId = $request->integer('sector_id') ?: null;
@@ -53,6 +53,23 @@ class InboxController extends Controller
         $selected = null;
         if ($request->filled('conversation')) {
             $selected = $this->loadConversation((int) $request->integer('conversation'), $user);
+            if ($selected === null) {
+                $params = [];
+                if ($filter !== 'all') {
+                    $params['filter'] = $filter;
+                }
+                if ($sectorId !== null) {
+                    $params['sector_id'] = $sectorId;
+                }
+                if ($filterUserId !== null) {
+                    $params['user_id'] = $filterUserId;
+                }
+                if ($sort !== 'newest') {
+                    $params['sort'] = $sort;
+                }
+
+                return redirect()->route('inbox.index', $params);
+            }
         }
 
         $sectors = Sector::where('is_active', true)->orderBy('name')->get(['id', 'name']);
@@ -84,7 +101,7 @@ class InboxController extends Controller
         ]);
     }
 
-    public function show(Request $request, Conversation $conversation): Response
+    public function show(Request $request, Conversation $conversation): Response|RedirectResponse
     {
         return $this->index($request->merge(['conversation' => $conversation->id]));
     }
@@ -378,6 +395,14 @@ class InboxController extends Controller
     {
         $last = $conversation->messages()->latest()->first();
 
+        $unreadCount = $conversation->messages()
+            ->where('direction', 'in')
+            ->when(
+                $conversation->last_read_at,
+                fn ($q) => $q->where('created_at', '>', $conversation->last_read_at),
+            )
+            ->count();
+
         return [
             'id' => $conversation->id,
             'status' => $conversation->status,
@@ -398,16 +423,23 @@ class InboxController extends Controller
             'last_message_type' => $last?->type,
             'last_message_at' => $conversation->last_message_at?->toIso8601String(),
             'last_message_direction' => $last?->direction,
+            'unread_count' => $unreadCount,
         ];
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<string, mixed>|null
      */
-    private function loadConversation(int $id, User $user): array
+    private function loadConversation(int $id, User $user): ?array
     {
-        $conversation = Conversation::with(['contact', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type'])->findOrFail($id);
-        abort_unless($conversation->canBeViewedBy($user), 403);
+        $conversation = Conversation::with(['contact', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type'])->find($id);
+        if (! $conversation || ! $conversation->canBeViewedBy($user)) {
+            return null;
+        }
+
+        if (! $conversation->last_read_at || $conversation->last_read_at->diffInSeconds(now()) > 30) {
+            Conversation::whereKey($conversation->id)->update(['last_read_at' => now()]);
+        }
 
         $messages = $conversation->messages()
             ->with('sender:id,name')

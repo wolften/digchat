@@ -104,7 +104,10 @@ class ProcessInboundMessage implements ShouldQueue
         $contact->save();
 
         // Dispatch a job to fetch avatar via API when none is available and not yet tried.
-        if (! isset($meta['avatar_url']) && ! isset($meta['avatar_fetch_attempted'])) {
+        // Throttle: skip if a recent auth-error was recorded (retry window: 6 h).
+        $failedAt = data_get($meta, 'avatar_fetch_failed_at');
+        $recentAuthFailure = $failedAt && Carbon::parse($failedAt)->diffInHours(now()) < 6;
+        if (! isset($meta['avatar_url']) && ! isset($meta['avatar_fetch_attempted']) && ! $recentAuthFailure) {
             FetchContactAvatar::dispatch($contact->id);
         }
 

@@ -17,7 +17,7 @@ class SurveyController extends Controller
 {
     public function index(): Response
     {
-        $surveys = Survey::withCount(['questions', 'responses', 'completedResponses'])
+        $surveys = Survey::withCount(['questions', 'completedResponses'])
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (Survey $s) => [
@@ -25,21 +25,44 @@ class SurveyController extends Controller
                 'name'                      => $s->name,
                 'description'               => $s->description,
                 'is_active'                 => $s->is_active,
-                'thank_you_message'         => $s->thank_you_message,
                 'questions_count'           => $s->questions_count,
-                'responses_count'           => $s->responses_count,
                 'completed_responses_count' => $s->completed_responses_count,
-                'questions'                 => $s->questions->map(fn (SurveyQuestion $q) => [
+                'created_at'                => $s->created_at?->toIso8601String(),
+            ]);
+
+        return Inertia::render('Pesquisas/Index', [
+            'surveys' => $surveys,
+        ]);
+    }
+
+    public function create(): Response
+    {
+        return Inertia::render('Pesquisas/Create');
+    }
+
+    public function show(Survey $survey): Response
+    {
+        $survey->loadCount(['questions', 'responses', 'completedResponses']);
+        $survey->load(['questions' => fn ($q) => $q->orderBy('position')]);
+
+        return Inertia::render('Pesquisas/Show', [
+            'survey' => [
+                'id'                        => $survey->id,
+                'name'                      => $survey->name,
+                'description'               => $survey->description,
+                'is_active'                 => $survey->is_active,
+                'thank_you_message'         => $survey->thank_you_message,
+                'questions_count'           => $survey->questions_count,
+                'responses_count'           => $survey->responses_count,
+                'completed_responses_count' => $survey->completed_responses_count,
+                'questions'                 => $survey->questions->map(fn (SurveyQuestion $q) => [
                     'id'       => $q->id,
                     'text'     => $q->text,
                     'position' => $q->position,
                     'options'  => $q->options ?? [],
                 ]),
-                'created_at' => $s->created_at?->toIso8601String(),
-            ]);
-
-        return Inertia::render('Pesquisas/Index', [
-            'surveys' => $surveys,
+                'created_at' => $survey->created_at?->toIso8601String(),
+            ],
         ]);
     }
 
@@ -57,7 +80,7 @@ class SurveyController extends Controller
             'questions.*.options.*.label'   => ['required', 'string', 'max:100'],
         ]);
 
-        DB::transaction(function () use ($validated, $request): void {
+        $survey = DB::transaction(function () use ($validated, $request): Survey {
             $survey = Survey::create([
                 'name'              => $validated['name'],
                 'description'       => $validated['description'] ?? null,
@@ -73,9 +96,11 @@ class SurveyController extends Controller
                     'options'  => $q['options'],
                 ]);
             }
+
+            return $survey;
         });
 
-        return back()->with('success', 'Pesquisa criada com sucesso.');
+        return redirect()->route('pesquisas.show', $survey)->with('success', 'Pesquisa criada com sucesso.');
     }
 
     public function update(Request $request, Survey $survey): RedirectResponse
@@ -121,7 +146,7 @@ class SurveyController extends Controller
     {
         $survey->delete();
 
-        return back()->with('success', 'Pesquisa excluída.');
+        return redirect()->route('pesquisas.index')->with('success', 'Pesquisa excluída.');
     }
 
     /** Returns stats + individual responses for a survey (JSON). */

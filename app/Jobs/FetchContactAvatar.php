@@ -47,13 +47,17 @@ class FetchContactAvatar implements ShouldQueue
         $whatsApp = new WhatsAppService($channel);
         $pictureUrl = $whatsApp->getContactProfilePictureUrl($contact->wa_id);
 
-        // Auth error (expired token): don't mark as attempted so the job retries
-        // automatically the next time the contact sends a message.
+        // Auth error (expired token): record timestamp so we only retry once every 6 h
+        // instead of on every incoming message. When the token is refreshed the next
+        // message after the 6 h window will trigger a fresh attempt automatically.
         if ($whatsApp->getLastErrorMessage()) {
-            Log::warning('FetchContactAvatar: auth error, skipping mark attempted', [
+            Log::warning('FetchContactAvatar: auth error, throttling retry', [
                 'contact_id' => $this->contactId,
                 'error'      => $whatsApp->getLastErrorMessage(),
             ]);
+            $meta['avatar_fetch_failed_at'] = now()->toISOString();
+            $contact->meta = $meta;
+            $contact->save();
             return;
         }
 
