@@ -11,6 +11,13 @@ import {
     DialogTitle,
 } from '@/Components/ui/dialog';
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/Components/ui/dropdown-menu';
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -23,10 +30,12 @@ import { cn, formatClientDisplayName, formatClientPhone } from '@/lib/utils';
 import { PageProps } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
+    AlertTriangle,
     ArrowDownUp,
     ArrowRightLeft,
     Bot,
     Check,
+    ChevronDown,
     CheckCheck,
     Clock,
     FileText,
@@ -122,6 +131,7 @@ interface Selected {
     can_act: boolean;
     can_assign: boolean;
     can_transfer: boolean;
+    can_force_close: boolean;
     last_message_at: string | null;
     contact: {
         id: number;
@@ -324,6 +334,8 @@ export default function InboxIndex({
     const [attachmentDialogOpen, setAttachmentDialogOpen] = useState(false);
     const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
     const [closing, setClosing] = useState(false);
+    const [forceCloseConfirmOpen, setForceCloseConfirmOpen] = useState(false);
+    const [forceClosing, setForceClosing] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
     const [isRecording, setIsRecording] = useState(false);
@@ -947,6 +959,7 @@ export default function InboxIndex({
     const canAssignSelected = Boolean(selected?.can_assign);
     const canActSelected = Boolean(selected?.can_act);
     const canTransferSelected = Boolean(selected?.can_transfer);
+    const canForceCloseSelected = Boolean(selected?.can_force_close);
     const isAssignedToCurrentUser = selected?.assigned_user_id === currentUser.id;
     const composerErrors = composer.errors as Record<string, string | undefined>;
 
@@ -1347,41 +1360,57 @@ export default function InboxIndex({
                                                 )}
                                             </div>
 
-                                            {/* ── Divisor visual (só quando há botões de ação) ── */}
-                                            {(canAssignSelected && selected.status !== 'open') ||
-                                             (canTransferSelected && sectors.length > 0) ||
-                                             (canActSelected && selected.status !== 'closed' && selected.status !== 'surveying') ? (
-                                                <div className="h-5 w-px bg-ink/[0.12]" />
-                                            ) : null}
-
-                                            {/* ── Botões de ação ── */}
-                                            {canAssignSelected && selected.status !== 'open' && (
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => action('inbox.assign')}
-                                                >
-                                                    <UserCheck /> Assumir
-                                                </Button>
-                                            )}
-                                            {canTransferSelected && (sectors.length > 0 || transfer_users.length > 0) && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={openTransferDialog}
-                                                >
-                                                    <ArrowRightLeft /> Transferir
-                                                </Button>
-                                            )}
-                                            {canActSelected && selected.status !== 'closed' && selected.status !== 'surveying' && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-950/30"
-                                                    onClick={() => setCloseConfirmOpen(true)}
-                                                    disabled={closing}
-                                                >
-                                                    Encerrar
-                                                </Button>
+                                            {/* ── Divisor visual + dropdown Ações ── */}
+                                            {((canAssignSelected && selected.status !== 'open') ||
+                                              (canTransferSelected && (sectors.length > 0 || transfer_users.length > 0)) ||
+                                              (canActSelected && selected.status !== 'closed' && selected.status !== 'surveying') ||
+                                              (canForceCloseSelected && selected.status !== 'closed')) && (
+                                                <>
+                                                    <div className="h-5 w-px bg-ink/[0.12]" />
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button size="sm" variant="outline">
+                                                                Ações <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            {canAssignSelected && selected.status !== 'open' && (
+                                                                <DropdownMenuItem onClick={() => action('inbox.assign')}>
+                                                                    <UserCheck className="mr-2 h-4 w-4" /> Assumir
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {canTransferSelected && (sectors.length > 0 || transfer_users.length > 0) && (
+                                                                <DropdownMenuItem onClick={openTransferDialog}>
+                                                                    <ArrowRightLeft className="mr-2 h-4 w-4" /> Transferir
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {canActSelected && selected.status !== 'closed' && selected.status !== 'surveying' && (
+                                                                <>
+                                                                    {(canAssignSelected || canTransferSelected) && <DropdownMenuSeparator />}
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => setCloseConfirmOpen(true)}
+                                                                        disabled={closing}
+                                                                        className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+                                                                    >
+                                                                        Encerrar
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
+                                                            {canForceCloseSelected && selected.status !== 'closed' && (
+                                                                <>
+                                                                    {(canAssignSelected || canTransferSelected || (canActSelected && selected.status !== 'surveying')) && <DropdownMenuSeparator />}
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => setForceCloseConfirmOpen(true)}
+                                                                        disabled={forceClosing}
+                                                                        className="text-orange-600 focus:text-orange-600 dark:text-orange-400 dark:focus:text-orange-400"
+                                                                    >
+                                                                        <AlertTriangle className="mr-2 h-4 w-4" /> Forçar encerramento
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </>
                                             )}
 
                                             {/* ── IXC panel toggle ── */}
@@ -2083,6 +2112,54 @@ export default function InboxIndex({
                             disabled={closing}
                         >
                             {closing ? 'Encerrando...' : 'Encerrar'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog: forçar encerramento (admin/gestor) */}
+            <Dialog open={forceCloseConfirmOpen} onOpenChange={(open) => { if (!forceClosing) setForceCloseConfirmOpen(open); }}>
+                <DialogContent className="gap-5 p-5 sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-orange-500" />
+                            Forçar encerramento
+                        </DialogTitle>
+                        <DialogDescription>
+                            Isso encerrará a conversa imediatamente, mesmo que esteja aguardando resposta da pesquisa de satisfação. Use apenas quando a pesquisa não foi entregue ao cliente.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:space-x-0">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setForceCloseConfirmOpen(false)}
+                            disabled={forceClosing}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            size="sm"
+                            className="bg-orange-600 text-white hover:bg-orange-700"
+                            onClick={() => {
+                                if (!selected) return;
+                                setForceClosing(true);
+                                router.post(
+                                    route('inbox.force-close', selected.id),
+                                    {},
+                                    {
+                                        preserveScroll: true,
+                                        preserveState: true,
+                                        onFinish: () => {
+                                            setForceClosing(false);
+                                            setForceCloseConfirmOpen(false);
+                                        },
+                                    },
+                                );
+                            }}
+                            disabled={forceClosing}
+                        >
+                            {forceClosing ? 'Encerrando...' : 'Forçar encerramento'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

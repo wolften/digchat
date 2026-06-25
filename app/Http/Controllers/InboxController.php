@@ -391,6 +391,18 @@ class InboxController extends Controller
         return back()->with('success', 'Atendimento encerrado.');
     }
 
+    public function forceClose(Conversation $conversation): RedirectResponse
+    {
+        abort_unless(request()->user()->isManager(), 403, 'Apenas administradores e gestores podem forçar o encerramento.');
+
+        $conversation->forceFill([
+            'status'             => Conversation::STATUS_CLOSED,
+            'survey_response_id' => null,
+        ])->save();
+
+        return back()->with('success', 'Atendimento encerrado forçadamente.');
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -486,6 +498,7 @@ class InboxController extends Controller
             'can_act' => $conversation->canBeActedOnBy($user),
             'can_assign' => $conversation->canBeAssignedBy($user),
             'can_transfer' => $conversation->canBeTransferredBy($user),
+            'can_force_close' => $user->isManager(),
             'last_message_at' => $conversation->last_message_at?->toIso8601String(),
             'contact' => [
                 'id'                   => $conversation->contact->id,

@@ -45,6 +45,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/inbox/{conversation}/messages', [InboxController::class, 'sendMessage'])->name('inbox.messages.store');
     Route::get('/inbox/messages/{message}/media', [InboxController::class, 'media'])->name('inbox.messages.media');
     Route::post('/inbox/{conversation}/close', [InboxController::class, 'close'])->name('inbox.close');
+    Route::post('/inbox/{conversation}/force-close', [InboxController::class, 'forceClose'])->name('inbox.force-close')->middleware('role:admin,gestor');
     Route::post('/inbox/{conversation}/transfer', [InboxController::class, 'transfer'])->name('inbox.transfer');
 
     // Fluxos de atendimento — somente admin e gestor.
