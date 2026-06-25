@@ -76,6 +76,7 @@ class InboxController extends Controller
         $users = $user->isManager()
             ? User::where('is_active', true)->orderBy('name')->get(['id', 'name'])
             : collect();
+        $transferUsers = User::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Inbox/Index', [
             'conversations' => $conversations,
@@ -86,6 +87,7 @@ class InboxController extends Controller
             'user_id' => $filterUserId,
             'sectors' => $sectors,
             'users' => $users,
+            'transfer_users' => $transferUsers,
             'counts' => [
                 'bot' => Conversation::query()->visibleTo($user)
                     ->where('status', Conversation::STATUS_BOT)->count(),
@@ -303,14 +305,28 @@ class InboxController extends Controller
         );
 
         $validated = $request->validate([
-            'sector_id' => ['required', 'exists:sectors,id'],
+            'sector_id' => ['nullable', 'exists:sectors,id'],
+            'user_id'   => ['nullable', 'exists:users,id'],
         ]);
+
+        if (!empty($validated['user_id'])) {
+            $targetUser = User::findOrFail($validated['user_id']);
+
+            $conversation->forceFill([
+                'assigned_user_id' => $targetUser->id,
+                'status'           => Conversation::STATUS_OPEN,
+            ])->save();
+
+            return back()->with('success', 'Conversa transferida para ' . $targetUser->name . '.');
+        }
+
+        abort_if(empty($validated['sector_id']), 422, 'Informe um setor ou usuário.');
 
         $sector = Sector::findOrFail($validated['sector_id']);
 
         $conversation->forceFill([
-            'sector_id' => $sector->id,
-            'status' => Conversation::STATUS_QUEUED,
+            'sector_id'        => $sector->id,
+            'status'           => Conversation::STATUS_QUEUED,
             'assigned_user_id' => null,
         ])->save();
 

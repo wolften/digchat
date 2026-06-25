@@ -148,6 +148,7 @@ interface Props {
     user_id: number | null;
     sectors: Sector[];
     users: UserFilter[];
+    transfer_users: UserFilter[];
     counts: { bot: number; queued: number; mine: number };
     auto_close_enabled: boolean;
     auto_close_minutes: number;
@@ -300,6 +301,7 @@ export default function InboxIndex({
     user_id,
     sectors,
     users,
+    transfer_users,
     counts,
     auto_close_enabled,
     auto_close_minutes,
@@ -333,7 +335,9 @@ export default function InboxIndex({
     const [audioDuration, setAudioDuration] = useState(0);
     const [audioCurrentTime, setAudioCurrentTime] = useState(0);
     const [transferOpen, setTransferOpen] = useState(false);
+    const [transferMode, setTransferMode] = useState<'sector' | 'user'>('sector');
     const [transferSectorId, setTransferSectorId] = useState<string>('');
+    const [transferUserId, setTransferUserId] = useState<string>('');
     const [transferring, setTransferring] = useState(false);
     const [ixcPanelOpen, setIxcPanelOpen] = useState(false);
     const [notesPanelOpen, setNotesPanelOpen] = useState(false);
@@ -376,6 +380,32 @@ export default function InboxIndex({
             setIxcPanelOpen(false);
         }
     }, [selected?.id]);
+
+    // Remove otimistas que o servidor já confirmou (evita duplicatas ao enviar várias mensagens seguidas).
+    useEffect(() => {
+        if (!selected?.messages || optimisticMessages.length === 0) return;
+
+        const oldestOptimisticTime = Math.min(...optimisticMessages.map((m) => new Date(m.created_at).getTime()));
+
+        const realCounts = new Map<string | null, number>();
+        for (const m of selected.messages) {
+            if (m.direction !== 'out') continue;
+            if (new Date(m.created_at).getTime() < oldestOptimisticTime - 5000) continue;
+            realCounts.set(m.body, (realCounts.get(m.body) ?? 0) + 1);
+        }
+
+        setOptimisticMessages((prev) => {
+            const counts = new Map(realCounts);
+            return prev.filter((m) => {
+                const available = counts.get(m.body) ?? 0;
+                if (available > 0) {
+                    counts.set(m.body, available - 1);
+                    return false;
+                }
+                return true;
+            });
+        });
+    }, [selected?.id, selected?.messages?.length]);
 
     // Auto-scroll para o fim da thread quando muda a seleção/mensagens.
     useEffect(() => {
@@ -867,26 +897,30 @@ export default function InboxIndex({
     };
 
     const openTransferDialog = () => {
+        setTransferMode(sectors.length > 0 ? 'sector' : 'user');
         setTransferSectorId(selected?.sector?.id?.toString() ?? '');
+        setTransferUserId('');
         setTransferOpen(true);
     };
 
     const submitTransfer = () => {
-        if (!selected || !transferSectorId) return;
+        if (!selected) return;
+        const payload =
+            transferMode === 'user'
+                ? { user_id: transferUserId }
+                : { sector_id: transferSectorId };
+        if (!payload.user_id && !payload.sector_id) return;
         setTransferring(true);
-        router.post(
-            route('inbox.transfer', selected.id),
-            { sector_id: transferSectorId },
-            {
-                preserveScroll: true,
-                preserveState: true,
-                onSuccess: () => {
-                    setTransferOpen(false);
-                    setTransferSectorId('');
-                },
-                onFinish: () => setTransferring(false),
+        router.post(route('inbox.transfer', selected.id), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                setTransferOpen(false);
+                setTransferSectorId('');
+                setTransferUserId('');
             },
-        );
+            onFinish: () => setTransferring(false),
+        });
     };
 
     const hasTypedBody = composer.data.body.trim().length > 0;
@@ -1109,7 +1143,7 @@ export default function InboxIndex({
                                                     <span className={cn("truncate font-medium", unread > 0 && "font-semibold")}>
                                                         {contactName}
                                                     </span>
-                                                    <div className="flex shrink-0 flex-col items-end gap-1">
+                                                    <div className="flex shrink-0 items-center gap-1.5">
                                                         {convCountdown !== null ? (
                                                             <span
                                                                 className={cn(
@@ -1311,7 +1345,7 @@ export default function InboxIndex({
                                                     <UserCheck /> Assumir
                                                 </Button>
                                             )}
-                                            {canTransferSelected && sectors.length > 0 && (
+                                            {canTransferSelected && (sectors.length > 0 || transfer_users.length > 0) && (
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
@@ -1893,7 +1927,7 @@ export default function InboxIndex({
                         </div>
             </div>
 
-            {/* Dialog: transferir para setor */}
+            {/* Dialog: transferir */}
             <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
                 <DialogContent className="gap-5 p-5 sm:max-w-md">
                     <DialogHeader className="pr-8">
@@ -1902,33 +1936,88 @@ export default function InboxIndex({
                                 <ArrowRightLeft className="h-4 w-4" />
                             </div>
                             <div className="min-w-0 space-y-1">
-                                <DialogTitle>Transferir para setor</DialogTitle>
+                                <DialogTitle>Transferir conversa</DialogTitle>
                                 <DialogDescription>
-                                    Escolha o setor que deve assumir esta conversa.
+                                    {transferMode === 'sector'
+                                        ? 'Escolha o setor que deve assumir esta conversa.'
+                                        : 'Escolha o atendente que deve assumir esta conversa.'}
                                 </DialogDescription>
                             </div>
                         </div>
                     </DialogHeader>
+
+                    {/* Mode toggle — só exibe se ambas as opções existem */}
+                    {sectors.length > 0 && transfer_users.length > 0 && (
+                        <div className="grid grid-cols-2 gap-1 rounded-xl border border-ink/[0.08] bg-ink/[0.03] p-1">
+                            <button
+                                type="button"
+                                onClick={() => setTransferMode('sector')}
+                                className={cn(
+                                    'rounded-lg py-1.5 text-sm font-medium transition-colors',
+                                    transferMode === 'sector'
+                                        ? 'bg-white text-ink shadow-sm dark:bg-ink/10'
+                                        : 'text-ink/50 hover:text-ink/75',
+                                )}
+                            >
+                                Setor
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setTransferMode('user')}
+                                className={cn(
+                                    'rounded-lg py-1.5 text-sm font-medium transition-colors',
+                                    transferMode === 'user'
+                                        ? 'bg-white text-ink shadow-sm dark:bg-ink/10'
+                                        : 'text-ink/50 hover:text-ink/75',
+                                )}
+                            >
+                                Atendente
+                            </button>
+                        </div>
+                    )}
+
                     <div className="space-y-2">
-                        <p className="text-xs font-medium uppercase tracking-widest text-ink/45">
-                            Setor de destino
-                        </p>
-                        <Select
-                            value={transferSectorId}
-                            onValueChange={setTransferSectorId}
-                        >
-                            <SelectTrigger className="h-10 px-3 text-sm">
-                                <SelectValue placeholder="Selecione um setor" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[60]">
-                                {sectors.map((s) => (
-                                    <SelectItem key={s.id} value={s.id.toString()}>
-                                        {s.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        {transferMode === 'sector' ? (
+                            <>
+                                <p className="text-xs font-medium uppercase tracking-widest text-ink/45">
+                                    Setor de destino
+                                </p>
+                                <Select value={transferSectorId} onValueChange={setTransferSectorId}>
+                                    <SelectTrigger className="h-10 px-3 text-sm">
+                                        <SelectValue placeholder="Selecione um setor" />
+                                    </SelectTrigger>
+                                    <SelectContent className="z-[60]">
+                                        {sectors.map((s) => (
+                                            <SelectItem key={s.id} value={s.id.toString()}>
+                                                {s.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-xs font-medium uppercase tracking-widest text-ink/45">
+                                    Atendente de destino
+                                </p>
+                                <Select value={transferUserId} onValueChange={setTransferUserId}>
+                                    <SelectTrigger className="h-10 px-3 text-sm">
+                                        <SelectValue placeholder="Selecione um atendente" />
+                                    </SelectTrigger>
+                                    <SelectContent className="z-[60]">
+                                        {transfer_users
+                                            .filter((u) => u.id !== selected?.assigned_user_id)
+                                            .map((u) => (
+                                                <SelectItem key={u.id} value={u.id.toString()}>
+                                                    {u.name}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
+                            </>
+                        )}
                     </div>
+
                     <DialogFooter className="gap-2 sm:space-x-0">
                         <Button
                             variant="outline"
@@ -1939,7 +2028,10 @@ export default function InboxIndex({
                         </Button>
                         <Button
                             onClick={submitTransfer}
-                            disabled={!transferSectorId || transferring}
+                            disabled={
+                                transferring ||
+                                (transferMode === 'sector' ? !transferSectorId : !transferUserId)
+                            }
                         >
                             Transferir
                         </Button>
