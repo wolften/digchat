@@ -19,6 +19,7 @@ class HistoricoController extends Controller
         $sectorId = $request->integer('sector_id') ?: null;
         $userId   = $request->integer('user_id') ?: null;
         $search   = $request->string('search')->trim()->toString() ?: null;
+        $channel  = $request->string('channel')->trim()->toString() ?: null;
 
         $base = fn () => Conversation::query()
             ->whereIn('status', [Conversation::STATUS_CLOSED, Conversation::STATUS_SURVEYING])
@@ -26,6 +27,7 @@ class HistoricoController extends Controller
             ->whereDate('created_at', '<=', $dateTo)
             ->when($sectorId, fn ($q) => $q->where('sector_id', $sectorId))
             ->when($userId, fn ($q) => $q->where('assigned_user_id', $userId))
+            ->when($channel, fn ($q) => $q->whereHas('channel', fn ($q2) => $q2->where('type', $channel)))
             ->when($search, fn ($q) => $q->whereHas('contact', fn ($q2) => $q2
                 ->where('name', 'like', "%{$search}%")
                 ->orWhere('wa_id', 'like', "%{$search}%")
@@ -41,7 +43,7 @@ class HistoricoController extends Controller
             ->count();
 
         $conversations = $base()
-            ->with(['contact', 'assignedUser:id,name', 'sector:id,name', 'surveyResponse.answers'])
+            ->with(['contact', 'assignedUser:id,name', 'sector:id,name', 'surveyResponse.answers', 'channel:id,type,name'])
             ->orderByDesc('last_message_at')
             ->paginate(40)
             ->through(fn (Conversation $c) => $this->summarize($c));
@@ -68,6 +70,7 @@ class HistoricoController extends Controller
                 'sector_id' => $sectorId,
                 'user_id'   => $userId,
                 'search'    => $search,
+                'channel'   => $channel,
             ],
         ]);
     }
@@ -144,6 +147,8 @@ class HistoricoController extends Controller
             'survey_completed' => $conversation->surveyResponse?->isCompleted() ?? false,
             'last_message_at'  => $conversation->last_message_at?->toIso8601String(),
             'created_at'       => $conversation->created_at?->toIso8601String(),
+            'channel_type'     => $conversation->channel?->type,
+            'channel_name'     => $conversation->channel?->name,
         ];
     }
 
