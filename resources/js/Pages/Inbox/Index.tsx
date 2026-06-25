@@ -385,12 +385,12 @@ export default function InboxIndex({
     useEffect(() => {
         if (!selected?.messages || optimisticMessages.length === 0) return;
 
-        const oldestOptimisticTime = Math.min(...optimisticMessages.map((m) => new Date(m.created_at).getTime()));
+        const oldestOptimisticTime = Math.min(...optimisticMessages.map((m) => new Date(m.created_at ?? 0).getTime()));
 
         const realCounts = new Map<string | null, number>();
         for (const m of selected.messages) {
             if (m.direction !== 'out') continue;
-            if (new Date(m.created_at).getTime() < oldestOptimisticTime - 5000) continue;
+            if (new Date(m.created_at ?? 0).getTime() < oldestOptimisticTime - 5000) continue;
             realCounts.set(m.body, (realCounts.get(m.body) ?? 0) + 1);
         }
 
@@ -1001,8 +1001,8 @@ export default function InboxIndex({
                                             value={sector_id?.toString() ?? 'all'}
                                             onValueChange={changeSector}
                                         >
-                                            <SelectTrigger className="h-11 min-w-0 rounded-xl border-ink/[0.1] bg-white px-2.5 py-1.5 text-left shadow-sm focus:border-accent/50 focus:ring-accent/20 dark:bg-ink/[0.04]">
-                                                <div className="min-w-0 flex-1">
+                                            <SelectTrigger className="h-11 min-w-0 overflow-hidden rounded-xl border-ink/[0.1] bg-white px-2.5 py-1.5 text-left shadow-sm focus:border-accent/50 focus:ring-accent/20 dark:bg-ink/[0.04]">
+                                                <div className="min-w-0 flex-1 overflow-hidden">
                                                     <span className="block text-[9px] font-bold uppercase leading-none tracking-[0.08em] text-ink/35">
                                                         Setor
                                                     </span>
@@ -1027,8 +1027,8 @@ export default function InboxIndex({
                                             value={user_id?.toString() ?? 'all'}
                                             onValueChange={changeUser}
                                         >
-                                            <SelectTrigger className="h-11 min-w-0 rounded-xl border-ink/[0.1] bg-white px-2.5 py-1.5 text-left shadow-sm focus:border-accent/50 focus:ring-accent/20 dark:bg-ink/[0.04]">
-                                                <div className="min-w-0 flex-1">
+                                            <SelectTrigger className="h-11 min-w-0 overflow-hidden rounded-xl border-ink/[0.1] bg-white px-2.5 py-1.5 text-left shadow-sm focus:border-accent/50 focus:ring-accent/20 dark:bg-ink/[0.04]">
+                                                <div className="min-w-0 flex-1 overflow-hidden">
                                                     <span className="block text-[9px] font-bold uppercase leading-none tracking-[0.08em] text-ink/35">
                                                         Atendente
                                                     </span>
