@@ -7,7 +7,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class IntegrationConfig extends Model
 {
-    protected $fillable = ['type', 'name', 'base_url', 'token', 'is_active'];
+    protected $fillable = [
+        'type',
+        'name',
+        'base_url',
+        'token',
+'is_active',
+    ];
 
     protected function casts(): array
     {

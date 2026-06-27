@@ -41,4 +41,6 @@ export type PageProps<
     };
     appName: string;
     appIconUrl: string | null;
+    appSubtitle: string;
+    inboxBadgeCount: number;
 };

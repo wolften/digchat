@@ -19,6 +19,7 @@ class Contact extends Model
         'notes',
         'ixc_customer_id',
         'ixc_customer_name',
+        'ixc_document',
         'integration_config_id',
     ];
 

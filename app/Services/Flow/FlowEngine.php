@@ -50,6 +50,26 @@ class FlowEngine
         $currentNode = $this->findNode($flow, $currentNodeId);
 
         if (! $currentNode || $currentNode['type'] !== 'question') {
+            if (($currentNode['type'] ?? null) === 'ixc_action') {
+                $handle = (new IxcBotActionRunner($this->whatsApp))
+                    ->handleReply($conversation, $currentNode, $userMessage, $rawMessage);
+
+                if ($handle) {
+                    $nextId = $this->findEdgeTarget($flow, $currentNodeId, $handle);
+                    if ($nextId) {
+                        $this->processFrom($conversation, $flow, $nextId);
+                    } else {
+                        $conversation->update([
+                            'status'          => Conversation::STATUS_QUEUED,
+                            'flow_id'         => null,
+                            'current_node_id' => null,
+                        ]);
+                    }
+                }
+
+                return;
+            }
+
             $nextId = $this->findEdgeTarget($flow, $currentNodeId);
             if ($nextId) {
                 $this->processFrom($conversation, $flow, $nextId);
@@ -100,6 +120,28 @@ class FlowEngine
                     $this->sendQuestion($conversation, $node);
                     $conversation->update(['current_node_id' => $node['id']]);
                     return;
+
+                case 'ixc_action':
+                    $handle = (new IxcBotActionRunner($this->whatsApp))->start($conversation, $node);
+
+                    if (! $handle) {
+                        $conversation->update(['current_node_id' => $node['id']]);
+                        return;
+                    }
+
+                    $nextId = $this->findEdgeTarget($flow, $currentId, $handle);
+
+                    if (! $nextId) {
+                        $conversation->update([
+                            'status'          => Conversation::STATUS_QUEUED,
+                            'flow_id'         => null,
+                            'current_node_id' => null,
+                        ]);
+                        return;
+                    }
+
+                    $currentId = $nextId;
+                    continue 2;
 
                 case 'handoff':
                     $sectorId = ! empty($node['data']['sector_id']) ? (int) $node['data']['sector_id'] : null;

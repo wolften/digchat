@@ -55,6 +55,7 @@ class IxcController extends Controller
         $validated = $request->validate([
             'ixc_customer_id'   => ['required', 'string'],
             'ixc_customer_name' => ['required', 'string'],
+            'ixc_document'      => ['nullable', 'string', 'max:20'],
         ]);
 
         $config = IntegrationConfig::activeIxc();
@@ -62,6 +63,7 @@ class IxcController extends Controller
         $contact->update([
             'ixc_customer_id'      => $validated['ixc_customer_id'],
             'ixc_customer_name'    => $validated['ixc_customer_name'],
+            'ixc_document'         => $this->normalizeDocument((string) ($validated['ixc_document'] ?? '')),
             'integration_config_id' => $config?->id,
         ]);
 
@@ -73,6 +75,7 @@ class IxcController extends Controller
         $contact->update([
             'ixc_customer_id'      => null,
             'ixc_customer_name'    => null,
+            'ixc_document'         => null,
             'integration_config_id' => null,
         ]);
 
@@ -98,6 +101,9 @@ class IxcController extends Controller
         if (! is_array($contratos)) {
             $contratos = [];
         }
+
+        // Only show active contracts.
+        $contratos = array_values(array_filter($contratos, fn ($c) => ($c['status'] ?? '') === 'A'));
 
         $data = [];
         foreach ($contratos as $contrato) {
@@ -128,15 +134,21 @@ class IxcController extends Controller
                 ];
             }
 
+            $valor = (float) ($contrato['valor'] ?? $contrato['valor_plano'] ?? 0);
+
             $data[] = [
-                'id'               => $contrato['id'] ?? '',
-                'login'            => $login,
-                'status_contrato'  => $contrato['status'] ?? '',
-                'tipo'             => $contrato['tipo_servico'] ?? ($contrato['tipo'] ?? ''),
-                'plano'            => $contrato['descricao_plano'] ?? ($contrato['plano'] ?? ''),
-                'online'           => $status['online'],
-                'ip'               => $status['ip'],
-                'since'            => $status['since'],
+                'id'              => $contrato['id'] ?? '',
+                'login'           => $login,
+                'status_contrato' => $contrato['status'] ?? '',
+                'tipo'            => $contrato['tipo_servico'] ?? ($contrato['tipo'] ?? ''),
+                'plano'           => $contrato['contrato'] ?? '',
+                'valor'           => $valor > 0 ? 'R$ ' . number_format($valor, 2, ',', '.') : null,
+                'velocidade_down' => $contrato['velocidade_download'] ?? ($contrato['velocidade_down'] ?? ($contrato['download'] ?? null)),
+                'velocidade_up'   => $contrato['velocidade_upload'] ?? ($contrato['velocidade_up'] ?? ($contrato['upload'] ?? null)),
+                'data_ativacao'   => $contrato['data_ativacao'] ?? ($contrato['data_inicio'] ?? ($contrato['created'] ?? null)),
+                'online'          => $status['online'],
+                'ip'              => $status['ip'],
+                'since'           => $status['since'],
             ];
         }
 
@@ -189,18 +201,85 @@ class IxcController extends Controller
             if ($status !== 'A' || $renegociado === 'S') {
                 continue;
             }
+            $valorJuros    = (float) ($b['valor_juros'] ?? 0);
+            $valorMulta    = (float) ($b['valor_multa'] ?? 0);
+            $valorDesconto = (float) ($b['valor_desconto'] ?? 0);
             $invoices[] = [
                 'id'              => $b['id'] ?? '',
                 'valor'           => $b['valor'] ?? null,
                 'data_vencimento' => $b['data_vencimento'] ?? null,
+                'data_emissao'    => $b['data_emissao'] ?? ($b['data_lancamento'] ?? null),
+                'referencia'      => trim((string) ($b['referencia'] ?? $b['descricao'] ?? $b['observacao'] ?? '')),
+                'competencia'     => $b['competencia'] ?? ($b['mes_referencia'] ?? null),
+                'nosso_numero'    => trim((string) ($b['nosso_numero'] ?? '')),
+                'parcela'         => trim((string) ($b['numero_parcela'] ?? '')),
+                'valor_juros'     => $valorJuros > 0 ? number_format($valorJuros, 2, ',', '.') : null,
+                'valor_multa'     => $valorMulta > 0 ? number_format($valorMulta, 2, ',', '.') : null,
+                'valor_desconto'  => $valorDesconto > 0 ? number_format($valorDesconto, 2, ',', '.') : null,
                 'baixa_data'      => $b['baixa_data'] ?? null,
                 'status'          => $status,
             ];
         }
 
+        // Central do assinante (login/senha do portal self-service do cliente)
+        $centralDoAssinante = null;
+        if ($contact->ixc_customer_id) {
+            $clienteResult = $client->getCliente((string) $contact->ixc_customer_id);
+            $cli = ($clienteResult['registros'] ?? [])[0] ?? null;
+            if ($cli) {
+                $login = trim((string) ($cli['hotsite_email'] ?? $cli['login_assinante'] ?? $cli['login_central'] ?? ''));
+                $senha = trim((string) ($cli['senha'] ?? ''));
+                if ($login !== '' || $senha !== '') {
+                    $centralDoAssinante = ['login' => $login ?: null, 'senha' => $senha ?: null];
+                }
+            }
+        }
+
+        // Serviços adicionais do contrato (TV, etc.)
+        $servicosResult = $client->getServicosContrato($contractId);
+        $servicos = [];
+        foreach ($servicosResult['registros'] ?? [] as $s) {
+            $valorTotal = (float) ($s['valor_total'] ?? $s['valor_unitario'] ?? $s['valor'] ?? 0);
+            $servicos[] = [
+                'id'     => $s['id'] ?? '',
+                'nome'   => trim((string) ($s['descricao'] ?? $s['nome'] ?? '')),
+                'tipo'   => trim((string) ($s['tipo'] ?? '')),
+                'status' => $s['status'] ?? '',
+                'valor'  => $valorTotal > 0 ? 'R$ ' . number_format($valorTotal, 2, ',', '.') : null,
+            ];
+        }
+
+        // Comodatos (equipamentos em campo)
+        $comodatosResult = $client->getComodatosContrato($contractId);
+        $comodatos = [];
+        foreach ($comodatosResult['registros'] ?? [] as $c) {
+            $qtde    = (int) ($c['qtde_saida'] ?? 0);
+            $qtdeDev = (int) ($c['qtde_devolvida'] ?? 0);
+            $valorUnit    = (float) ($c['valor_unitario'] ?? $c['valor_unit'] ?? 0);
+            $valorTotal   = (float) ($c['valor_total'] ?? 0);
+            $comodatos[] = [
+                'id'              => $c['id'] ?? '',
+                'id_produto'      => $c['id_produto'] ?? null,
+                'descricao'       => $c['produto'] ?? ($c['descricao'] ?? ($c['nome_produto'] ?? ($c['descricao_produto'] ?? ''))),
+                'qtde'            => $qtde,
+                'qtde_devolvida'  => $qtdeDev,
+                'unidade'         => $c['unidade'] ?? null,
+                'valor_unitario'  => $valorUnit > 0 ? number_format($valorUnit, 2, ',', '.') : null,
+                'valor_total'     => $valorTotal > 0 ? number_format($valorTotal, 2, ',', '.') : null,
+                'id_patrimonio'   => ($c['id_patrimonio'] ?? 0) > 0 ? (string) $c['id_patrimonio'] : null,
+                'patrimonio'      => $c['numero_patrimonio'] ?? ($c['n_patrimonio'] ?? ($c['patrimonio'] ?? '')),
+                'numero_serie'    => $c['numero_serie'] ?? ($c['n_serie'] ?? ($c['serie'] ?? null)),
+                'mac'             => $c['mac'] ?? null,
+                'data'            => $c['data'] ?? ($c['data_inicio'] ?? ($c['data_comodato'] ?? null)),
+            ];
+        }
+
         return response()->json([
-            'connection' => $connection,
-            'invoices'   => array_values($invoices),
+            'connection'        => $connection,
+            'invoices'          => array_values($invoices),
+            'comodatos'         => array_values($comodatos),
+            'servicos'          => array_values($servicos),
+            'central_assinante' => $centralDoAssinante,
         ]);
     }
 
@@ -312,5 +391,12 @@ class IxcController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    private function normalizeDocument(string $document): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $document) ?: '';
+
+        return $digits !== '' ? $digits : null;
     }
 }

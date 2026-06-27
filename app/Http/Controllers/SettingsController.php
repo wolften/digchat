@@ -19,7 +19,13 @@ class SettingsController extends Controller
     {
         $settings     = AppSetting::allCached();
         $surveys      = Survey::where('is_active', true)->orderBy('name')->get(['id', 'name']);
-        $integrations = IntegrationConfig::orderBy('type')->orderBy('name')->get(['id', 'type', 'name', 'base_url', 'is_active']);
+        $integrations = IntegrationConfig::orderBy('type')->orderBy('name')->get([
+            'id',
+            'type',
+            'name',
+            'base_url',
+            'is_active',
+        ]);
 
         return Inertia::render('Configuracoes/Index', [
             'settings'     => $settings,
@@ -85,7 +91,8 @@ class SettingsController extends Controller
     public function updateSystem(Request $request): RedirectResponse
     {
         $request->validate([
-            'app_name' => ['nullable', 'string', 'max:80'],
+            'app_name'     => ['nullable', 'string', 'max:80'],
+            'app_subtitle' => ['nullable', 'string', 'max:120'],
             'app_icon' => ['nullable', 'image', 'mimes:png,jpg,jpeg,svg,webp', 'max:512'],
             'notify_customer_on_transfer' => ['nullable'],
             'auto_close_inactive_conversations_enabled' => ['nullable', 'boolean'],
@@ -97,6 +104,10 @@ class SettingsController extends Controller
 
         if ($request->filled('app_name')) {
             AppSetting::set('app_name', $request->string('app_name')->trim());
+        }
+
+        if ($request->filled('app_subtitle')) {
+            AppSetting::set('app_subtitle', $request->string('app_subtitle')->trim());
         }
 
         AppSetting::set(

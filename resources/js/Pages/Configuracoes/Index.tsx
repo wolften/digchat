@@ -165,6 +165,7 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
 
     const sysForm = useForm<{
         app_name: string;
+        app_subtitle: string;
         app_icon: File | null;
         notify_customer_on_transfer: boolean;
         auto_close_inactive_conversations_enabled: boolean;
@@ -174,6 +175,7 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
         survey_on_close_survey_id: string;
     }>({
         app_name: settings.app_name ?? '',
+        app_subtitle: settings.app_subtitle ?? '',
         app_icon: null,
         notify_customer_on_transfer: transferNotificationEnabled,
         auto_close_inactive_conversations_enabled: autoCloseInactiveEnabled,
@@ -203,12 +205,24 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
 
     const openNewIntegration = () => {
         integrationForm.reset();
-        integrationForm.setData({ type: 'ixc', name: '', base_url: '', token: '', is_active: true });
+        integrationForm.setData({
+            type: 'ixc',
+            name: '',
+            base_url: '',
+            token: '',
+            is_active: true,
+        });
         setIntegrationDialog({ open: true, editing: null });
     };
 
     const openEditIntegration = (cfg: IntegrationConfig) => {
-        integrationForm.setData({ type: cfg.type, name: cfg.name, base_url: cfg.base_url, token: '', is_active: cfg.is_active });
+        integrationForm.setData({
+            type: cfg.type,
+            name: cfg.name,
+            base_url: cfg.base_url,
+            token: '',
+            is_active: cfg.is_active,
+        });
         setIntegrationDialog({ open: true, editing: cfg });
     };
 
@@ -299,6 +313,23 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                                     </p>
                                     {sysForm.errors.app_name && (
                                         <p className="text-sm text-red-300">{sysForm.errors.app_name}</p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="app_subtitle">Subtítulo da sidebar</Label>
+                                    <Input
+                                        id="app_subtitle"
+                                        value={sysForm.data.app_subtitle}
+                                        onChange={(e) => sysForm.setData('app_subtitle', e.target.value)}
+                                        placeholder="Atendimento inteligente"
+                                        maxLength={120}
+                                    />
+                                    <p className="text-xs text-ink/45">
+                                        Texto exibido abaixo do nome na sidebar.
+                                    </p>
+                                    {sysForm.errors.app_subtitle && (
+                                        <p className="text-sm text-red-300">{sysForm.errors.app_subtitle}</p>
                                     )}
                                 </div>
 

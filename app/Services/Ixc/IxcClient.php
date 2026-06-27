@@ -56,6 +56,65 @@ class IxcClient
         ]);
     }
 
+    public function searchClienteByDocument(string $document): array
+    {
+        $digits = preg_replace('/\D+/', '', $document) ?: '';
+
+        if ($digits === '') {
+            return ['registros' => [], 'total' => '0'];
+        }
+
+        // IXC stores CPF/CNPJ formatted — try formatted first, fall back to raw digits, then LIKE.
+        $formatted = $this->formatDocumentForQuery($digits);
+        $query = $formatted !== $digits ? $formatted : $digits;
+
+        $result = $this->listRequest('cliente', [
+            'qtype'     => 'cliente.cnpj_cpf',
+            'query'     => $query,
+            'oper'      => '=',
+            'page'      => '1',
+            'rp'        => '20',
+            'sortname'  => 'cliente.id',
+            'sortorder' => 'asc',
+        ]);
+
+        if (! empty($result['registros'])) {
+            return $result;
+        }
+
+        // Fallback: some IXC instances store digits only.
+        if ($query !== $digits) {
+            $result = $this->listRequest('cliente', [
+                'qtype'     => 'cliente.cnpj_cpf',
+                'query'     => $digits,
+                'oper'      => '=',
+                'page'      => '1',
+                'rp'        => '20',
+                'sortname'  => 'cliente.id',
+                'sortorder' => 'asc',
+            ]);
+
+            if (! empty($result['registros'])) {
+                return $result;
+            }
+        }
+
+        return ['registros' => [], 'total' => '0'];
+    }
+
+    private function formatDocumentForQuery(string $digits): string
+    {
+        if (strlen($digits) === 11) {
+            return preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $digits) ?: $digits;
+        }
+
+        if (strlen($digits) === 14) {
+            return preg_replace('/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/', '$1.$2.$3/$4-$5', $digits) ?: $digits;
+        }
+
+        return $digits;
+    }
+
     public function getContratos(int $clienteId): array
     {
         return $this->listRequest('cliente_contrato', [
@@ -79,6 +138,30 @@ class IxcClient
             'page'  => '1',
             'rp'    => '20',
         ]);
+    }
+
+    public function getFaturasAbertasContrato(string $idContrato): array
+    {
+        $result = $this->getBoletosContrato($idContrato);
+        $faturas = $result['registros'] ?? [];
+
+        if (! is_array($faturas)) {
+            return [];
+        }
+
+        $open = array_filter($faturas, function (array $fatura): bool {
+            $status = (string) ($fatura['status'] ?? '');
+            $renegociado = (string) ($fatura['titulo_renegociado'] ?? 'N');
+
+            return $status === 'A' && $renegociado !== 'S';
+        });
+
+        usort($open, fn (array $a, array $b): int => strcmp(
+            (string) ($a['data_vencimento'] ?? ''),
+            (string) ($b['data_vencimento'] ?? ''),
+        ));
+
+        return array_values($open);
     }
 
     public function getBoleto(string $invoiceId): ?string
@@ -175,6 +258,97 @@ class IxcClient
         }
     }
 
+    /**
+     * @return array{ok: bool, message: string}
+     */
+    public function unlockTrust(string $contractId): array
+    {
+        $url  = rtrim($this->config->base_url, '/') . '/webservice/v1/desbloqueio_confianca';
+        $auth = 'Basic ' . base64_encode($this->config->token);
+
+        try {
+            $response = Http::withHeaders(['Authorization' => $auth])
+                ->post($url, ['id' => $contractId]);
+        } catch (Throwable $e) {
+            Log::error('IxcClient: desbloqueio exception', ['message' => $e->getMessage()]);
+
+            return [
+                'ok' => false,
+                'message' => 'Não foi possível comunicar com o IXC para solicitar o desbloqueio.',
+            ];
+        }
+
+        if (! $response->successful()) {
+            Log::warning('IxcClient: desbloqueio não-ok', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return [
+                'ok' => false,
+                'message' => 'O IXC recusou a solicitação de desbloqueio.',
+            ];
+        }
+
+        $json = $response->json();
+
+        if (is_array($json) && ($json['type'] ?? '') === 'error') {
+            return [
+                'ok' => false,
+                'message' => (string) ($json['message'] ?? $json['msg'] ?? 'O IXC não permitiu o desbloqueio neste momento.'),
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'message' => is_array($json)
+                ? (string) ($json['message'] ?? $json['msg'] ?? 'Desbloqueio solicitado com sucesso.')
+                : 'Desbloqueio solicitado com sucesso.',
+        ];
+    }
+
+    public function getCliente(string $clienteId): array
+    {
+        return $this->listRequest('cliente', [
+            'qtype'     => 'cliente.id',
+            'query'     => $clienteId,
+            'oper'      => '=',
+            'page'      => '1',
+            'rp'        => '1',
+            'sortname'  => 'cliente.id',
+            'sortorder' => 'asc',
+        ]);
+    }
+
+    public function getServicosContrato(string $idContrato): array
+    {
+        return $this->listRequest('cliente_contrato_servicos', [
+            'qtype'     => 'cliente_contrato_servicos.id_contrato',
+            'query'     => $idContrato,
+            'oper'      => '=',
+            'page'      => '1',
+            'rp'        => '100',
+            'sortname'  => 'cliente_contrato_servicos.id',
+            'sortorder' => 'asc',
+        ]);
+    }
+
+    public function getComodatosContrato(string $idContrato): array
+    {
+        return $this->listRequest('cliente_contrato_comodato', [
+            'qtype'      => 'movimento_produtos.id_contrato',
+            'query'      => $idContrato,
+            'oper'       => '=',
+            'page'       => '1',
+            'rp'         => '100',
+            'sortname'   => 'movimento_produtos.id',
+            'sortorder'  => 'asc',
+            'grid_param' => json_encode([
+                ['TB' => 'movimento_produtos.status_comodato', 'OP' => '=', 'P' => 'E'],
+            ]),
+        ]);
+    }
+
     public function getLoginStatusByContrato(string $idContrato): array
     {
         return $this->listRequest('radusuarios', [
@@ -218,4 +392,5 @@ class IxcClient
             return false;
         }
     }
+
 }

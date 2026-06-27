@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\AppSetting;
+use App\Models\Conversation;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -40,7 +41,36 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
             ],
             'appName'    => fn () => AppSetting::get('app_name', config('app.name')) ?: config('app.name'),
-            'appIconUrl' => fn () => AppSetting::get('app_icon_url'),
+            'appIconUrl'  => fn () => AppSetting::get('app_icon_url'),
+            'appSubtitle' => fn () => AppSetting::get('app_subtitle', 'Atendimento inteligente') ?: 'Atendimento inteligente',
+            'inboxBadgeCount' => function () use ($request) {
+                $user = $request->user();
+                if (! $user) {
+                    return 0;
+                }
+
+                $query = Conversation::query();
+
+                if ($user->isManager()) {
+                    $query->where(function ($q) use ($user) {
+                        $q->whereIn('status', [Conversation::STATUS_BOT, Conversation::STATUS_QUEUED])
+                            ->orWhere(function ($q2) use ($user) {
+                                $q2->where('status', Conversation::STATUS_OPEN)
+                                    ->where('assigned_user_id', $user->id);
+                            });
+                    });
+                } else {
+                    $query->visibleTo($user)->active();
+                }
+
+                // Só conta conversas com mensagens não lidas pelo atendente
+                $query->whereHas('messages', function ($q) {
+                    $q->where('direction', 'in')
+                        ->whereRaw('(conversations.last_read_at IS NULL OR messages.created_at > conversations.last_read_at)');
+                });
+
+                return $query->count();
+            },
         ];
     }
 }

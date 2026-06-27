@@ -1,5 +1,6 @@
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import { Toaster } from '@/Components/ui/sonner';
+import { useNotifications } from '@/hooks/useNotifications';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
 import { PageProps } from '@/types';
@@ -22,6 +23,7 @@ import {
     Settings,
     Building2,
     Sun,
+    User,
     Users,
     X,
     Zap,
@@ -34,6 +36,7 @@ type NavItem = {
     href: string;
     active: boolean;
     icon: typeof Gauge;
+    badge?: number;
     managerOnly?: boolean;
     adminOnly?: boolean;
 };
@@ -52,6 +55,8 @@ export default function Authenticated({
     const flash = page.props.flash;
     const appName = page.props.appName;
     const appIconUrl = page.props.appIconUrl;
+    const appSubtitle = page.props.appSubtitle;
+    const inboxBadgeCount = page.props.inboxBadgeCount ?? 0;
     const isManager = user.role === 'admin' || user.role === 'gestor';
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -63,6 +68,7 @@ export default function Authenticated({
         }
     });
     const { theme, toggle: toggleTheme } = useTheme();
+    useNotifications(user.id);
 
     useEffect(() => {
         if (flash?.success) toast.success(flash.success);
@@ -91,6 +97,7 @@ export default function Authenticated({
             routeName: 'inbox.index',
             activePattern: 'inbox.*',
             icon: MessageCircle,
+            badge: inboxBadgeCount || undefined,
         },
         {
             label: 'Histórico',
@@ -188,7 +195,7 @@ export default function Authenticated({
     const makeSidebar = (collapsed: boolean) => (
         <aside
             className={cn(
-                'glass-nav flex h-full shrink-0 flex-col overflow-hidden border-r border-accent/10 md:rounded-2xl md:border transition-[width] duration-200',
+                'glass-nav relative flex h-full shrink-0 flex-col overflow-visible border-r border-accent/10 md:rounded-2xl md:border transition-[width] duration-200',
                 collapsed ? 'w-16' : 'w-72 md:w-64',
             )}
         >
@@ -200,12 +207,14 @@ export default function Authenticated({
             >
                 <Link
                     href={route('dashboard')}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/30 bg-accent/15 text-accent"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl text-accent"
                 >
                     {appIconUrl ? (
-                        <img src={appIconUrl} alt={appName} className="h-5 w-5 rounded object-contain" />
+                        <img src={appIconUrl} alt={appName} className="h-full w-full object-cover" />
                     ) : (
-                        <ApplicationLogo className="h-5 w-5 fill-current" />
+                        <span className="font-manrope text-sm font-bold uppercase text-accent">
+                            {appName?.charAt(0) ?? 'D'}
+                        </span>
                     )}
                 </Link>
                 {!collapsed && (
@@ -214,7 +223,7 @@ export default function Authenticated({
                             {appName}
                         </p>
                         <p className="truncate text-[11px] text-ink/40">
-                            Atendimento inteligente
+                            {appSubtitle}
                         </p>
                     </div>
                 )}
@@ -238,16 +247,30 @@ export default function Authenticated({
                                     : 'text-ink/62 hover:bg-ink/[0.06] hover:text-ink',
                             )}
                         >
-                            <Icon
-                                className={cn(
-                                    'h-4 w-4 shrink-0 transition-colors',
-                                    item.active
-                                        ? 'text-canvas dark:text-black'
-                                        : 'text-ink/40 group-hover:text-ink',
+                            <div className="relative shrink-0">
+                                <Icon
+                                    className={cn(
+                                        'h-4 w-4 transition-colors',
+                                        item.active
+                                            ? 'text-canvas dark:text-black'
+                                            : 'text-ink/40 group-hover:text-ink',
+                                    )}
+                                />
+                                {collapsed && !!item.badge && (
+                                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-green-500 px-0.5 text-[9px] font-bold leading-none text-white dark:bg-green-600 dark:text-black">
+                                        {item.badge > 99 ? '99+' : item.badge}
+                                    </span>
                                 )}
-                            />
+                            </div>
                             {!collapsed && (
-                                <span className="truncate">{item.label}</span>
+                                <>
+                                    <span className="flex-1 truncate">{item.label}</span>
+                                    {!!item.badge && (
+                                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-green-500 px-1.5 text-[10px] font-bold text-white dark:bg-green-600 dark:text-black">
+                                            {item.badge > 99 ? '99+' : item.badge}
+                                        </span>
+                                    )}
+                                </>
                             )}
                         </Link>
                     );
@@ -259,6 +282,7 @@ export default function Authenticated({
                     <button
                         type="button"
                         onClick={() => setUserMenuOpen((open) => !open)}
+                        aria-expanded={userMenuOpen}
                         title={collapsed ? user.name : undefined}
                         className={cn(
                             'flex w-full items-center rounded-xl px-2 py-2 text-left transition hover:bg-ink/[0.06]',
@@ -287,11 +311,19 @@ export default function Authenticated({
                     </button>
 
                     {userMenuOpen && (
-                        <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-accent/20 bg-white p-1 shadow-xl dark:bg-[#142a1b]">
+                        <div
+                            className={cn(
+                                'absolute z-50 rounded-xl border border-accent/20 bg-white p-1 shadow-xl dark:bg-[#142a1b]',
+                                collapsed
+                                    ? 'bottom-0 left-full ml-2 w-40'
+                                    : 'bottom-full left-0 right-0 mb-2',
+                            )}
+                        >
                             <Link
                                 href={route('profile.edit')}
-                                className="block rounded-lg px-3 py-2 text-sm text-ink/72 transition hover:bg-accent/10 hover:text-accent"
+                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-ink/72 transition hover:bg-accent/10 hover:text-accent"
                             >
+                                <User className="h-4 w-4 shrink-0" />
                                 Perfil
                             </Link>
                             <Link
@@ -300,7 +332,7 @@ export default function Authenticated({
                                 as="button"
                                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-300 transition hover:bg-red-500/10"
                             >
-                                <LogOut className="h-4 w-4" />
+                                <LogOut className="h-4 w-4 shrink-0" />
                                 Sair
                             </Link>
                         </div>

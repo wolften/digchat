@@ -1,6 +1,6 @@
-import { Badge } from '@/Components/ui/badge';
+import { Badge, BadgeProps } from '@/Components/ui/badge';
 import { Button } from '@/Components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
+import { Card, CardContent } from '@/Components/ui/card';
 import { Input } from '@/Components/ui/input';
 import {
     Select,
@@ -24,7 +24,6 @@ import { Head, router } from '@inertiajs/react';
 import {
     Clock3,
     Headphones,
-    Radio,
     RefreshCcw,
     Search,
     ShieldCheck,
@@ -71,51 +70,39 @@ const ROLE_LABELS: Record<UserRole, string> = {
     atendente: 'Atendente',
 };
 
-const ROLE_META: Record<UserRole, { Icon: typeof ShieldCheck; className: string }> = {
-    admin: {
-        Icon: ShieldCheck,
-        className:
-            'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200',
-    },
-    gestor: {
-        Icon: Sparkles,
-        className:
-            'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-400/30 dark:bg-sky-400/10 dark:text-sky-200',
-    },
-    atendente: {
-        Icon: Headphones,
-        className:
-            'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-300/30 dark:bg-amber-300/10 dark:text-amber-100',
-    },
+const ROLE_META: Record<UserRole, { Icon: typeof ShieldCheck; variant: BadgeProps['variant'] }> = {
+    admin: { Icon: ShieldCheck, variant: 'default' },
+    gestor: { Icon: Sparkles, variant: 'bot' },
+    atendente: { Icon: Headphones, variant: 'queued' },
 };
 
 const PRESENCE_META: Record<
     PresenceState,
-    { label: string; detail: string; className: string }
+    { label: string; detail: string; dot: string; variant: BadgeProps['variant'] }
 > = {
     online: {
         label: 'Online',
         detail: 'ativo agora',
-        className:
-            'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-200',
+        dot: 'bg-emerald-400',
+        variant: 'default',
     },
     away: {
         label: 'Ausente',
         detail: 'atividade recente',
-        className:
-            'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-300/35 dark:bg-amber-300/10 dark:text-amber-100',
+        dot: 'bg-amber-400',
+        variant: 'queued',
     },
     offline: {
         label: 'Offline',
         detail: 'fora da sessão',
-        className:
-            'border-slate-300 bg-slate-100 text-slate-700 dark:border-ink/14 dark:bg-ink/[0.05] dark:text-ink/55',
+        dot: 'bg-slate-400 dark:bg-ink/30',
+        variant: 'secondary',
     },
     inactive: {
         label: 'Inativo',
         detail: 'usuário bloqueado',
-        className:
-            'border-red-300 bg-red-50 text-red-800 dark:border-red-400/35 dark:bg-red-400/10 dark:text-red-200',
+        dot: 'bg-red-400',
+        variant: 'destructive',
     },
 };
 
@@ -230,27 +217,24 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
 
             <div className="scrollbar-thin flex-1 overflow-y-auto p-6">
                 <div className="flex flex-col gap-4">
-                    <Card className="rounded-2xl border border-accent/15">
-                        <CardHeader className="gap-3 pb-0 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <CardTitle className="flex items-center gap-2 text-xl">
-                                    <Radio className="h-4 w-4 text-accent" />
-                                    Presença da equipe
-                                </CardTitle>
-                                <p className="mt-1 text-sm text-ink/50">
-                                    Visão rápida de quem está disponível para atendimento agora.
-                                </p>
-                            </div>
-                            <Button type="button" variant="outline" onClick={refreshPresence}>
-                                <RefreshCcw className="h-4 w-4" />
-                                Atualizar
-                            </Button>
-                        </CardHeader>
-                        <CardContent className="pt-4 text-xs text-ink/48">
-                            Última atualização {timeAgo(generatedAt)} ({formatClock(generatedAt)})
-                        </CardContent>
-                    </Card>
 
+                    {/* Page intro row */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="font-manrope text-lg font-semibold text-ink">
+                                Presença da equipe
+                            </h1>
+                            <p className="mt-0.5 text-sm text-ink/48">
+                                Atualizado {timeAgo(generatedAt)} · {formatClock(generatedAt)}
+                            </p>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={refreshPresence}>
+                            <RefreshCcw className="h-3.5 w-3.5" />
+                            Atualizar
+                        </Button>
+                    </div>
+
+                    {/* Stat cards */}
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                         <StatCard icon={UserRoundCheck} label="Online" value={summary.online} tone="emerald" />
                         <StatCard icon={Clock3} label="Ausentes" value={summary.away} tone="amber" />
@@ -259,51 +243,23 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                         <StatCard icon={UsersRound} label="Cobertura" value={`${onlineRatio}%`} tone="accent" />
                     </div>
 
+                    {/* Filters + table unified */}
                     <Card className="rounded-2xl">
-                        <CardContent className="space-y-4 p-4">
-                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
-                                <div className="relative">
-                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
-                                    <Input
-                                        value={query}
-                                        onChange={(event) => setQuery(event.target.value)}
-                                        placeholder="Buscar por nome, e-mail ou setor"
-                                        className="h-9 pl-9"
-                                    />
-                                </div>
-                                <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value as 'all' | UserRole)}>
-                                    <SelectTrigger className="h-9">
-                                        <SelectValue placeholder="Filtrar perfil" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Todos os perfis</SelectItem>
-                                        <SelectItem value="admin">Admin ({countsByRole.admin})</SelectItem>
-                                        <SelectItem value="gestor">Gestor ({countsByRole.gestor})</SelectItem>
-                                        <SelectItem value="atendente">Atendente ({countsByRole.atendente})</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                                {PRESENCE_FILTERS.map((status) => (
-                                    <Button
-                                        key={status.value}
-                                        type="button"
-                                        size="sm"
-                                        variant={presenceFilter === status.value ? 'default' : 'ghost'}
-                                        onClick={() => setPresenceFilter(status.value)}
-                                    >
-                                        {status.label}
-                                        {status.value !== 'all' && (
-                                            <span className="text-[11px] opacity-80"> ({summary[status.value]})</span>
-                                        )}
-                                    </Button>
-                                ))}
+                        {/* Filter header */}
+                        <div className="flex flex-col gap-3 border-b border-ink/[0.06] p-5">
+                            <div className="flex items-center justify-between">
+                                <p className="text-[15px] font-semibold text-ink">
+                                    Equipe monitorada{' '}
+                                    <span className="font-normal text-ink/40">
+                                        ({filteredUsers.length})
+                                    </span>
+                                </p>
                                 {hasFilters && (
                                     <Button
                                         type="button"
                                         size="sm"
-                                        variant="outline"
+                                        variant="ghost"
+                                        className="h-7 text-xs text-ink/55 hover:text-ink"
                                         onClick={() => {
                                             setQuery('');
                                             setRoleFilter('all');
@@ -314,16 +270,69 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                     </Button>
                                 )}
                             </div>
-                        </CardContent>
-                    </Card>
 
-                    <Card className="rounded-2xl">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-base">Equipe monitorada ({filteredUsers.length})</CardTitle>
-                        </CardHeader>
+                            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem]">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
+                                    <Input
+                                        value={query}
+                                        onChange={(event) => setQuery(event.target.value)}
+                                        placeholder="Buscar por nome, e-mail ou setor"
+                                        className="h-9 pl-9"
+                                    />
+                                </div>
+                                <Select
+                                    value={roleFilter}
+                                    onValueChange={(value) =>
+                                        setRoleFilter(value as 'all' | UserRole)
+                                    }
+                                >
+                                    <SelectTrigger className="h-9">
+                                        <SelectValue placeholder="Filtrar perfil" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos os perfis</SelectItem>
+                                        <SelectItem value="admin">
+                                            Admin ({countsByRole.admin})
+                                        </SelectItem>
+                                        <SelectItem value="gestor">
+                                            Gestor ({countsByRole.gestor})
+                                        </SelectItem>
+                                        <SelectItem value="atendente">
+                                            Atendente ({countsByRole.atendente})
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1">
+                                {PRESENCE_FILTERS.map((status) => (
+                                    <button
+                                        key={status.value}
+                                        type="button"
+                                        onClick={() => setPresenceFilter(status.value)}
+                                        className={cn(
+                                            'rounded-lg px-3 py-1 text-sm font-medium transition-colors',
+                                            presenceFilter === status.value
+                                                ? 'bg-accent text-canvas dark:text-black'
+                                                : 'text-ink/58 hover:bg-ink/[0.06] hover:text-ink',
+                                        )}
+                                    >
+                                        {status.label}
+                                        {status.value !== 'all' && (
+                                            <span className="ml-1 text-[11px] opacity-65">
+                                                ({summary[status.value]})
+                                            </span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Table */}
                         <CardContent className="p-0">
                             {filteredUsers.length === 0 ? (
-                                <div className="px-5 pb-5">
+                                <div className="px-5 py-5">
                                     <div className="rounded-xl border border-ink/10 bg-ink/[0.03] p-5 text-sm text-ink/55">
                                         Nenhum usuário encontrado com os filtros atuais.
                                     </div>
@@ -332,12 +341,24 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                 <Table className="[&_tbody_tr]:align-top">
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="pl-5 text-[11px] uppercase tracking-wide text-ink/62">Usuário</TableHead>
-                                            <TableHead className="text-[11px] uppercase tracking-wide text-ink/62">Status</TableHead>
-                                            <TableHead className="text-[11px] uppercase tracking-wide text-ink/62">Perfil</TableHead>
-                                            <TableHead className="text-[11px] uppercase tracking-wide text-ink/62">Setores</TableHead>
-                                            <TableHead className="text-right text-[11px] uppercase tracking-wide text-ink/62">Conversas</TableHead>
-                                            <TableHead className="pr-5 text-[11px] uppercase tracking-wide text-ink/62">Último sinal</TableHead>
+                                            <TableHead className="pl-5 text-[11px] uppercase tracking-wide text-ink/62">
+                                                Usuário
+                                            </TableHead>
+                                            <TableHead className="text-[11px] uppercase tracking-wide text-ink/62">
+                                                Status
+                                            </TableHead>
+                                            <TableHead className="text-[11px] uppercase tracking-wide text-ink/62">
+                                                Perfil
+                                            </TableHead>
+                                            <TableHead className="text-[11px] uppercase tracking-wide text-ink/62">
+                                                Setores
+                                            </TableHead>
+                                            <TableHead className="text-right text-[11px] uppercase tracking-wide text-ink/62">
+                                                Conversas
+                                            </TableHead>
+                                            <TableHead className="pr-5 text-[11px] uppercase tracking-wide text-ink/62">
+                                                Último sinal
+                                            </TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -347,11 +368,22 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                             const presence = PRESENCE_META[user.presence];
 
                                             return (
-                                                <TableRow key={user.id} className="hover:bg-accent/[0.04]">
+                                                <TableRow
+                                                    key={user.id}
+                                                    className="hover:bg-accent/[0.04]"
+                                                >
                                                     <TableCell className="pl-5">
                                                         <div className="flex items-center gap-3">
-                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/35 bg-accent/15 text-xs font-bold text-accent">
-                                                                {initials(user.name) || 'DC'}
+                                                            <div className="relative shrink-0">
+                                                                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent/35 bg-accent/15 text-xs font-bold text-accent">
+                                                                    {initials(user.name) || 'DC'}
+                                                                </div>
+                                                                <span
+                                                                    className={cn(
+                                                                        'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-canvas',
+                                                                        presence.dot,
+                                                                    )}
+                                                                />
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <p className="truncate text-[15px] font-semibold text-ink/92">
@@ -365,35 +397,38 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                                     </TableCell>
                                                     <TableCell>
                                                         <div>
-                                                            <Badge className={cn('mb-1 font-semibold', presence.className)}>
+                                                            <Badge
+                                                                variant={presence.variant}
+                                                                className="mb-1"
+                                                            >
                                                                 {presence.label}
                                                             </Badge>
-                                                            <p className="text-xs text-ink/58">{presence.detail}</p>
+                                                            <p className="text-xs text-ink/58">
+                                                                {presence.detail}
+                                                            </p>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <Badge className={cn('gap-1', role.className)}>
+                                                        <Badge variant={role.variant} className="gap-1">
                                                             <RoleIcon className="h-3.5 w-3.5" />
                                                             {ROLE_LABELS[user.role]}
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell>
                                                         {user.sectors.length === 0 ? (
-                                                            <Badge className="border-ink/20 bg-white text-ink/75 dark:border-ink/[0.12] dark:bg-ink/[0.07] dark:text-ink/70">
-                                                                Sem setor
-                                                            </Badge>
+                                                            <Badge variant="secondary">Sem setor</Badge>
                                                         ) : (
                                                             <div className="flex flex-wrap gap-1">
                                                                 {user.sectors.slice(0, 2).map((sector) => (
                                                                     <Badge
                                                                         key={sector.id}
-                                                                        className="border-ink/20 bg-white text-ink/80 dark:border-ink/[0.12] dark:bg-ink/[0.07] dark:text-ink/70"
+                                                                        variant="secondary"
                                                                     >
                                                                         {sector.name}
                                                                     </Badge>
                                                                 ))}
                                                                 {user.sectors.length > 2 && (
-                                                                    <Badge className="border-ink/20 bg-white text-ink/80 dark:border-ink/[0.12] dark:bg-ink/[0.07] dark:text-ink/70">
+                                                                    <Badge variant="secondary">
                                                                         +{user.sectors.length - 2}
                                                                     </Badge>
                                                                 )}
@@ -407,7 +442,9 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                                     </TableCell>
                                                     <TableCell className="pr-5">
                                                         <div className="text-xs">
-                                                            <p className="font-medium text-ink/88">{timeAgo(user.last_seen_at)}</p>
+                                                            <p className="font-medium text-ink/88">
+                                                                {timeAgo(user.last_seen_at)}
+                                                            </p>
                                                             <p className="text-ink/52">
                                                                 {formatClock(user.last_seen_at)}
                                                             </p>
@@ -455,7 +492,12 @@ function StatCard({
                     </p>
                     <p className="mt-1 font-manrope text-3xl font-bold text-ink">{value}</p>
                 </div>
-                <div className={cn('flex h-10 w-10 items-center justify-center rounded-xl border', toneClass)}>
+                <div
+                    className={cn(
+                        'flex h-10 w-10 items-center justify-center rounded-xl border',
+                        toneClass,
+                    )}
+                >
                     <Icon className="h-4 w-4" />
                 </div>
             </CardContent>

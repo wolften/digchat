@@ -26,6 +26,7 @@ import {
 } from '@/Components/ui/select';
 import { Textarea } from '@/Components/ui/textarea';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { isMediaMessageType, mediaCaption, mediaTypeFromPlaceholder } from '@/lib/messageMedia';
 import { cn, formatClientDisplayName, formatClientPhone } from '@/lib/utils';
 import { PageProps } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
@@ -37,6 +38,7 @@ import {
     Check,
     ChevronDown,
     CheckCheck,
+    CircleX,
     Clock,
     FileText,
     ImageIcon,
@@ -198,14 +200,7 @@ function mediaPreview(message: ConversationSummary): {
     label: string;
 } | null {
     const normalizedType = (message.last_message_type ?? '').toLowerCase();
-    const body = (message.last_message ?? '').trim().toLowerCase();
-    const inferredType =
-        body === '[image]' ||
-        body === '[audio]' ||
-        body === '[video]' ||
-        body === '[document]'
-            ? body.replace('[', '').replace(']', '')
-            : '';
+    const inferredType = mediaTypeFromPlaceholder(message.last_message) ?? '';
     const type = normalizedType || inferredType;
 
     if (type === 'image') return { icon: ImageIcon, label: 'Imagem' };
@@ -258,6 +253,7 @@ const MESSAGE_ROLE_META = {
         label: 'Cliente',
         row: 'justify-start',
         bubble: 'bg-white text-gray-800 dark:bg-[#142a1b] dark:text-gray-100',
+        roundedBubble: 'rounded-tl-2xl rounded-tr-2xl rounded-br-2xl',
         icon: 'bg-ink/[0.06] text-ink/55 dark:bg-white/10 dark:text-white/65',
         labelText: 'text-ink/55 dark:text-white/60',
         metaText: 'text-ink/42',
@@ -269,6 +265,7 @@ const MESSAGE_ROLE_META = {
         label: 'Atendente',
         row: 'justify-end',
         bubble: 'bg-accent text-black',
+        roundedBubble: 'rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl',
         icon: 'bg-black/10 text-black/70',
         labelText: 'text-black/70',
         metaText: 'text-black/55',
@@ -281,6 +278,7 @@ const MESSAGE_ROLE_META = {
         row: 'justify-end',
         bubble:
             'border border-amber-300/50 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-50',
+        roundedBubble: 'rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl',
         icon: 'bg-amber-200/70 text-amber-900 dark:bg-amber-800 dark:text-amber-100',
         labelText: 'text-amber-900/70 dark:text-amber-100/70',
         metaText: 'text-amber-800/55 dark:text-amber-200/60',
@@ -294,6 +292,7 @@ const MESSAGE_ROLE_META = {
         label: string;
         row: string;
         bubble: string;
+        roundedBubble: string;
         icon: string;
         labelText: string;
         metaText: string;
@@ -377,7 +376,8 @@ export default function InboxIndex({
         channel.listen('.conversation.updated', reload);
 
         return () => {
-            echo.leave('conversations');
+            channel.stopListening('.message.created', reload);
+            channel.stopListening('.conversation.updated', reload);
         };
     }, []);
 
@@ -465,7 +465,7 @@ export default function InboxIndex({
             autoClosedRef.current = selected.id;
             router.post(
                 route('inbox.close', selected.id),
-                {},
+                { auto_close: true },
                 { preserveScroll: true, preserveState: true },
             );
         }
@@ -1194,7 +1194,7 @@ export default function InboxIndex({
                                                             </span>
                                                         )}
                                                         {unread > 0 && (
-                                                            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-green-500 px-1.5 text-[10px] font-bold text-white dark:bg-green-600">
+                                                            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-green-500 px-1.5 text-[10px] font-bold text-white dark:bg-green-600 dark:text-black">
                                                                 {unread > 99 ? '99+' : unread}
                                                             </span>
                                                         )}
@@ -1392,7 +1392,7 @@ export default function InboxIndex({
                                                                         disabled={closing}
                                                                         className="text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
                                                                     >
-                                                                        Encerrar
+                                                                        <CircleX className="mr-2 h-4 w-4" /> Encerrar
                                                                     </DropdownMenuItem>
                                                                 </>
                                                             )}
@@ -1458,50 +1458,36 @@ export default function InboxIndex({
                                         {[...selected.messages, ...optimisticMessages].map((m) => {
                                             const role = messageRole(m);
                                             const roleMeta = MESSAGE_ROLE_META[role];
-                                            const RoleIcon = roleMeta.Icon;
                                             const isOptimistic = 'optimistic' in m && m.optimistic;
-                                            const senderName =
-                                                role === 'client'
-                                                    ? formatClientDisplayName(
-                                                          selected.contact.name,
-                                                          selected.contact.wa_id,
-                                                      )
-                                                    : role === 'attendant'
-                                                      ? (m.sender?.name ?? 'Atendente')
-                                                      : 'Bot do atendimento';
+                                            const caption = mediaCaption(m.body, m.type);
 
                                             return (
                                                 <div
                                                     key={m.id}
                                                     className={cn('flex transition-opacity duration-300', roleMeta.row, isOptimistic ? 'opacity-50' : '')}
                                                 >
+                                                    <div className="relative w-fit max-w-[75%]">
+                                                    {role === 'client' ? (
+                                                        <svg className="absolute -left-[7px] bottom-0" width="8" height="13" viewBox="0 0 8 13" aria-hidden="true">
+                                                            <path d="M 8 0 C 6 6 0 9 0 13 L 8 13 Z" className="fill-white dark:fill-[#142a1b]" />
+                                                        </svg>
+                                                    ) : role === 'attendant' ? (
+                                                        <svg className="absolute -right-[7px] bottom-0" width="8" height="13" viewBox="0 0 8 13" aria-hidden="true">
+                                                            <path d="M 0 0 C 2 6 8 9 8 13 L 0 13 Z" className="fill-accent" />
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="absolute -right-[7px] bottom-0" width="8" height="13" viewBox="0 0 8 13" aria-hidden="true">
+                                                            <path d="M 0 0 C 2 6 8 9 8 13 L 0 13 Z" className="fill-amber-50 dark:fill-amber-900" />
+                                                        </svg>
+                                                    )}
                                                     <div
                                                         className={cn(
-                                                            'max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm',
+                                                            'px-3 py-2 text-sm shadow-sm',
+                                                            roleMeta.roundedBubble,
                                                             roleMeta.bubble,
                                                         )}
                                                     >
-                                                        <div
-                                                            className={cn(
-                                                                'mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase leading-none tracking-[0.02em]',
-                                                                roleMeta.labelText,
-                                                            )}
-                                                        >
-                                                            <span
-                                                                className={cn(
-                                                                    'inline-flex h-5 w-5 items-center justify-center rounded-full',
-                                                                    roleMeta.icon,
-                                                                )}
-                                                            >
-                                                                <RoleIcon className="h-3 w-3" />
-                                                            </span>
-                                                            <span>{roleMeta.label}</span>
-                                                            <span className="normal-case opacity-75">
-                                                                {senderName}
-                                                            </span>
-                                                        </div>
-
-                                                        {m.type === 'image' &&
+{m.type === 'image' &&
                                                         m.media_url ? (
                                                             <div className="space-y-2">
                                                                 <a
@@ -1516,12 +1502,11 @@ export default function InboxIndex({
                                                                         loading="lazy"
                                                                     />
                                                                 </a>
-                                                                {m.body &&
-                                                                    m.body !== '[image]' && (
-                                                                        <p className="whitespace-pre-wrap break-words">
-                                                                            {m.body}
-                                                                        </p>
-                                                                    )}
+                                                                {caption && (
+                                                                    <p className="whitespace-pre-wrap break-words">
+                                                                        {caption}
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         ) : m.type === 'video' &&
                                                           m.media_url ? (
@@ -1532,12 +1517,11 @@ export default function InboxIndex({
                                                                     src={m.media_url}
                                                                     className="max-h-64 w-[300px] max-w-full rounded-md border bg-black/80"
                                                                 />
-                                                                {m.body &&
-                                                                    m.body !== '[video]' && (
-                                                                        <p className="whitespace-pre-wrap break-words">
-                                                                            {m.body}
-                                                                        </p>
-                                                                    )}
+                                                                {caption && (
+                                                                    <p className="whitespace-pre-wrap break-words">
+                                                                        {caption}
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         ) : m.type === 'audio' &&
                                                           m.media_url ? (
@@ -1548,12 +1532,11 @@ export default function InboxIndex({
                                                                     src={m.media_url}
                                                                     className="h-10 w-[260px] max-w-full"
                                                                 />
-                                                                {m.body &&
-                                                                    m.body !== '[audio]' && (
-                                                                        <p className="whitespace-pre-wrap break-words">
-                                                                            {m.body}
-                                                                        </p>
-                                                                    )}
+                                                                {caption && (
+                                                                    <p className="whitespace-pre-wrap break-words">
+                                                                        {caption}
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         ) : m.type === 'document' &&
                                                           m.media_url ? (
@@ -1567,14 +1550,13 @@ export default function InboxIndex({
                                                                     <FileText className="h-4 w-4" />
                                                                     Abrir documento
                                                                 </a>
-                                                                {m.body &&
-                                                                    m.body !== '[document]' && (
-                                                                        <p className="whitespace-pre-wrap break-words">
-                                                                            {m.body}
-                                                                        </p>
-                                                                    )}
+                                                                {caption && (
+                                                                    <p className="whitespace-pre-wrap break-words">
+                                                                        {caption}
+                                                                    </p>
+                                                                )}
                                                             </div>
-                                                        ) : (m.type === 'image' || m.type === 'video' || m.type === 'audio' || m.type === 'document') ? (
+                                                        ) : isMediaMessageType(m.type) ? (
                                                             <div className="inline-flex items-center gap-2 rounded-lg border border-black/[0.12] bg-black/[0.05] px-3 py-2 text-xs opacity-60 dark:border-white/[0.12] dark:bg-white/[0.05]">
                                                                 {m.type === 'image' ? <ImageIcon className="h-4 w-4" /> :
                                                                  m.type === 'video' ? <Video className="h-4 w-4" /> :
@@ -1584,7 +1566,7 @@ export default function InboxIndex({
                                                                     {m.type === 'image' ? 'Imagem' :
                                                                      m.type === 'video' ? 'Vídeo' :
                                                                      m.type === 'audio' ? 'Áudio' :
-                                                                     (m.body && !m.body.startsWith('[')) ? m.body : 'Documento'}
+                                                                     caption ?? 'Documento'}
                                                                 </span>
                                                             </div>
                                                         ) : (
@@ -1611,6 +1593,7 @@ export default function InboxIndex({
                                                                     <Check className={cn('h-3 w-3', roleMeta.tick)} />
                                                                 ) : null)}
                                                         </div>
+                                                    </div>
                                                     </div>
                                                 </div>
                                             );

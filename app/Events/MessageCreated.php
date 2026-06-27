@@ -38,11 +38,24 @@ class MessageCreated implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
+        $conversation = $this->message->conversation;
+        $contact = $conversation?->contact;
+
         return [
             'message' => [
                 'id' => $this->message->id,
                 'conversation_id' => $this->message->conversation_id,
+                'direction' => $this->message->direction,
+                'type' => $this->message->type,
+                'body' => $this->message->body,
                 'created_at' => $this->message->created_at?->toIso8601String(),
+            ],
+            'conversation' => [
+                'status' => $conversation?->status,
+                'assigned_user_id' => $conversation?->assigned_user_id,
+            ],
+            'contact' => [
+                'name' => $contact?->displayName(),
             ],
         ];
     }

@@ -37,17 +37,17 @@ export default function NotesPanel({ contactId, initialNotes, onClose }: Props) 
 
     return (
         <div className="flex w-72 shrink-0 flex-col border-l border-ink/[0.08] bg-canvas">
-            <div className="flex min-h-12 items-center justify-between border-b border-ink/[0.08] px-3">
-                <div className="flex items-center gap-2">
-                    <StickyNote className="h-4 w-4 text-ink/50" />
-                    <span className="text-sm font-semibold text-ink/80">Anotações</span>
+            <div className="flex h-16 shrink-0 items-center justify-between border-b border-ink/[0.08] px-4">
+                <div className="flex items-center gap-2.5 min-w-0">
+                    <StickyNote className="h-4 w-4 shrink-0 text-ink/50" />
+                    <span className="text-sm font-semibold text-ink/90">Anotações</span>
                 </div>
                 <button
                     type="button"
                     onClick={onClose}
-                    className="rounded p-1 text-ink/40 transition-colors hover:bg-ink/[0.06] hover:text-ink/70"
+                    className="shrink-0 rounded-lg p-1.5 text-ink/40 transition-colors hover:bg-ink/[0.06] hover:text-ink/70"
                 >
-                    <X className="h-4 w-4" />
+                    <X className="h-3.5 w-3.5" />
                 </button>
             </div>
 

@@ -105,6 +105,8 @@ class InboxController extends Controller
 
     public function show(Request $request, Conversation $conversation): Response|RedirectResponse
     {
+        abort_unless($conversation->canBeViewedBy($request->user()), 403);
+
         return $this->index($request->merge(['conversation' => $conversation->id]));
     }
 
@@ -343,7 +345,7 @@ class InboxController extends Controller
         return back()->with('success', 'Conversa transferida para o setor.');
     }
 
-    public function close(Conversation $conversation): RedirectResponse
+    public function close(Request $request, Conversation $conversation): RedirectResponse
     {
         $sender = $this->senderFor($conversation);
         abort_unless(
@@ -351,6 +353,14 @@ class InboxController extends Controller
             403,
             'Conversa atribuída a outro atendente.',
         );
+
+        $isAutoClose = $request->boolean('auto_close');
+
+        // On auto-close, respect the inactivity survey toggle independently.
+        if ($isAutoClose && ! AppSetting::bool('survey_on_inactivity_close_enabled', false)) {
+            $conversation->forceFill(['status' => Conversation::STATUS_CLOSED])->save();
+            return back()->with('success', 'Atendimento encerrado por inatividade.');
+        }
 
         // Check if survey should be sent on close
         if (AppSetting::bool('survey_on_close_enabled', false)) {
