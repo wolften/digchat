@@ -215,7 +215,7 @@ export default function Authenticated({
             >
                 <Link
                     href={route('dashboard')}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl text-accent"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl text-accent"
                 >
                     {appIconUrl ? (
                         <img src={appIconUrl} alt={appName} className="h-full w-full object-cover" />
