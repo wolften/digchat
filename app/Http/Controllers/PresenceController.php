@@ -32,12 +32,17 @@ class PresenceController extends Controller
             ->orderBy('name')
             ->get()
             ->map(function (User $user) use ($sessionActivity, $onlineAfter, $awayAfter) {
-                $lastActivity = (int) ($sessionActivity->get($user->id)?->last_activity ?? 0);
+                // Use active session for presence status; fall back to persisted last_seen_at
+                // when the session has expired (sessions table is pruned by Laravel).
+                $sessionActivity_ts = (int) ($sessionActivity->get($user->id)?->last_activity ?? 0);
+                $persistedTs        = $user->last_seen_at?->timestamp ?? 0;
+                $lastActivity       = max($sessionActivity_ts, $persistedTs);
+
                 $presence = match (true) {
-                    ! $user->is_active => 'inactive',
-                    $lastActivity >= $onlineAfter => 'online',
-                    $lastActivity >= $awayAfter => 'away',
-                    default => 'offline',
+                    ! $user->is_active          => 'inactive',
+                    $sessionActivity_ts >= $onlineAfter => 'online',
+                    $sessionActivity_ts >= $awayAfter   => 'away',
+                    default                     => 'offline',
                 };
 
                 return [

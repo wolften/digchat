@@ -1,4 +1,14 @@
 import { Dialog, DialogContent } from '@/Components/ui/dialog';
+
+const TIPO_SERVICO_LABEL: Record<string, string> = {
+    I:    'Internet',
+    T:    'Telefonia',
+    S:    'Serviços',
+    M:    'Mercadoria',
+    SVA:  'SVA',
+    TV:   'TV/Streaming',
+    MVNO: 'MVNO/Telefonia Móvel',
+};
 import { Input } from '@/Components/ui/input';
 import axios from 'axios';
 import {
@@ -6,18 +16,22 @@ import {
     ArrowUpFromLine,
     Building2,
     ChevronRight,
+    ClipboardList,
     Eye,
     EyeOff,
     FileText,
+    Headphones,
     KeyRound,
     Loader2,
     Monitor,
     Network,
+    Phone,
     QrCode,
     Receipt,
     RefreshCw,
     Search,
     Send,
+    Smartphone,
     Sparkles,
     Unlink,
     Wifi,
@@ -113,12 +127,61 @@ interface Comodato {
     data: string | null;
 }
 
+interface LinhaSip {
+    id: string;
+    numero: string | null;
+    descricao: string | null;
+    ativo: boolean;
+    context: string | null;
+    ipaddr: string | null;
+    limite_chamada: string | null;
+    created_at: string | null;
+    data_cancelamento: string | null;
+}
+
+interface LinhaMvno {
+    id: string;
+    status_linha: string;
+    telefone: string | null;
+    simcard: string | null;
+    esim: boolean;
+    portabilidade: boolean;
+    status_portabilidade: string | null;
+    numero_temporario: string | null;
+    operadora_origem: string | null;
+    created_at: string | null;
+}
+
+interface Ticket {
+    id: string;
+    titulo: string;
+    status: string;
+    protocolo: string;
+    data_criacao: string | null;
+}
+
+interface OrdemServico {
+    id: string;
+    assunto: string;
+    status: string;
+    mensagem: string;
+    mensagem_resposta: string;
+    data_abertura: string | null;
+    data_previsao: string | null;
+    data_fechamento: string | null;
+    tecnico: string;
+}
+
 interface ContractDetails {
     connection: ConnectionData | null;
     invoices: Invoice[];
     comodatos: Comodato[];
     servicos: ServicoAdicional[];
+    linhas_sip: LinhaSip[];
+    linhas_mvno: LinhaMvno[];
     central_assinante: CentralAssinante | null;
+    ordens: OrdemServico[];
+    tickets: Ticket[];
 }
 
 interface Props {
@@ -153,6 +216,14 @@ function formatDateShort(dt: string | null): string {
     }
 }
 
+function formatBrPhone(raw: string | null): string {
+    if (!raw) return '—';
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length === 11) return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`;
+    if (digits.length === 10) return `(${digits.slice(0,2)}) ${digits.slice(2,6)}-${digits.slice(6)}`;
+    return raw;
+}
+
 function isOverdue(dataVencimento: string | null): boolean {
     if (!dataVencimento) return false;
     try { return new Date(dataVencimento) < new Date(); } catch { return false; }
@@ -185,7 +256,7 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
     const [loadingDetails, setLoadingDetails]         = useState(false);
     const [showSenha, setShowSenha]                   = useState(false);
     const [showSenhaCentral, setShowSenhaCentral]     = useState(false);
-    const [activeTab, setActiveTab]                   = useState<'conexao' | 'servicos' | 'equipamentos' | 'financeiro'>('conexao');
+    const [activeTab, setActiveTab]                   = useState<'conexao' | 'servicos' | 'equipamentos' | 'financeiro' | 'os' | 'atendimentos'>('conexao');
     const [sendingBoleto, setSendingBoleto]           = useState<string | null>(null);
     const [boletoFeedback, setBoletoFeedback]         = useState<{ id: string; ok: boolean; msg: string } | null>(null);
     const [sendingPix, setSendingPix]                 = useState<string | null>(null);
@@ -266,7 +337,7 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
         axios
             .get(route('ixc.contracts.details', { contact: contact.id, contractId: c.id }))
             .then((res) => setDetails(res.data))
-            .catch(() => setDetails({ connection: null, invoices: [] }))
+            .catch(() => setDetails({ connection: null, invoices: [], comodatos: [], servicos: [], central_assinante: null, ordens: [], tickets: [] }))
             .finally(() => setLoadingDetails(false));
     };
 
@@ -532,7 +603,7 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
 
             {/* ── Modal de detalhes do contrato ── */}
             <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-                <DialogContent className="max-w-lg gap-0 overflow-hidden p-0">
+                <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0">
                     {/* Status accent stripe */}
                     <div
                         className={`h-1 w-full ${
@@ -595,10 +666,12 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
                     <div className="flex border-b border-ink/[0.08]">
                         {(
                             [
-                                { key: 'conexao',      label: 'Conexão',      icon: Network  },
-                                { key: 'servicos',     label: 'Serviços',     icon: Sparkles },
-                                { key: 'equipamentos', label: 'Equip.',        icon: Monitor  },
-                                { key: 'financeiro',   label: 'Financeiro',   icon: Receipt  },
+                                { key: 'conexao',      label: 'Conexão',    icon: Network       },
+                                { key: 'servicos',     label: 'Serviços',   icon: Sparkles      },
+                                { key: 'equipamentos', label: 'Equip.',     icon: Monitor       },
+                                { key: 'financeiro',   label: 'Financ.',    icon: Receipt       },
+                                { key: 'os',           label: 'OS',         icon: ClipboardList },
+                                { key: 'atendimentos', label: 'Atend.',     icon: Headphones    },
                             ] as const
                         ).map(({ key, label, icon: Icon }) => (
                             <button
@@ -622,7 +695,7 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
                             <Loader2 className="h-5 w-5 animate-spin" />
                         </div>
                     ) : (
-                        <div className="h-[65vh] overflow-y-auto">
+                        <div className="scrollbar-thin h-[65vh] overflow-y-auto">
                             <div className="space-y-5 p-5">
 
                                 {/* ── Tab: Conexão ── */}
@@ -813,7 +886,7 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
                                                                     {s.nome || 'Serviço'}
                                                                 </p>
                                                                 {s.tipo && (
-                                                                    <p className="text-[10px] text-ink/35">{s.tipo}</p>
+                                                                    <p className="text-[10px] text-ink/35">{TIPO_SERVICO_LABEL[s.tipo] ?? s.tipo}</p>
                                                                 )}
                                                             </div>
                                                             {s.valor && (
@@ -824,6 +897,147 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
                                                 </ul>
                                             )}
                                         </section>
+
+                                        {(details?.linhas_mvno ?? []).length > 0 && (
+                                            <section>
+                                                <h3 className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-ink/30">
+                                                    <Smartphone className="h-3 w-3" />
+                                                    Linhas MVNO
+                                                </h3>
+                                                <ul className="space-y-3">
+                                                    {(details!.linhas_mvno).map((l) => {
+                                                        const ativa = l.status_linha === 'A';
+                                                        return (
+                                                            <li key={l.id} className="overflow-hidden rounded-xl border border-ink/[0.08]">
+                                                                {/* Accent stripe */}
+                                                                <div className={`h-0.5 w-full ${ativa ? 'bg-emerald-400' : 'bg-ink/10'}`} />
+
+                                                                {/* Phone number + status + date */}
+                                                                <div className="flex items-start justify-between gap-3 px-4 pt-3.5 pb-3">
+                                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${ativa ? 'bg-emerald-500/10' : 'bg-ink/[0.05]'}`}>
+                                                                            <Smartphone className={`h-4 w-4 ${ativa ? 'text-emerald-600 dark:text-emerald-400' : 'text-ink/30'}`} />
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <p className="font-mono text-[15px] font-bold tracking-tight text-ink/85">
+                                                                                {formatBrPhone(l.telefone)}
+                                                                            </p>
+                                                                            {l.created_at && (
+                                                                                <p className="mt-0.5 text-[10px] text-ink/35">
+                                                                                    Ativado em {formatDateShort(l.created_at)}
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className={`shrink-0 mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${ativa ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-400' : 'bg-ink/[0.07] text-ink/40'}`}>
+                                                                        <span className={`h-1.5 w-1.5 rounded-full ${ativa ? 'bg-emerald-500' : 'bg-ink/25'}`} />
+                                                                        {ativa ? 'Ativa' : 'Inativa'}
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* Attribute pills */}
+                                                                <div className="flex flex-wrap gap-1.5 border-t border-ink/[0.06] px-4 py-2.5">
+                                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${l.esim ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400' : 'bg-ink/[0.06] text-ink/45'}`}>
+                                                                        {l.esim ? 'eSIM' : 'SIM Físico'}
+                                                                    </span>
+                                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${l.portabilidade ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400' : 'bg-ink/[0.06] text-ink/45'}`}>
+                                                                        {l.portabilidade
+                                                                            ? `Portabilidade${l.operadora_origem ? ` · ${l.operadora_origem}` : ''}`
+                                                                            : 'Sem portabilidade'}
+                                                                    </span>
+                                                                    {l.numero_temporario && (
+                                                                        <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                                                                            Temp. {l.numero_temporario}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* SIM card number */}
+                                                                {l.simcard && (
+                                                                    <div className="flex items-center gap-3 border-t border-ink/[0.06] bg-ink/[0.015] px-4 py-2">
+                                                                        <span className="shrink-0 text-[9px] font-bold uppercase tracking-widest text-ink/25">SIM</span>
+                                                                        <span className="min-w-0 truncate font-mono text-[11px] text-ink/45">{l.simcard}</span>
+                                                                    </div>
+                                                                )}
+                                                            </li>
+                                                        );
+                                                    })}
+                                                </ul>
+                                            </section>
+                                        )}
+
+                                        {(details?.linhas_sip ?? []).length > 0 && (
+                                            <section>
+                                                <h3 className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-ink/30">
+                                                    <Phone className="h-3 w-3" />
+                                                    Linhas SIP
+                                                </h3>
+                                                <ul className="space-y-3">
+                                                    {(details!.linhas_sip).map((s) => {
+                                                        const cancelado = Boolean(s.data_cancelamento && s.data_cancelamento !== '0000-00-00');
+                                                        const ativo = s.ativo && !cancelado;
+                                                        return (
+                                                            <li key={s.id} className="overflow-hidden rounded-xl border border-ink/[0.08]">
+                                                                {/* Accent stripe */}
+                                                                <div className={`h-0.5 w-full ${ativo ? 'bg-sky-400' : 'bg-ink/10'}`} />
+
+                                                                {/* Header */}
+                                                                <div className="flex items-start justify-between gap-3 px-4 pt-3.5 pb-3">
+                                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${ativo ? 'bg-sky-500/10' : 'bg-ink/[0.05]'}`}>
+                                                                            <Phone className={`h-4 w-4 ${ativo ? 'text-sky-600 dark:text-sky-400' : 'text-ink/30'}`} />
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <p className="font-mono text-[15px] font-bold tracking-tight text-ink/85">
+                                                                                {formatBrPhone(s.numero)}
+                                                                            </p>
+                                                                            {s.created_at && (
+                                                                                <p className="mt-0.5 text-[10px] text-ink/35">
+                                                                                    Ativado em {formatDateShort(s.created_at)}
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className={`shrink-0 mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${ativo ? 'bg-sky-500/12 text-sky-700 dark:text-sky-400' : 'bg-ink/[0.07] text-ink/40'}`}>
+                                                                        <span className={`h-1.5 w-1.5 rounded-full ${ativo ? 'bg-sky-500' : 'bg-ink/25'}`} />
+                                                                        {cancelado ? 'Cancelado' : ativo ? 'Ativo' : 'Inativo'}
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* Description */}
+                                                                {s.descricao && (
+                                                                    <div className="border-t border-ink/[0.06] px-4 py-2">
+                                                                        <p className="truncate text-[11px] text-ink/55">{s.descricao}</p>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Details grid */}
+                                                                <div className={`grid divide-x divide-ink/[0.06] border-t border-ink/[0.06] bg-ink/[0.015] ${[s.ipaddr, s.context, s.limite_chamada].filter(Boolean).length === 3 ? 'grid-cols-3' : [s.ipaddr, s.context, s.limite_chamada].filter(Boolean).length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                                                    {s.ipaddr && (
+                                                                        <div className="flex flex-col items-center py-2">
+                                                                            <dt className="text-[9px] uppercase tracking-wider text-ink/30">IP</dt>
+                                                                            <dd className="mt-0.5 font-mono text-[10px] font-medium text-ink/60">{s.ipaddr}</dd>
+                                                                        </div>
+                                                                    )}
+                                                                    {s.context && (
+                                                                        <div className="flex flex-col items-center py-2">
+                                                                            <dt className="text-[9px] uppercase tracking-wider text-ink/30">Tipo</dt>
+                                                                            <dd className="mt-0.5 text-[10px] font-medium text-ink/60">{s.context}</dd>
+                                                                        </div>
+                                                                    )}
+                                                                    {s.limite_chamada && (
+                                                                        <div className="flex flex-col items-center py-2">
+                                                                            <dt className="text-[9px] uppercase tracking-wider text-ink/30">Limite</dt>
+                                                                            <dd className="mt-0.5 text-[10px] font-medium text-ink/60">{s.limite_chamada} ch.</dd>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </li>
+                                                        );
+                                                    })}
+                                                </ul>
+                                            </section>
+                                        )}
 
                                         {details?.central_assinante && (
                                             <section>
@@ -948,87 +1162,246 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
                                                     const fbBol        = boletoFeedback?.id === inv.id ? boletoFeedback : null;
                                                     const fbPix        = pixFeedback?.id === inv.id ? pixFeedback : null;
                                                     return (
-                                                        <li key={inv.id} className="overflow-hidden rounded-lg border border-ink/[0.08]">
+                                                        <li key={inv.id} className={`overflow-hidden rounded-xl border ${overdue ? 'border-red-200/70 dark:border-red-900/40' : 'border-ink/[0.08]'}`}>
+                                                            {/* Accent bar */}
+                                                            <div className={`h-1 w-full ${overdue ? 'bg-red-500' : 'bg-ink/[0.06]'}`} />
+
                                                             {/* Valor + vencimento */}
-                                                            <div className="flex items-start justify-between gap-3 px-4 py-3">
-                                                                <div>
-                                                                    <p className="text-sm font-semibold text-ink/85">
+                                                            <div className="flex items-start justify-between gap-3 px-4 pt-3 pb-2.5">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-lg font-bold leading-none text-ink/90">
                                                                         R$ {Number(inv.valor ?? 0).toFixed(2).replace('.', ',')}
                                                                     </p>
                                                                     {inv.referencia && (
-                                                                        <p className="mt-0.5 text-[11px] text-ink/45">{inv.referencia}</p>
+                                                                        <p className="mt-1 truncate text-[11px] text-ink/45">{inv.referencia}</p>
+                                                                    )}
+                                                                    {(inv.valor_juros || inv.valor_multa) && (
+                                                                        <p className="mt-1 text-[10px] font-medium text-red-500 dark:text-red-400">
+                                                                            + {[inv.valor_juros && `Juros R$ ${inv.valor_juros}`, inv.valor_multa && `Multa R$ ${inv.valor_multa}`].filter(Boolean).join(' · ')}
+                                                                        </p>
                                                                     )}
                                                                 </div>
-                                                                <div className="text-right">
-                                                                    <p className={`text-[11px] font-medium ${overdue ? 'text-red-500 dark:text-red-400' : 'text-ink/40'}`}>
+                                                                <div className="shrink-0 text-right">
+                                                                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                                                        overdue
+                                                                            ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                                                                            : 'bg-ink/[0.06] text-ink/50'
+                                                                    }`}>
                                                                         {overdue ? 'Venceu' : 'Vence'} {formatDateShort(inv.data_vencimento)}
-                                                                    </p>
+                                                                    </span>
                                                                     {inv.data_emissao && (
-                                                                        <p className="mt-0.5 text-[10px] text-ink/30">Emitido {formatDateShort(inv.data_emissao)}</p>
+                                                                        <p className="mt-1 text-[10px] text-ink/30">Emitido {formatDateShort(inv.data_emissao)}</p>
                                                                     )}
                                                                 </div>
                                                             </div>
 
                                                             {/* Detalhes extras */}
-                                                            {(inv.competencia || inv.nosso_numero || inv.parcela || inv.valor_juros || inv.valor_multa) && (
-                                                                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-ink/[0.05] bg-ink/[0.01] px-4 py-2">
+                                                            {(inv.competencia || inv.nosso_numero || inv.parcela) && (
+                                                                <div className="flex flex-wrap gap-x-4 gap-y-0.5 border-t border-ink/[0.05] bg-ink/[0.015] px-4 py-1.5">
                                                                     {inv.competencia && (
-                                                                        <div className="flex items-center justify-between col-span-2 text-[10px]">
-                                                                            <dt className="text-ink/35">Competência</dt>
-                                                                            <dd className="text-ink/60">{inv.competencia}</dd>
-                                                                        </div>
-                                                                    )}
-                                                                    {inv.nosso_numero && (
-                                                                        <div className="flex items-center justify-between col-span-2 text-[10px]">
-                                                                            <dt className="text-ink/35">Nosso número</dt>
-                                                                            <dd className="font-mono text-ink/60">{inv.nosso_numero}</dd>
-                                                                        </div>
+                                                                        <span className="text-[10px] text-ink/40">{inv.competencia}</span>
                                                                     )}
                                                                     {inv.parcela && (
-                                                                        <div className="flex items-center justify-between col-span-2 text-[10px]">
-                                                                            <dt className="text-ink/35">Parcela</dt>
-                                                                            <dd className="text-ink/60">{inv.parcela}</dd>
-                                                                        </div>
+                                                                        <span className="text-[10px] text-ink/40">Parcela {inv.parcela}</span>
                                                                     )}
-                                                                    {(inv.valor_juros || inv.valor_multa) && (
-                                                                        <div className="flex items-center justify-between col-span-2 text-[10px]">
-                                                                            <dt className="text-ink/35">Acréscimos</dt>
-                                                                            <dd className="text-red-500 dark:text-red-400">
-                                                                                {[inv.valor_juros && `Juros R$ ${inv.valor_juros}`, inv.valor_multa && `Multa R$ ${inv.valor_multa}`].filter(Boolean).join(' · ')}
-                                                                            </dd>
-                                                                        </div>
+                                                                    {inv.nosso_numero && (
+                                                                        <span className="font-mono text-[10px] text-ink/30">{inv.nosso_numero}</span>
                                                                     )}
-                                                                </dl>
+                                                                </div>
                                                             )}
 
-                                                            <div className="flex items-center gap-1.5 border-t border-ink/[0.06] px-3 py-1.5">
+                                                            {/* Botões */}
+                                                            <div className="flex gap-2 border-t border-ink/[0.06] p-2">
                                                                 <button
                                                                     type="button"
                                                                     disabled={anyBusy}
                                                                     onClick={() => handleSendPix(inv)}
                                                                     title="Enviar PIX + QR Code na conversa"
-                                                                    className="flex items-center gap-1.5 rounded-md bg-emerald-500/[0.12] px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400"
+                                                                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-500/10 py-2 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400"
                                                                 >
-                                                                    {isSendingPix ? <Loader2 className="h-3 w-3 animate-spin" /> : <QrCode className="h-3 w-3" />}
-                                                                    PIX
+                                                                    {isSendingPix ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <QrCode className="h-3.5 w-3.5" />}
+                                                                    Enviar PIX
                                                                 </button>
                                                                 <button
                                                                     type="button"
                                                                     disabled={anyBusy}
                                                                     onClick={() => handleSendBoleto(inv)}
                                                                     title="Enviar 2ª via na conversa"
-                                                                    className="flex items-center gap-1.5 rounded-md bg-blue-500/[0.12] px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition-colors hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400"
+                                                                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-500/10 py-2 text-[11px] font-semibold text-blue-700 transition-colors hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-400"
                                                                 >
-                                                                    {isSendingBol ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-                                                                    2ª via
+                                                                    {isSendingBol ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                                                                    2ª via boleto
                                                                 </button>
                                                             </div>
+
                                                             {(fbPix || fbBol) && (
-                                                                <div className="border-t border-ink/[0.06] px-3 py-1.5">
+                                                                <div className="border-t border-ink/[0.06] px-4 py-2">
                                                                     {fbPix && <p className={`text-[11px] ${fbPix.ok ? 'text-emerald-600' : 'text-red-500'}`}>{fbPix.msg}</p>}
                                                                     {fbBol && <p className={`text-[11px] ${fbBol.ok ? 'text-emerald-600' : 'text-red-500'}`}>{fbBol.msg}</p>}
                                                                 </div>
                                                             )}
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+                                    </section>
+                                )}
+
+                                {/* ── Tab: Atendimentos ── */}
+                                {activeTab === 'atendimentos' && (
+                                    <section>
+                                        <h3 className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-ink/30">
+                                            <Headphones className="h-3 w-3" />
+                                            Atendimentos
+                                        </h3>
+                                        {!details || (details.tickets ?? []).length === 0 ? (
+                                            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-ink/[0.10] py-6 text-center">
+                                                <Headphones className="h-5 w-5 text-ink/20" />
+                                                <p className="text-xs text-ink/35">Nenhum atendimento encontrado.</p>
+                                            </div>
+                                        ) : (
+                                            <ul className="space-y-2">
+                                                {(details.tickets ?? []).map((tk) => {
+                                                    const statusLabel: Record<string, string> = {
+                                                        T:    'Em tratamento',
+                                                        C:    'Cancelado',
+                                                        F:    'Fechado',
+                                                        EX:   'Em execução',
+                                                        OSAB: 'OS aberta',
+                                                        OSAG: 'OS aguardando',
+                                                        OSEX: 'OS em execução',
+                                                    };
+                                                    const statusColor: Record<string, string> = {
+                                                        T:    'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+                                                        C:    'bg-ink/[0.08] text-ink/40',
+                                                        F:    'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+                                                        EX:   'bg-violet-500/15 text-violet-700 dark:text-violet-400',
+                                                        OSAB: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+                                                        OSAG: 'bg-orange-500/15 text-orange-700 dark:text-orange-400',
+                                                        OSEX: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+                                                    };
+                                                    return (
+                                                        <li key={tk.id} className="overflow-hidden rounded-xl border border-ink/[0.08]">
+                                                            <div className="flex items-start justify-between gap-3 px-4 py-3">
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                                        <span className="font-mono text-[10px] text-ink/35">#{tk.id}</span>
+                                                                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${statusColor[tk.status] ?? 'bg-ink/[0.08] text-ink/40'}`}>
+                                                                            {statusLabel[tk.status] ?? tk.status}
+                                                                        </span>
+                                                                    </div>
+                                                                    {tk.titulo && (
+                                                                        <p className="mt-1 text-xs font-medium text-ink/75 leading-snug">
+                                                                            {tk.titulo}
+                                                                        </p>
+                                                                    )}
+                                                                    {tk.protocolo && (
+                                                                        <p className="mt-1 font-mono text-[10px] text-ink/35">
+                                                                            {tk.protocolo}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                                {tk.data_criacao && (
+                                                                    <span className="shrink-0 text-[10px] text-ink/35">
+                                                                        {formatDateShort(tk.data_criacao)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+                                    </section>
+                                )}
+
+                                {/* ── Tab: OS ── */}
+                                {activeTab === 'os' && (
+                                    <section>
+                                        <h3 className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-ink/30">
+                                            <ClipboardList className="h-3 w-3" />
+                                            Ordens de Serviço
+                                        </h3>
+                                        {!details || (details.ordens ?? []).length === 0 ? (
+                                            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-ink/[0.10] py-6 text-center">
+                                                <ClipboardList className="h-5 w-5 text-ink/20" />
+                                                <p className="text-xs text-ink/35">Nenhuma OS encontrada.</p>
+                                            </div>
+                                        ) : (
+                                            <ul className="space-y-2">
+                                                {(details.ordens ?? []).map((os) => {
+                                                    const statusLabel: Record<string, string> = {
+                                                        A:   'Aberto',
+                                                        F:   'Fechado',
+                                                        AN:  'Anulado',
+                                                        EN:  'Em andamento',
+                                                        AS:  'Assumido',
+                                                        AG:  'Aguardando',
+                                                        EX:  'Em execução',
+                                                        RAG: 'Reagendado',
+                                                        DS:  'Deslocamento',
+                                                    };
+                                                    const statusColor: Record<string, string> = {
+                                                        A:   'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+                                                        F:   'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+                                                        AN:  'bg-ink/[0.08] text-ink/40',
+                                                        EN:  'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+                                                        AS:  'bg-violet-500/15 text-violet-700 dark:text-violet-400',
+                                                        AG:  'bg-orange-500/15 text-orange-700 dark:text-orange-400',
+                                                        EX:  'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+                                                        RAG: 'bg-orange-500/15 text-orange-700 dark:text-orange-400',
+                                                        DS:  'bg-sky-500/15 text-sky-700 dark:text-sky-400',
+                                                    };
+                                                    return (
+                                                        <li key={os.id} className="overflow-hidden rounded-xl border border-ink/[0.08]">
+                                                            <div className="flex items-start justify-between gap-3 px-4 py-3">
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="font-mono text-[10px] text-ink/35">#{os.id}</span>
+                                                                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${statusColor[os.status] ?? 'bg-ink/[0.08] text-ink/40'}`}>
+                                                                            {statusLabel[os.status] ?? os.status}
+                                                                        </span>
+                                                                    </div>
+                                                                    {os.assunto && (
+                                                                        <p className="mt-1 text-xs font-semibold text-ink/80 leading-snug">
+                                                                            {os.assunto}
+                                                                        </p>
+                                                                    )}
+                                                                    {os.mensagem && (
+                                                                        <div className="mt-1.5">
+                                                                            <p className="text-[9px] font-semibold uppercase tracking-wider text-ink/30">Mensagem</p>
+                                                                            <p className="mt-0.5 text-[11px] text-ink/60 leading-snug line-clamp-3">
+                                                                                {os.mensagem}
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                    {os.mensagem_resposta && (
+                                                                        <div className="mt-1.5">
+                                                                            <p className="text-[9px] font-semibold uppercase tracking-wider text-ink/30">Resposta do Técnico</p>
+                                                                            <p className="mt-0.5 text-[11px] text-ink/60 leading-snug line-clamp-2">
+                                                                                {os.mensagem_resposta}
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                    {os.tecnico && (
+                                                                        <p className="mt-1 text-[10px] text-ink/40">
+                                                                            Técnico: {os.tecnico}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                                <div className="shrink-0 text-right">
+                                                                    {os.data_abertura && (
+                                                                        <p className="text-[10px] text-ink/35">{formatDateShort(os.data_abertura)}</p>
+                                                                    )}
+                                                                    {os.data_fechamento && os.status === 'F' && (
+                                                                        <p className="mt-0.5 text-[10px] text-ink/30">Fechado {formatDateShort(os.data_fechamento)}</p>
+                                                                    )}
+                                                                    {os.data_previsao && os.status !== 'F' && (
+                                                                        <p className="mt-0.5 text-[10px] text-ink/30">Prev. {formatDateShort(os.data_previsao)}</p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </li>
                                                     );
                                                 })}

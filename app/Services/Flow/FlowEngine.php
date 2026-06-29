@@ -79,18 +79,20 @@ class FlowEngine
             return;
         }
 
-        if ($userMessage !== null) {
-            $selectedOptionId = $this->matchOption($currentNode, $userMessage, $rawMessage);
-            $nextId = $selectedOptionId !== null
-                ? $this->findEdgeTarget($flow, $currentNodeId, $selectedOptionId)
-                : null;
+        // null userMessage (audio, sticker, media) counts as an invalid attempt
+        $selectedOptionId = $userMessage !== null
+            ? $this->matchOption($currentNode, $userMessage, $rawMessage)
+            : null;
 
-            if ($nextId) {
-                $this->processFrom($conversation, $flow, $nextId);
-            } else {
-                // Unrecognised response: re-send the question.
-                $this->sendQuestion($conversation, $currentNode);
-            }
+        $nextId = $selectedOptionId !== null
+            ? $this->findEdgeTarget($flow, $currentNodeId, $selectedOptionId)
+            : null;
+
+        if ($nextId) {
+            $this->resetAttempts($conversation, $currentNodeId);
+            $this->processFrom($conversation, $flow, $nextId);
+        } else {
+            $this->handleInvalidReply($conversation, $currentNode);
         }
     }
 
@@ -117,6 +119,7 @@ class FlowEngine
                     break;
 
                 case 'question':
+                    $this->resetAttempts($conversation, $node['id']);
                     $this->sendQuestion($conversation, $node);
                     $conversation->update(['current_node_id' => $node['id']]);
                     return;
@@ -245,6 +248,61 @@ class FlowEngine
                 'wa_message_id' => $waMessageId,
                 'status'        => 'sent',
             ]);
+        }
+    }
+
+    private function handleInvalidReply(Conversation $conversation, array $node): void
+    {
+        $maxRetries     = max(1, (int) ($node['data']['max_retries'] ?? 3));
+        $retryMessage   = trim((string) ($node['data']['retry_message'] ?? ''));
+        $fallbackMsg    = trim((string) ($node['data']['fallback_message'] ?? ''));
+        $fallbackSector = ! empty($node['data']['fallback_sector_id'])
+            ? (int) $node['data']['fallback_sector_id']
+            : null;
+
+        $attempts = $this->incrementAttempts($conversation, $node['id']);
+
+        if ($attempts >= $maxRetries) {
+            $this->resetAttempts($conversation, $node['id']);
+
+            if ($fallbackMsg !== '') {
+                $this->whatsApp->sendText($conversation->contact->wa_id, $fallbackMsg);
+            }
+
+            $conversation->update([
+                'status'          => Conversation::STATUS_QUEUED,
+                'sector_id'       => $fallbackSector ?? $conversation->sector_id,
+                'flow_id'         => null,
+                'current_node_id' => null,
+            ]);
+
+            return;
+        }
+
+        if ($retryMessage !== '') {
+            $this->whatsApp->sendText($conversation->contact->wa_id, $retryMessage);
+        }
+
+        $this->sendQuestion($conversation, $node);
+    }
+
+    private function incrementAttempts(Conversation $conversation, string $nodeId): int
+    {
+        $context  = $conversation->context ?? [];
+        $attempts = (int) ($context['attempts'][$nodeId] ?? 0) + 1;
+        $context['attempts'][$nodeId] = $attempts;
+        $conversation->update(['context' => $context]);
+
+        return $attempts;
+    }
+
+    private function resetAttempts(Conversation $conversation, string $nodeId): void
+    {
+        $context = $conversation->context ?? [];
+
+        if (isset($context['attempts'][$nodeId])) {
+            unset($context['attempts'][$nodeId]);
+            $conversation->update(['context' => $context]);
         }
     }
 

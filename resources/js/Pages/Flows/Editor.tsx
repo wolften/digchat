@@ -51,6 +51,10 @@ interface FlowNodeData {
     document_message?: string;
     sector_id?: number | null;
     sector_name?: string;
+    max_retries?: number;
+    retry_message?: string;
+    fallback_sector_id?: number | null;
+    fallback_message?: string;
 }
 
 interface Sector {
@@ -500,6 +504,71 @@ function ConfigPanel({ node, sectors, onChange, onDelete }: ConfigPanelProps) {
                                 ≤3 opções → botões; 4–10 → lista. Conecte cada alça a um nó.
                             </p>
                         </div>
+
+                        <div className="space-y-3 rounded-md border border-ink/10 bg-ink/[0.02] p-3">
+                            <p className="text-[11px] font-semibold text-ink/50 uppercase tracking-wide">Respostas inválidas</p>
+
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Tentativas antes do handoff</Label>
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    max={10}
+                                    value={data.max_retries ?? 3}
+                                    onChange={e => set({ max_retries: Math.max(1, parseInt(e.target.value) || 3) })}
+                                    className="h-7 text-xs"
+                                />
+                                <p className="text-[10px] text-ink/40">Inclui áudio, figurinha e texto fora das opções.</p>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">
+                                    Mensagem em cada erro{' '}
+                                    <span className="text-ink/40">(opcional)</span>
+                                </Label>
+                                <Textarea
+                                    value={data.retry_message ?? ''}
+                                    onChange={e => set({ retry_message: e.target.value })}
+                                    placeholder="Por favor, escolha uma das opções acima."
+                                    rows={2}
+                                    className="resize-none text-xs"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Setor ao esgotar tentativas</Label>
+                                <Select
+                                    value={data.fallback_sector_id != null ? String(data.fallback_sector_id) : '__none__'}
+                                    onValueChange={val =>
+                                        set({ fallback_sector_id: val === '__none__' ? null : Number(val) })
+                                    }
+                                >
+                                    <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue placeholder="Fila geral (sem setor)" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__none__">Fila geral (sem setor)</SelectItem>
+                                        {sectors.map(s => (
+                                            <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">
+                                    Mensagem antes do handoff{' '}
+                                    <span className="text-ink/40">(opcional)</span>
+                                </Label>
+                                <Textarea
+                                    value={data.fallback_message ?? ''}
+                                    onChange={e => set({ fallback_message: e.target.value })}
+                                    placeholder="Vou te transferir para um de nossos atendentes..."
+                                    rows={2}
+                                    className="resize-none text-xs"
+                                />
+                            </div>
+                        </div>
                     </>
                 )}
 
@@ -885,7 +954,7 @@ export default function FlowEditor({ flow, sectors }: Props) {
                         </div>
 
                         {/* Right config panel */}
-                        <div className="w-56 shrink-0 border-l border-ink/[0.08]">
+                        <div className="w-72 shrink-0 border-l border-ink/[0.08]">
                             <ConfigPanel
                                 node={selectedNode}
                                 sectors={sectors}

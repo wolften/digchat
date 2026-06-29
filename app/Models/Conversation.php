@@ -6,6 +6,7 @@ use App\Events\ConversationUpdated;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Models\Channel;
@@ -25,6 +26,12 @@ class Conversation extends Model
 
     protected static function booted(): void
     {
+        static::created(function (Conversation $conversation): void {
+            $conversation->updateQuietly([
+                'protocol_number' => str_pad((string) $conversation->id, 8, '0', STR_PAD_LEFT),
+            ]);
+        });
+
         static::saved(fn (Conversation $conversation) => ConversationUpdated::dispatch($conversation));
     }
 
@@ -39,6 +46,7 @@ class Conversation extends Model
         'context',
         'survey_response_id',
         'last_message_at',
+        'protocol_number',
     ];
 
     protected function casts(): array
@@ -78,6 +86,11 @@ class Conversation extends Model
     public function surveyResponse(): HasOne
     {
         return $this->hasOne(SurveyResponse::class);
+    }
+
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(Tag::class);
     }
 
     public function isHandledByBot(): bool

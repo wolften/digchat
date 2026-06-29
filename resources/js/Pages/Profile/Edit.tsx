@@ -20,8 +20,8 @@ export default function Edit({
         >
             <Head title="Perfil" />
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-                <div className="mx-auto flex max-w-6xl flex-col gap-5">
+            <div className="scrollbar-thin flex-1 overflow-y-auto p-6">
+                <div className="flex flex-col gap-5">
                     <div className="flex flex-col gap-4 rounded-2xl border border-accent/12 bg-ink/[0.025] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                         <div className="flex min-w-0 items-center gap-4">
                             <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl border border-accent/25 bg-accent/12 text-accent shadow-sm">

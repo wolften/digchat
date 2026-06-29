@@ -9,6 +9,7 @@ use App\Models\IntegrationConfig;
 use App\Models\Message;
 use App\Models\QuickReply;
 use App\Models\Sector;
+use App\Models\Tag;
 use App\Models\Survey;
 use App\Models\SurveyResponse;
 use App\Models\User;
@@ -31,12 +32,13 @@ class InboxController extends Controller
         $filter = $request->string('filter', 'all')->toString();
         $sectorId = $request->integer('sector_id') ?: null;
         $filterUserId = $request->integer('user_id') ?: null;
+        $tagId = $request->integer('tag_id') ?: null;
         $sort = in_array($request->string('sort')->toString(), ['oldest']) ? 'oldest' : 'newest';
         $user = $request->user();
         $userId = $user->id;
 
         $conversations = Conversation::query()
-            ->with(['contact', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type'])
+            ->with(['contact', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type', 'tags:id,name,color'])
             ->where('status', '!=', Conversation::STATUS_CLOSED)
             ->visibleTo($user)
             ->when($filter === 'mine', fn ($q) => $q->where('assigned_user_id', $userId))
@@ -45,6 +47,7 @@ class InboxController extends Controller
             ->when($filter === 'open', fn ($q) => $q->where('status', Conversation::STATUS_OPEN))
             ->when($sectorId !== null, fn ($q) => $q->where('sector_id', $sectorId))
             ->when($filterUserId !== null, fn ($q) => $q->where('assigned_user_id', $filterUserId))
+            ->when($tagId !== null, fn ($q) => $q->whereHas('tags', fn ($q2) => $q2->where('tags.id', $tagId)))
             ->when($sort === 'oldest', fn ($q) => $q->orderBy('last_message_at'), fn ($q) => $q->orderByDesc('last_message_at'))
             ->limit(100)
             ->get()
@@ -63,6 +66,9 @@ class InboxController extends Controller
                 }
                 if ($filterUserId !== null) {
                     $params['user_id'] = $filterUserId;
+                }
+                if ($tagId !== null) {
+                    $params['tag_id'] = $tagId;
                 }
                 if ($sort !== 'newest') {
                     $params['sort'] = $sort;
@@ -85,9 +91,11 @@ class InboxController extends Controller
             'sort' => $sort,
             'sector_id' => $sectorId,
             'user_id' => $filterUserId,
+            'tag_id' => $tagId,
             'sectors' => $sectors,
             'users' => $users,
             'transfer_users' => $transferUsers,
+            'tags' => Tag::where('is_active', true)->orderBy('name')->get(['id', 'name', 'color']),
             'counts' => [
                 'bot' => Conversation::query()->visibleTo($user)
                     ->where('status', Conversation::STATUS_BOT)->count(),
@@ -449,6 +457,7 @@ class InboxController extends Controller
             'assigned_user_id' => $conversation->assigned_user_id,
             'assigned_user' => $conversation->assignedUser?->only(['id', 'name']),
             'sector' => $conversation->sector?->only(['id', 'name']),
+            'tags' => $conversation->tags->map->only(['id', 'name', 'color'])->values()->all(),
             'can_transfer' => $conversation->canBeTransferredBy($user),
             'contact' => [
                 'id' => $conversation->contact->id,
@@ -461,6 +470,7 @@ class InboxController extends Controller
             'last_message_type' => $last?->type,
             'last_message_at' => $conversation->last_message_at?->toIso8601String(),
             'last_message_direction' => $last?->direction,
+            'last_message_status' => $last?->direction === 'out' ? $last?->status : null,
             'unread_count' => $unreadCount,
         ];
     }
@@ -470,7 +480,7 @@ class InboxController extends Controller
      */
     private function loadConversation(int $id, User $user): ?array
     {
-        $conversation = Conversation::with(['contact', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type'])->find($id);
+        $conversation = Conversation::with(['contact', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type', 'tags:id,name,color'])->find($id);
         if (! $conversation || ! $conversation->canBeViewedBy($user)) {
             return null;
         }
@@ -499,12 +509,14 @@ class InboxController extends Controller
 
         return [
             'id' => $conversation->id,
+            'protocol_number' => $conversation->protocol_number,
             'status' => $conversation->status,
             'channel_type' => $conversation->channel?->type,
             'channel_name' => $conversation->channel?->name,
             'assigned_user_id' => $conversation->assigned_user_id,
             'assigned_user' => $conversation->assignedUser?->only(['id', 'name']),
             'sector' => $conversation->sector?->only(['id', 'name']),
+            'tags' => $conversation->tags->map->only(['id', 'name', 'color'])->values()->all(),
             'can_act' => $conversation->canBeActedOnBy($user),
             'can_assign' => $conversation->canBeAssignedBy($user),
             'can_transfer' => $conversation->canBeTransferredBy($user),

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\Sector;
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -18,6 +19,7 @@ class HistoricoController extends Controller
         $dateTo   = $request->string('date_to')->toString() ?: now()->toDateString();
         $sectorId = $request->integer('sector_id') ?: null;
         $userId   = $request->integer('user_id') ?: null;
+        $tagId    = $request->integer('tag_id') ?: null;
         $search   = $request->string('search')->trim()->toString() ?: null;
         $channel  = $request->string('channel')->trim()->toString() ?: null;
 
@@ -27,11 +29,15 @@ class HistoricoController extends Controller
             ->whereDate('created_at', '<=', $dateTo)
             ->when($sectorId, fn ($q) => $q->where('sector_id', $sectorId))
             ->when($userId, fn ($q) => $q->where('assigned_user_id', $userId))
+            ->when($tagId, fn ($q) => $q->whereHas('tags', fn ($q2) => $q2->where('tags.id', $tagId)))
             ->when($channel, fn ($q) => $q->whereHas('channel', fn ($q2) => $q2->where('type', $channel)))
-            ->when($search, fn ($q) => $q->whereHas('contact', fn ($q2) => $q2
-                ->where('name', 'like', "%{$search}%")
-                ->orWhere('wa_id', 'like', "%{$search}%")
-            ));
+            ->when($search, fn ($q) => $q
+                ->where('protocol_number', 'like', "%{$search}%")
+                ->orWhereHas('contact', fn ($q2) => $q2
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('wa_id', 'like', "%{$search}%")
+                )
+            );
 
         $total      = $base()->count();
         $botOnly    = $base()->whereNull('assigned_user_id')->count();
@@ -43,7 +49,7 @@ class HistoricoController extends Controller
             ->count();
 
         $conversations = $base()
-            ->with(['contact', 'assignedUser:id,name', 'sector:id,name', 'surveyResponse.answers', 'channel:id,type,name'])
+            ->with(['contact', 'assignedUser:id,name', 'sector:id,name', 'surveyResponse.answers', 'channel:id,type,name', 'tags:id,name,color'])
             ->orderByDesc('last_message_at')
             ->paginate(40)
             ->through(fn (Conversation $c) => $this->summarize($c));
@@ -58,6 +64,7 @@ class HistoricoController extends Controller
             'selected'      => $selected,
             'sectors'       => Sector::orderBy('name')->get(['id', 'name']),
             'users'         => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'tags'          => Tag::where('is_active', true)->orderBy('name')->get(['id', 'name', 'color']),
             'stats'         => [
                 'total'                => $total,
                 'avg_duration_minutes' => $avgMins ? (int) round((float) $avgMins) : null,
@@ -69,6 +76,7 @@ class HistoricoController extends Controller
                 'date_to'   => $dateTo,
                 'sector_id' => $sectorId,
                 'user_id'   => $userId,
+                'tag_id'    => $tagId,
                 'search'    => $search,
                 'channel'   => $channel,
             ],
@@ -94,7 +102,7 @@ class HistoricoController extends Controller
             ->get();
 
         $csv = "\xEF\xBB\xBF"; // UTF-8 BOM para Excel
-        $csv .= "ID,Contato,Telefone,Setor,Atendente,Duracao (min),Pesquisa,Data\n";
+        $csv .= "Protocolo,ID,Contato,Telefone,Setor,Atendente,Duracao (min),Pesquisa,Data\n";
 
         foreach ($rows as $c) {
             $dur = $c->created_at && $c->last_message_at
@@ -104,6 +112,7 @@ class HistoricoController extends Controller
                 ? ($c->surveyResponse->answers->first()?->option_label ?? 'Respondida')
                 : '';
             $csv .= implode(',', [
+                $c->protocol_number ?? '',
                 $c->id,
                 '"'.str_replace('"', '""', $c->contact->displayName()).'"',
                 $c->contact->wa_id,
@@ -134,6 +143,7 @@ class HistoricoController extends Controller
 
         return [
             'id'               => $conversation->id,
+            'protocol_number'  => $conversation->protocol_number,
             'contact'          => [
                 'id'    => $conversation->contact->id,
                 'name'  => $conversation->contact->displayName(),
@@ -141,6 +151,7 @@ class HistoricoController extends Controller
             ],
             'assigned_user'    => $conversation->assignedUser?->only(['id', 'name']),
             'sector'           => $conversation->sector?->only(['id', 'name']),
+            'tags'             => $conversation->tags->map->only(['id', 'name', 'color'])->values()->all(),
             'bot_only'         => $conversation->assigned_user_id === null,
             'duration_minutes' => $dur,
             'survey_answer'    => $surveyAns,
@@ -196,6 +207,7 @@ class HistoricoController extends Controller
 
         return [
             'id'               => $c->id,
+            'protocol_number'  => $c->protocol_number,
             'contact'          => [
                 'id'    => $c->contact->id,
                 'name'  => $c->contact->displayName(),

@@ -19,6 +19,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock,
+    Copy,
     Download,
     FileText,
     History,
@@ -30,6 +31,7 @@ import {
     UserRound,
     Video,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Fragment, useEffect, useRef, useState } from 'react';
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -48,8 +50,15 @@ const TelegramIcon = ({ className }: { className?: string }) => (
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+interface Tag {
+    id: number;
+    name: string;
+    color: string;
+}
+
 interface ConvItem {
     id: number;
+    protocol_number: string | null;
     contact: { id: number; name: string; wa_id: string };
     assigned_user: { id: number; name: string } | null;
     sector: { id: number; name: string } | null;
@@ -61,6 +70,7 @@ interface ConvItem {
     created_at: string | null;
     channel_type: 'whatsapp' | 'telegram' | null;
     channel_name: string | null;
+    tags: Tag[];
 }
 
 interface Msg {
@@ -75,6 +85,7 @@ interface Msg {
 
 interface Detail {
     id: number;
+    protocol_number: string | null;
     contact: { id: number; name: string; wa_id: string };
     assigned_user: { id: number; name: string } | null;
     sector: { id: number; name: string } | null;
@@ -101,6 +112,7 @@ interface Filters {
     date_to: string;
     sector_id: number | null;
     user_id: number | null;
+    tag_id: number | null;
     search: string | null;
     channel: string | null;
 }
@@ -110,6 +122,7 @@ interface Props extends PageProps {
     selected: Detail | null;
     sectors: { id: number; name: string }[];
     users: { id: number; name: string }[];
+    tags: Tag[];
     stats: {
         total: number;
         avg_duration_minutes: number | null;
@@ -254,10 +267,10 @@ function MessageBubble({ msg }: { msg: Msg }) {
                     className={cn(
                         'overflow-hidden rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
                         isIn
-                            ? 'rounded-tl-sm bg-ink/[0.06] text-ink'
+                            ? 'rounded-tl-sm border border-black/[0.08] bg-white text-gray-800 dark:border-white/[0.10] dark:bg-zinc-700 dark:text-zinc-100'
                             : isHuman
-                              ? 'rounded-tr-sm bg-accent text-canvas'
-                              : 'rounded-tr-sm bg-accent/[0.12] text-ink ring-1 ring-accent/20',
+                              ? 'rounded-tr-sm border border-green-400/50 bg-green-50 text-green-950 dark:border-green-500/40 dark:bg-green-900 dark:text-green-50'
+                              : 'rounded-tr-sm border border-sky-400/50 bg-sky-50 text-sky-950 dark:border-sky-500/40 dark:bg-sky-900 dark:text-sky-50',
                     )}
                 >
                     {mediaLabel && MediaIcon ? (
@@ -346,6 +359,17 @@ function ChannelBadge({ type, name }: { type: 'whatsapp' | 'telegram' | null; na
 
 // ─── ConvRow ─────────────────────────────────────────────────────────────────
 
+const TAG_BADGE_CLASSES: Record<string, string> = {
+    blue:   'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40',
+    green:  'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/40',
+    amber:  'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/40',
+    red:    'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40',
+    purple: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/40',
+    teal:   'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800/40',
+    coral:  'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
+    pink:   'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-800/40',
+};
+
 function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolean; onClick: () => void }) {
     return (
         <li className="relative">
@@ -380,9 +404,16 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                             )}>
                                 {conv.contact.name}
                             </span>
-                            <span className="shrink-0 text-[10px] text-ink/35">
-                                {formatRelativeDate(conv.last_message_at)}
-                            </span>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                                {conv.protocol_number && (
+                                    <span className="text-[10px] font-mono text-ink/30">
+                                        #{conv.protocol_number}
+                                    </span>
+                                )}
+                                <span className="text-[10px] text-ink/35">
+                                    {formatRelativeDate(conv.last_message_at)}
+                                </span>
+                            </div>
                         </div>
 
                         <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -393,6 +424,16 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                                     {conv.sector.name}
                                 </Badge>
                             )}
+
+                            {conv.tags?.slice(0, 2).map((tag) => (
+                                <span
+                                    key={tag.id}
+                                    className={`inline-flex h-4 max-w-[7rem] min-w-0 items-center rounded-full border px-1.5 text-[10px] font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
+                                    title={tag.name}
+                                >
+                                    <span className="min-w-0 truncate">{tag.name}</span>
+                                </span>
+                            ))}
 
                             {conv.bot_only ? (
                                 <span className="inline-flex h-4 items-center gap-0.5 rounded-full bg-accent/10 px-1.5 text-[10px] font-medium text-accent">
@@ -448,7 +489,23 @@ function DetailPanel({ detail }: { detail: Detail }) {
 
                     <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-ink/90">{detail.contact.name}</p>
-                        <p className="text-[10px] text-ink/40">{detail.contact.wa_id}</p>
+                        <div className="flex items-center gap-2">
+                            <p className="text-[10px] text-ink/40">{detail.contact.wa_id}</p>
+                            {detail.protocol_number && (
+                                <button
+                                    type="button"
+                                    title="Copiar número de protocolo"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(detail.protocol_number!);
+                                        toast.success('Protocolo copiado!');
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded border border-ink/[0.10] bg-ink/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-ink/50 transition-colors hover:bg-ink/[0.08] hover:text-ink/80"
+                                >
+                                    #{detail.protocol_number}
+                                    <Copy className="h-2.5 w-2.5" />
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1.5">
@@ -557,6 +614,7 @@ export default function HistoricoIndex({
     selected,
     sectors,
     users,
+    tags,
     stats,
     filters,
 }: Props) {
@@ -577,6 +635,7 @@ export default function HistoricoIndex({
         };
         if (filters.sector_id) base.sector_id = filters.sector_id;
         if (filters.user_id) base.user_id = filters.user_id;
+        if (filters.tag_id) base.tag_id = filters.tag_id;
         if (filters.search) base.search = filters.search;
         if (filters.channel) base.channel = filters.channel;
 
@@ -665,8 +724,8 @@ export default function HistoricoIndex({
                         <div className="relative shrink-0">
                             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/35" />
                             <Input
-                                className="h-8 w-40 pl-8 text-xs"
-                                placeholder="Buscar contato..."
+                                className="h-8 w-48 pl-8 text-xs"
+                                placeholder="Contato ou protocolo..."
                                 value={localSearch}
                                 onChange={(e) => handleSearch(e.target.value)}
                             />
@@ -738,6 +797,25 @@ export default function HistoricoIndex({
                                 <SelectItem value="telegram">Telegram</SelectItem>
                             </SelectContent>
                         </Select>
+
+                        {tags.length > 0 && (
+                            <Select
+                                value={filters.tag_id ? String(filters.tag_id) : 'all'}
+                                onValueChange={(v) => go({ tag_id: v === 'all' ? null : Number(v), conversation: undefined })}
+                            >
+                                <SelectTrigger className="h-8 w-36 shrink-0 text-xs">
+                                    <SelectValue placeholder="Etiqueta" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todas as etiquetas</SelectItem>
+                                    {tags.map((t) => (
+                                        <SelectItem key={t.id} value={String(t.id)}>
+                                            {t.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
 
                         {/* Spacer + Export */}
                         <div className="flex-1" />

@@ -40,6 +40,7 @@ import {
     CheckCheck,
     CircleX,
     Clock,
+    Copy,
     FileText,
     ImageIcon,
     Loader2,
@@ -53,6 +54,7 @@ import {
     Square,
     Star,
     StickyNote,
+    Tag as TagIcon,
     Trash2,
     UserCheck,
     UserRound,
@@ -80,6 +82,12 @@ interface Sector {
     name: string;
 }
 
+interface Tag {
+    id: number;
+    name: string;
+    color: string;
+}
+
 interface ConversationSummary {
     id: number;
     status: Status;
@@ -99,7 +107,9 @@ interface ConversationSummary {
     last_message_type?: string | null;
     last_message_at: string | null;
     last_message_direction?: string | null;
+    last_message_status?: string | null;
     unread_count: number;
+    tags: Tag[];
 }
 
 interface Msg {
@@ -124,6 +134,7 @@ interface QuickReply {
 
 interface Selected {
     id: number;
+    protocol_number: string | null;
     status: Status;
     channel_type: 'whatsapp' | 'telegram' | null;
     channel_name: string | null;
@@ -144,6 +155,7 @@ interface Selected {
         notes: string | null;
     };
     messages: Msg[];
+    tags: Tag[];
 }
 
 interface UserFilter {
@@ -158,8 +170,10 @@ interface Props {
     sort: string;
     sector_id: number | null;
     user_id: number | null;
+    tag_id: number | null;
     sectors: Sector[];
     users: UserFilter[];
+    tags: Tag[];
     transfer_users: UserFilter[];
     counts: { bot: number; queued: number; mine: number };
     auto_close_enabled: boolean;
@@ -167,6 +181,28 @@ interface Props {
     quick_replies: QuickReply[];
     has_ixc: boolean;
 }
+
+const TAG_BADGE_CLASSES: Record<string, string> = {
+    blue:   'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40',
+    green:  'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/40',
+    amber:  'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/40',
+    red:    'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40',
+    purple: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/40',
+    teal:   'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800/40',
+    coral:  'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
+    pink:   'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-800/40',
+};
+
+const TAG_DOT_CLASSES: Record<string, string> = {
+    blue:   'bg-blue-400',
+    green:  'bg-green-500',
+    amber:  'bg-amber-400',
+    red:    'bg-red-500',
+    purple: 'bg-purple-500',
+    teal:   'bg-teal-400',
+    coral:  'bg-orange-400',
+    pink:   'bg-pink-400',
+};
 
 const STATUS_LABEL: Record<Status, string> = {
     bot: 'Automação',
@@ -252,38 +288,38 @@ const MESSAGE_ROLE_META = {
         Icon: UserRound,
         label: 'Cliente',
         row: 'justify-start',
-        bubble: 'bg-white text-gray-800 dark:bg-[#142a1b] dark:text-gray-100',
-        roundedBubble: 'rounded-tl-2xl rounded-tr-2xl rounded-br-2xl',
+        bubble: 'border border-black/[0.08] bg-white text-gray-800 dark:border-white/[0.10] dark:bg-zinc-700 dark:text-zinc-100',
+        roundedBubble: 'rounded-2xl',
         icon: 'bg-ink/[0.06] text-ink/55 dark:bg-white/10 dark:text-white/65',
         labelText: 'text-ink/55 dark:text-white/60',
         metaText: 'text-ink/42',
-        tick: 'text-gray-800/70 dark:text-gray-100/70',
-        tickRead: 'text-gray-800 dark:text-gray-100',
+        tick: 'text-gray-800/70 dark:text-ink/70',
+        tickRead: 'text-gray-800 dark:text-ink',
     },
     attendant: {
         Icon: UserCheck,
         label: 'Atendente',
         row: 'justify-end',
-        bubble: 'bg-accent text-black',
-        roundedBubble: 'rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl',
-        icon: 'bg-black/10 text-black/70',
-        labelText: 'text-black/70',
-        metaText: 'text-black/55',
-        tick: 'text-black/70',
-        tickRead: 'text-black',
+        bubble: 'border border-green-400/50 bg-green-50 text-green-950 dark:border-green-500/40 dark:bg-green-900 dark:text-green-50',
+        roundedBubble: 'rounded-2xl',
+        icon: 'bg-green-200/70 text-green-900 dark:bg-green-800 dark:text-green-100',
+        labelText: 'text-green-900/70 dark:text-green-100/70',
+        metaText: 'text-green-800/55 dark:text-green-200/60',
+        tick: 'text-green-950/70 dark:text-white/70',
+        tickRead: 'text-green-950 dark:text-white',
     },
     automation: {
         Icon: Bot,
         label: 'Automação',
         row: 'justify-end',
         bubble:
-            'border border-amber-300/50 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-50',
-        roundedBubble: 'rounded-tl-2xl rounded-tr-2xl rounded-bl-2xl',
-        icon: 'bg-amber-200/70 text-amber-900 dark:bg-amber-800 dark:text-amber-100',
-        labelText: 'text-amber-900/70 dark:text-amber-100/70',
-        metaText: 'text-amber-800/55 dark:text-amber-200/60',
-        tick: 'text-amber-950/70 dark:text-white/70',
-        tickRead: 'text-amber-950 dark:text-white',
+            'border border-sky-400/50 bg-sky-50 text-sky-950 dark:border-sky-500/40 dark:bg-sky-900 dark:text-sky-50',
+        roundedBubble: 'rounded-2xl',
+        icon: 'bg-sky-200/70 text-sky-900 dark:bg-sky-800 dark:text-sky-100',
+        labelText: 'text-sky-900/70 dark:text-sky-100/70',
+        metaText: 'text-sky-800/55 dark:text-sky-200/60',
+        tick: 'text-sky-950/70 dark:text-white/70',
+        tickRead: 'text-sky-950 dark:text-white',
     },
 } satisfies Record<
     MessageRole,
@@ -308,8 +344,10 @@ export default function InboxIndex({
     sort,
     sector_id,
     user_id,
+    tag_id,
     sectors,
     users,
+    tags,
     transfer_users,
     counts,
     auto_close_enabled,
@@ -530,9 +568,38 @@ export default function InboxIndex({
                 sort: next,
                 ...(sector_id ? { sector_id } : {}),
                 ...(user_id ? { user_id } : {}),
+                ...(tag_id ? { tag_id } : {}),
                 ...(selected ? { conversation: selected.id } : {}),
             },
             { preserveState: true, preserveScroll: true },
+        );
+    };
+
+    const changeTag = (tid: string) => {
+        router.get(
+            route('inbox.index'),
+            {
+                filter,
+                sort,
+                ...(sector_id ? { sector_id } : {}),
+                ...(user_id ? { user_id } : {}),
+                ...(tid !== 'all' ? { tag_id: tid } : {}),
+                ...(selected ? { conversation: selected.id } : {}),
+            },
+            { preserveState: true, preserveScroll: true },
+        );
+    };
+
+    const toggleTag = (tagId: number) => {
+        if (!selected) return;
+        const currentIds = (selected.tags ?? []).map((t) => t.id);
+        const newIds = currentIds.includes(tagId)
+            ? currentIds.filter((id) => id !== tagId)
+            : [...currentIds, tagId];
+        router.put(
+            route('inbox.conversations.tags', selected.id),
+            { tag_ids: newIds },
+            { preserveState: true, preserveScroll: true, only: ['conversations', 'selected'] },
         );
     };
 
@@ -965,10 +1032,9 @@ export default function InboxIndex({
 
     const filters = [
         { key: 'all', label: 'Todas', title: 'Todas as conversas', Icon: MessageSquare },
+        { key: 'mine', label: 'Minhas', title: 'Minhas conversas', count: counts.mine, Icon: UserCheck },
         { key: 'bot', label: 'Auto', title: 'Conversas em automação', count: counts.bot, Icon: Bot },
         { key: 'queued', label: 'Fila', title: 'Conversas na fila', count: counts.queued, Icon: Clock },
-        { key: 'mine', label: 'Minhas', title: 'Minhas conversas', count: counts.mine, Icon: UserCheck },
-        { key: 'open', label: 'Atend.', title: 'Conversas em atendimento', Icon: UserRound },
     ];
 
     return (
@@ -985,7 +1051,7 @@ export default function InboxIndex({
                         {/* Lista de conversas */}
                         <div className="flex min-h-0 flex-col border-r border-ink/[0.08]">
                             <div className="flex h-16 items-center border-b border-ink/[0.08] px-2">
-                                <div className="grid w-full grid-cols-5 gap-1 rounded-2xl border border-ink/[0.08] bg-white p-1 shadow-sm dark:bg-ink/[0.03]">
+                                <div className="grid w-full grid-cols-4 gap-1 rounded-2xl border border-ink/[0.08] bg-white p-1 shadow-sm dark:bg-ink/[0.03]">
                                     {filters.map((f) => {
                                         const active = filter === f.key;
 
@@ -1022,9 +1088,11 @@ export default function InboxIndex({
                             <div
                                 className={cn(
                                     'grid items-center gap-2 border-b border-ink/[0.08] bg-ink/[0.015] px-2 py-2',
-                                    sectors.length > 0 && users.length > 0
-                                        ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_3rem]'
-                                        : 'grid-cols-[minmax(0,1fr)_3rem]',
+                                    [sectors.length > 0, users.length > 0, tags.length > 0].filter(Boolean).length === 3
+                                        ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_3rem]'
+                                        : [sectors.length > 0, users.length > 0, tags.length > 0].filter(Boolean).length === 2
+                                          ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_3rem]'
+                                          : 'grid-cols-[minmax(0,1fr)_3rem]',
                                 )}
                             >
                                     {sectors.length > 0 && (
@@ -1074,6 +1142,32 @@ export default function InboxIndex({
                                                 {users.map((u) => (
                                                     <SelectItem key={u.id} value={u.id.toString()}>
                                                         {u.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                    {tags.length > 0 && (
+                                        <Select
+                                            value={tag_id?.toString() ?? 'all'}
+                                            onValueChange={changeTag}
+                                        >
+                                            <SelectTrigger className="h-11 min-w-0 overflow-hidden rounded-xl border-ink/[0.1] bg-white px-2.5 py-1.5 text-left shadow-sm focus:border-accent/50 focus:ring-accent/20 dark:bg-ink/[0.04]">
+                                                <div className="min-w-0 flex-1 overflow-hidden">
+                                                    <span className="block text-[9px] font-bold uppercase leading-none tracking-[0.08em] text-ink/35">
+                                                        Etiqueta
+                                                    </span>
+                                                    <SelectValue
+                                                        className="mt-1 block truncate text-xs font-semibold text-ink/85"
+                                                        placeholder="Todas"
+                                                    />
+                                                </div>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">Todas</SelectItem>
+                                                {tags.map((t) => (
+                                                    <SelectItem key={t.id} value={t.id.toString()}>
+                                                        {t.name}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -1149,12 +1243,16 @@ export default function InboxIndex({
                                             key={c.id}
                                             onClick={() => selectConversation(c.id)}
                                             className={cn(
-                                                'group w-full border-b border-ink/[0.07] px-4 py-3 text-left text-ink transition hover:bg-ink/[0.05]',
-                                                isSelected && 'bg-accent/10',
+                                                'group relative w-full border-b border-ink/[0.07] px-4 py-3 text-left text-ink transition hover:bg-ink/[0.05]',
+                                                isSelected ? 'bg-accent/[0.08]' : 'hover:bg-ink/[0.05]',
                                             )}
                                         >
+                                            {isSelected && (
+                                                <span className="absolute inset-y-0 left-0 z-10 w-[3px] rounded-r-full bg-accent" />
+                                            )}
                                             <div className="flex items-start gap-3">
-                                                <div className="mt-0.5 h-10 w-10 shrink-0 overflow-hidden rounded-full border border-accent/20 bg-accent/15">
+                                                <div className="relative mt-0.5 shrink-0">
+                                                <div className={cn("h-10 w-10 overflow-hidden rounded-full transition-colors", isSelected ? "bg-accent shadow-sm shadow-accent/30" : "border border-accent/25 bg-accent/10")}>
                                                 {c.contact.avatar_url ? (
                                                     <img
                                                         src={c.contact.avatar_url}
@@ -1163,10 +1261,26 @@ export default function InboxIndex({
                                                         loading="lazy"
                                                     />
                                                 ) : (
-                                                    <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-accent">
+                                                    <div className={cn("flex h-full w-full items-center justify-center text-xs font-semibold", isSelected ? "text-canvas" : "text-accent")}>
                                                         {initials(contactName)}
                                                     </div>
                                                 )}
+                                                </div>
+                                                <span
+                                                    className={cn(
+                                                        "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-canvas",
+                                                        c.channel_type === 'telegram'
+                                                            ? "bg-blue-500 text-white"
+                                                            : "bg-green-500 text-white",
+                                                    )}
+                                                    title={c.channel_name ?? (c.channel_type === 'telegram' ? 'Telegram' : 'WhatsApp')}
+                                                >
+                                                    {c.channel_type === 'telegram' ? (
+                                                        <TelegramIcon className="h-2.5 w-2.5" />
+                                                    ) : (
+                                                        <WhatsAppIcon className="h-2.5 w-2.5" />
+                                                    )}
+                                                </span>
                                             </div>
 
                                             <div className="min-w-0 flex-1">
@@ -1200,31 +1314,28 @@ export default function InboxIndex({
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className={cn("text-sm text-ink/48", preview && PreviewIcon ? "flex items-center overflow-hidden" : "line-clamp-1")}>
+                                                <div className="flex items-center gap-1 overflow-hidden text-sm text-ink/48">
+                                                    {c.last_message_direction === 'out' && (() => {
+                                                        const s = c.last_message_status;
+                                                        if (s === 'read') return <CheckCheck className="h-3.5 w-3.5 shrink-0 text-blue-500" />;
+                                                        if (s === 'delivered') return <CheckCheck className="h-3.5 w-3.5 shrink-0 text-ink/40" />;
+                                                        if (s === 'sent' || s === 'accepted') return <Check className="h-3.5 w-3.5 shrink-0 text-ink/40" />;
+                                                        if (s === 'failed') return <CircleX className="h-3.5 w-3.5 shrink-0 text-red-500" />;
+                                                        return <Clock className="h-3.5 w-3.5 shrink-0 text-ink/40" />;
+                                                    })()}
                                                     {preview && PreviewIcon ? (
-                                                        <span className="inline-flex items-center gap-1.5 font-medium text-ink/62">
-                                                            <PreviewIcon className="h-3.5 w-3.5" />
-                                                            {preview.label}
+                                                        <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-ink/62">
+                                                            <PreviewIcon className="h-3.5 w-3.5 shrink-0" />
+                                                            <span className="truncate">{preview.label}</span>
                                                         </span>
                                                     ) : (
-                                                        c.last_message ?? '—'
+                                                        <span className="truncate">{c.last_message ?? '—'}</span>
                                                     )}
                                                 </div>
                                             </div>
                                             </div>
 
                                             <div className="mt-2 flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium leading-none">
-                                                    {c.channel_type === 'telegram' ? (
-                                                        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-blue-300/60 bg-blue-50 px-2 text-blue-600 dark:border-blue-500/30 dark:bg-blue-950/30 dark:text-blue-400">
-                                                            <TelegramIcon className="h-3 w-3" />
-                                                            {c.channel_name ?? 'Telegram'}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-green-300/60 bg-green-50 px-2 text-green-600 dark:border-green-500/30 dark:bg-green-950/30 dark:text-green-400">
-                                                            <WhatsAppIcon className="h-3 w-3" />
-                                                            {c.channel_name ?? 'WhatsApp'}
-                                                        </span>
-                                                    )}
                                                     {c.status === 'surveying' ? (
                                                         <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-violet-300 bg-violet-50 px-2 font-semibold text-violet-700 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
                                                             <Star className="h-3 w-3" />
@@ -1254,14 +1365,26 @@ export default function InboxIndex({
                                                             </span>
                                                         </span>
                                                     )}
+                                                    {c.tags?.slice(0, 2).map((tag) => (
+                                                        <span
+                                                            key={tag.id}
+                                                            className={`inline-flex h-5 max-w-[8rem] min-w-0 items-center rounded-full border px-1.5 text-[10px] font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
+                                                            title={tag.name}
+                                                        >
+                                                            <span className="min-w-0 truncate">{tag.name}</span>
+                                                        </span>
+                                                    ))}
+                                                    {(c.tags?.length ?? 0) > 2 && (
+                                                        <span className="text-[10px] text-ink/35">+{c.tags!.length - 2}</span>
+                                                    )}
                                                     {c.assigned_user && (
                                                         <span
-                                                            className="inline-flex h-5 max-w-[15rem] min-w-0 items-center gap-1 text-ink/56"
+                                                            className="inline-flex h-5 max-w-[9rem] min-w-0 items-center gap-1 text-ink/50"
                                                             title={c.assigned_user.name}
                                                         >
                                                             <UserRound className="h-3 w-3 shrink-0 opacity-60" />
                                                             <span className="min-w-0 truncate">
-                                                                {c.assigned_user.name}
+                                                                {c.assigned_user.name.split(' ')[0]}
                                                             </span>
                                                         </span>
                                                     )}
@@ -1291,10 +1414,26 @@ export default function InboxIndex({
                                                     selected.contact.wa_id,
                                                 )}
                                             </div>
-                                            <div className="text-xs text-ink/45">
-                                                {selected.channel_type === 'telegram'
-                                                    ? `ID: ${selected.contact.wa_id}`
-                                                    : formatClientPhone(selected.contact.wa_id)}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-ink/45">
+                                                    {selected.channel_type === 'telegram'
+                                                        ? `ID: ${selected.contact.wa_id}`
+                                                        : formatClientPhone(selected.contact.wa_id)}
+                                                </span>
+                                                {selected.protocol_number && (
+                                                    <button
+                                                        type="button"
+                                                        title="Copiar número de protocolo"
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(selected.protocol_number!);
+                                                            toast.success('Protocolo copiado!');
+                                                        }}
+                                                        className="inline-flex items-center gap-1 rounded-md border border-ink/[0.10] bg-ink/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-ink/50 transition-colors hover:bg-ink/[0.08] hover:text-ink/80"
+                                                    >
+                                                        #{selected.protocol_number}
+                                                        <Copy className="h-2.5 w-2.5" />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -1305,6 +1444,14 @@ export default function InboxIndex({
                                                         {selected.sector.name}
                                                     </span>
                                                 )}
+                                                {selected.tags?.map((tag) => (
+                                                    <span
+                                                        key={tag.id}
+                                                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
+                                                    >
+                                                        {tag.name}
+                                                    </span>
+                                                ))}
                                                 {selected.channel_type === 'telegram' ? (
                                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
                                                         <TelegramIcon className="h-3 w-3" />
@@ -1433,7 +1580,7 @@ export default function InboxIndex({
                                                 </>
                                             )}
 
-                                            {/* ── Notes panel toggle ── */}
+                                            {/* ── Notes + Tags ── */}
                                             {!has_ixc && <div className="h-5 w-px bg-ink/[0.12]" />}
                                             <button
                                                     type="button"
@@ -1448,6 +1595,40 @@ export default function InboxIndex({
                                                 >
                                                     <StickyNote className="h-4 w-4" />
                                                 </button>
+                                            {tags.length > 0 && (
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <button
+                                                            type="button"
+                                                            title="Etiquetas"
+                                                            className={cn(
+                                                                'rounded p-1.5 transition-colors',
+                                                                (selected.tags?.length ?? 0) > 0
+                                                                    ? 'bg-accent/10 text-accent'
+                                                                    : 'text-ink/40 hover:bg-ink/[0.06] hover:text-ink/70',
+                                                            )}
+                                                        >
+                                                            <TagIcon className="h-4 w-4" />
+                                                        </button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-44">
+                                                        {tags.map((tag) => {
+                                                            const isApplied = selected.tags?.some((t) => t.id === tag.id) ?? false;
+                                                            return (
+                                                                <DropdownMenuItem
+                                                                    key={tag.id}
+                                                                    onClick={() => toggleTag(tag.id)}
+                                                                    className="cursor-pointer gap-2"
+                                                                >
+                                                                    <span className={`h-2 w-2 shrink-0 rounded-full ${TAG_DOT_CLASSES[tag.color] ?? 'bg-ink/20'} ${isApplied ? 'opacity-100' : 'opacity-40'}`} />
+                                                                    <span className="flex-1 truncate">{tag.name}</span>
+                                                                    {isApplied && <Check className="h-3.5 w-3.5 shrink-0 text-accent" />}
+                                                                </DropdownMenuItem>
+                                                            );
+                                                        })}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1467,19 +1648,6 @@ export default function InboxIndex({
                                                     className={cn('flex transition-opacity duration-300', roleMeta.row, isOptimistic ? 'opacity-50' : '')}
                                                 >
                                                     <div className="relative w-fit max-w-[75%]">
-                                                    {role === 'client' ? (
-                                                        <svg className="absolute -left-[7px] bottom-0" width="8" height="13" viewBox="0 0 8 13" aria-hidden="true">
-                                                            <path d="M 8 0 C 6 6 0 9 0 13 L 8 13 Z" className="fill-white dark:fill-[#142a1b]" />
-                                                        </svg>
-                                                    ) : role === 'attendant' ? (
-                                                        <svg className="absolute -right-[7px] bottom-0" width="8" height="13" viewBox="0 0 8 13" aria-hidden="true">
-                                                            <path d="M 0 0 C 2 6 8 9 8 13 L 0 13 Z" className="fill-accent" />
-                                                        </svg>
-                                                    ) : (
-                                                        <svg className="absolute -right-[7px] bottom-0" width="8" height="13" viewBox="0 0 8 13" aria-hidden="true">
-                                                            <path d="M 0 0 C 2 6 8 9 8 13 L 0 13 Z" className="fill-amber-50 dark:fill-amber-900" />
-                                                        </svg>
-                                                    )}
                                                     <div
                                                         className={cn(
                                                             'px-3 py-2 text-sm shadow-sm',
@@ -1576,22 +1744,28 @@ export default function InboxIndex({
                                                         )}
                                                         <div
                                                             className={cn(
-                                                                'mt-1 flex items-center justify-end gap-1 text-[10px]',
+                                                                'mt-1 flex items-center gap-1 text-[10px]',
+                                                                role === 'automation' ? 'justify-between' : 'justify-end',
                                                                 roleMeta.metaText,
                                                             )}
                                                         >
-                                                            {formatTime(m.created_at)}
-                                                            {m.direction === 'out' &&
-                                                                (m.status === 'sending' ? (
-                                                                    <Loader2 className={cn('h-3 w-3 animate-spin', roleMeta.tick)} />
-                                                                ) : m.status === 'read' ? (
-                                                                    <CheckCheck className={cn('h-3 w-3', roleMeta.tickRead)} />
-                                                                ) : m.status === 'delivered' ? (
-                                                                    <CheckCheck className={cn('h-3 w-3', roleMeta.tick)} />
-                                                                ) : m.status === 'sent' ||
-                                                                  m.status === 'accepted' ? (
-                                                                    <Check className={cn('h-3 w-3', roleMeta.tick)} />
-                                                                ) : null)}
+                                                            {role === 'automation' && (
+                                                                <Bot className="h-3 w-3 shrink-0 opacity-60" />
+                                                            )}
+                                                            <div className="flex items-center gap-1">
+                                                                {formatTime(m.created_at)}
+                                                                {m.direction === 'out' &&
+                                                                    (m.status === 'sending' ? (
+                                                                        <Loader2 className={cn('h-3 w-3 animate-spin', roleMeta.tick)} />
+                                                                    ) : m.status === 'read' ? (
+                                                                        <CheckCheck className={cn('h-3 w-3', roleMeta.tickRead)} />
+                                                                    ) : m.status === 'delivered' ? (
+                                                                        <CheckCheck className={cn('h-3 w-3', roleMeta.tick)} />
+                                                                    ) : m.status === 'sent' ||
+                                                                      m.status === 'accepted' ? (
+                                                                        <Check className={cn('h-3 w-3', roleMeta.tick)} />
+                                                                    ) : null)}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     </div>

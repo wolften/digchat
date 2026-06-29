@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\ConversationTagController;
+use App\Http\Controllers\TagController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FlowController;
 use App\Http\Controllers\HistoricoController;
@@ -39,6 +41,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/contacts/{contact}/notes', [ContactController::class, 'updateNotes'])->name('contacts.notes.update');
 
     // Atendimento (inbox) — todos os usuários autenticados.
+    Route::put('/inbox/{conversation}/tags', [ConversationTagController::class, 'sync'])->name('inbox.conversations.tags');
     Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
     Route::get('/inbox/{conversation}', [InboxController::class, 'show'])->name('inbox.show');
     Route::post('/inbox/{conversation}/assign', [InboxController::class, 'assign'])->name('inbox.assign');
@@ -88,6 +91,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/respostas-rapidas', [QuickReplyController::class, 'store'])->name('respostas-rapidas.store');
         Route::put('/respostas-rapidas/{quickReply}', [QuickReplyController::class, 'update'])->name('respostas-rapidas.update');
         Route::delete('/respostas-rapidas/{quickReply}', [QuickReplyController::class, 'destroy'])->name('respostas-rapidas.destroy');
+
+        Route::get('/etiquetas', [TagController::class, 'index'])->name('tags.index');
+        Route::post('/etiquetas', [TagController::class, 'store'])->name('tags.store');
+        Route::put('/etiquetas/{tag}', [TagController::class, 'update'])->name('tags.update');
+        Route::delete('/etiquetas/{tag}', [TagController::class, 'destroy'])->name('tags.destroy');
 
         Route::get('/historico', [HistoricoController::class, 'index'])->name('historico.index');
         Route::get('/historico/export', [HistoricoController::class, 'export'])->name('historico.export');

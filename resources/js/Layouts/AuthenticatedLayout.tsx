@@ -23,6 +23,7 @@ import {
     Settings,
     Building2,
     Sun,
+    Tag,
     User,
     Users,
     X,
@@ -146,6 +147,13 @@ export default function Authenticated({
             routeName: 'respostas-rapidas.index',
             activePattern: 'respostas-rapidas.*',
             icon: Zap,
+            managerOnly: true,
+        },
+        {
+            label: 'Etiquetas',
+            routeName: 'tags.index',
+            activePattern: 'tags.*',
+            icon: Tag,
             managerOnly: true,
         },
 {

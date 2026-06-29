@@ -167,14 +167,6 @@ export default function Login({
                                                 <span>Manter conectado</span>
                                             </label>
 
-                                            {canResetPassword && (
-                                                <Link
-                                                    href={route('password.request')}
-                                                    className="text-sm font-semibold text-[#1f8f46] underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-accent/30"
-                                                >
-                                                    Esqueci minha senha
-                                                </Link>
-                                            )}
                                         </div>
 
                                         <Button
@@ -188,10 +180,6 @@ export default function Login({
                                         </Button>
                                     </form>
 
-                                    <div className="mt-7 rounded-2xl bg-[#f2f7f3] px-4 py-3 text-xs leading-5 text-[#627268]">
-                                        Dica: verifique se o e-mail pertence a um usuário
-                                        ativo antes de solicitar redefinição de senha.
-                                    </div>
                                 </div>
                             </div>
 

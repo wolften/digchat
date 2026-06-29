@@ -27,20 +27,31 @@ class IxcController extends Controller
         }
 
         $client = new IxcClient($config);
-        $result = $client->searchClientes($query);
 
-        $registros = $result['registros'] ?? [];
-        if (! is_array($registros)) {
-            $registros = [];
+        // If the query looks like a CPF/CNPJ (only digits + formatting chars), search by document.
+        $isDocument = preg_match('/^[\d.\-\/\s]+$/', $query) && strlen(preg_replace('/\D+/', '', $query)) >= 5;
+
+        if ($isDocument) {
+            $result    = $client->searchClienteByDocument($query);
+            $registros = $result['registros'] ?? [];
+            if (! is_array($registros)) {
+                $registros = [];
+            }
+        } else {
+            $result    = $client->searchClientes($query);
+            $registros = $result['registros'] ?? [];
+            if (! is_array($registros)) {
+                $registros = [];
+            }
+
+            // Filter client-side: keep only entries that actually start with the query
+            // (the >= operator may return alphabetically later names on the same page).
+            $upper     = mb_strtoupper($query);
+            $registros = array_filter($registros, fn ($r) => str_starts_with(
+                mb_strtoupper(trim((string) ($r['razao'] ?? ''))),
+                $upper
+            ));
         }
-
-        // Filter client-side: keep only entries that actually start with the query
-        // (the >= operator may return alphabetically later names on the same page).
-        $upper = mb_strtoupper($query);
-        $registros = array_filter($registros, fn ($r) => str_starts_with(
-            mb_strtoupper(trim((string) ($r['razao'] ?? ''))),
-            $upper
-        ));
 
         return response()->json(array_values(array_map(fn ($r) => [
             'id'       => $r['id'] ?? '',
@@ -274,12 +285,96 @@ class IxcController extends Controller
             ];
         }
 
+        // Linhas SIP VoIP do contrato
+        $sippeersResult = $client->getVoipSipeersByContrato($contractId);
+        $linhasSip = [];
+        foreach ($sippeersResult['registros'] ?? [] as $s) {
+            $numero = trim((string) ($s['callerid'] ?? $s['defaultuser'] ?? $s['username'] ?? '')) ?: null;
+            $limite = trim((string) ($s['call-limit'] ?? $s['limite_chamada'] ?? ''));
+            $linhasSip[] = [
+                'id'                => (string) ($s['id'] ?? ''),
+                'numero'            => $numero,
+                'descricao'         => trim((string) ($s['descricao'] ?? '')) ?: null,
+                'ativo'             => ((string) ($s['ativo'] ?? 'N')) === 'S',
+                'context'           => trim((string) ($s['context'] ?? '')) ?: null,
+                'ipaddr'            => trim((string) ($s['ipaddr'] ?? '')) ?: null,
+                'limite_chamada'    => ($limite !== '' && $limite !== '0') ? $limite : null,
+                'created_at'        => trim((string) ($s['created_at'] ?? '')) ?: null,
+                'data_cancelamento' => trim((string) ($s['data_cancelamento'] ?? '')) ?: null,
+            ];
+        }
+
+        // Linhas MVNO do contrato
+        $linhasMvnoResult = $client->getLinhaMvnoByContrato($contractId);
+        $linhasMvno = [];
+        foreach ($linhasMvnoResult['registros'] ?? [] as $l) {
+            $ddd    = trim((string) ($l['ddd_telefone'] ?? ''));
+            $numero = trim((string) ($l['numero_telefone'] ?? ''));
+            $linhasMvno[] = [
+                'id'                   => (string) ($l['id'] ?? ''),
+                'status_linha'         => (string) ($l['status_linha'] ?? ''),
+                'telefone'             => ($ddd !== '' && $numero !== '') ? "({$ddd}) {$numero}" : ($numero ?: null),
+                'simcard'              => trim((string) ($l['simcard'] ?? '')) ?: null,
+                'esim'                 => ((string) ($l['esim'] ?? 'N')) === 'S',
+                'portabilidade'        => ((string) ($l['portabilidade'] ?? 'N')) === 'S',
+                'status_portabilidade' => trim((string) ($l['status_portabilidade'] ?? '')) ?: null,
+                'numero_temporario'    => trim((string) ($l['numero_temporario'] ?? '')) ?: null,
+                'operadora_origem'     => trim((string) ($l['operadora_origem'] ?? '')) ?: null,
+                'created_at'           => trim((string) ($l['created_at'] ?? '')) ?: null,
+            ];
+        }
+
+        // Tickets (atendimentos) do cliente
+        $tickets = [];
+        if ($contact->ixc_customer_id) {
+            $ticketsResult = $client->getTickets((string) $contact->ixc_customer_id);
+            foreach ($ticketsResult['registros'] ?? [] as $t) {
+                $tickets[] = [
+                    'id'           => (string) ($t['id'] ?? ''),
+                    'titulo'       => trim((string) ($t['titulo'] ?? '')),
+                    'status'       => (string) ($t['status'] ?? ''),
+                    'protocolo'    => trim((string) ($t['protocolo'] ?? '')),
+                    'data_criacao' => $t['data_criacao'] ?? null,
+                ];
+            }
+        }
+
+        // Ordens de serviço do cliente
+        $ordens = [];
+        if ($contact->ixc_customer_id) {
+            $assuntosResult = $client->getOssAssuntos();
+            $assuntosMap = [];
+            foreach ($assuntosResult['registros'] ?? [] as $a) {
+                $assuntosMap[(string) ($a['id'] ?? '')] = trim((string) ($a['assunto'] ?? ''));
+            }
+
+            $ordensResult = $client->getOrdensServico((string) $contact->ixc_customer_id);
+            foreach ($ordensResult['registros'] ?? [] as $o) {
+                $idAssunto = (string) ($o['id_assunto'] ?? '');
+                $ordens[] = [
+                    'id'                 => (string) ($o['id'] ?? ''),
+                    'assunto'            => $assuntosMap[$idAssunto] ?? trim((string) ($o['assunto'] ?? '')),
+                    'status'             => (string) ($o['status'] ?? ''),
+                    'mensagem'           => trim((string) ($o['mensagem'] ?? '')),
+                    'mensagem_resposta'  => trim((string) ($o['mensagem_resposta'] ?? '')),
+                    'data_abertura'      => $o['data_abertura'] ?? null,
+                    'data_previsao'      => $o['data_agenda'] ?? null,
+                    'data_fechamento'    => $o['data_fechamento'] ?? null,
+                    'tecnico'            => trim((string) ($o['nome_tecnico'] ?? $o['tecnico'] ?? '')),
+                ];
+            }
+        }
+
         return response()->json([
             'connection'        => $connection,
             'invoices'          => array_values($invoices),
             'comodatos'         => array_values($comodatos),
             'servicos'          => array_values($servicos),
+            'linhas_sip'        => array_values($linhasSip),
+            'linhas_mvno'       => array_values($linhasMvno),
             'central_assinante' => $centralDoAssinante,
+            'ordens'            => array_values($ordens),
+            'tickets'           => array_values($tickets),
         ]);
     }
 

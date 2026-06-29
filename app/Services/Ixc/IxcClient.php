@@ -349,6 +349,71 @@ class IxcClient
         ]);
     }
 
+    public function getTickets(string $idCliente): array
+    {
+        return $this->listRequest('su_ticket', [
+            'qtype'     => 'su_ticket.id_cliente',
+            'query'     => $idCliente,
+            'oper'      => '=',
+            'page'      => '1',
+            'rp'        => '50',
+            'sortname'  => 'su_ticket.id',
+            'sortorder' => 'desc',
+        ]);
+    }
+
+    public function getOrdensServico(string $idCliente): array
+    {
+        return $this->listRequest('su_oss_chamado', [
+            'qtype'     => 'su_oss_chamado.id_cliente',
+            'query'     => $idCliente,
+            'oper'      => '=',
+            'page'      => '1',
+            'rp'        => '50',
+            'sortname'  => 'su_oss_chamado.id',
+            'sortorder' => 'desc',
+        ]);
+    }
+
+    public function getOssAssuntos(): array
+    {
+        return $this->listRequest('su_oss_assunto', [
+            'qtype'     => 'su_oss_assunto.id',
+            'query'     => '1',
+            'oper'      => '>=',
+            'page'      => '1',
+            'rp'        => '1000',
+            'sortname'  => 'su_oss_assunto.id',
+            'sortorder' => 'asc',
+        ]);
+    }
+
+    public function getVoipSipeersByContrato(string $idContrato): array
+    {
+        return $this->listRequest('voip_sippeers', [
+            'qtype'     => 'voip_sippeers.id_contrato',
+            'query'     => $idContrato,
+            'oper'      => '=',
+            'page'      => '1',
+            'rp'        => '100',
+            'sortname'  => 'voip_sippeers.id',
+            'sortorder' => 'asc',
+        ]);
+    }
+
+    public function getLinhaMvnoByContrato(string $idContrato): array
+    {
+        return $this->listRequest('linha_mvno', [
+            'qtype'     => 'linha_mvno.id_contrato',
+            'query'     => $idContrato,
+            'oper'      => '=',
+            'page'      => '1',
+            'rp'        => '100',
+            'sortname'  => 'linha_mvno.id',
+            'sortorder' => 'asc',
+        ]);
+    }
+
     public function getLoginStatusByContrato(string $idContrato): array
     {
         return $this->listRequest('radusuarios', [
