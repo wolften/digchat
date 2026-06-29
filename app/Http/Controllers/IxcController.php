@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Channel;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\IntegrationConfig;
 use App\Services\Ixc\IxcClient;
+use App\Services\Telegram\TelegramService;
 use App\Services\WhatsApp\MessageSender;
+use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -418,7 +421,7 @@ class IxcController extends Controller
 
         try {
             $file    = new UploadedFile($tmpPath, $filename, 'application/pdf', null, true);
-            $sender  = app(MessageSender::class);
+            $sender  = $this->makeSender($conversation);
             $message = $sender->sendAttachment($conversation, $file, null, $request->user());
 
             if ($message->status === 'failed') {
@@ -455,7 +458,7 @@ class IxcController extends Controller
             return response()->json(['error' => 'PIX não disponível para esta fatura.'], 422);
         }
 
-        $sender = app(MessageSender::class);
+        $sender = $this->makeSender($conversation);
 
         $contractPart = $validated['contract_id'] ? 'Contrato ' . $validated['contract_id'] : null;
         $datePart     = null;
@@ -486,6 +489,18 @@ class IxcController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    private function makeSender(Conversation $conversation): MessageSender
+    {
+        $channel = $conversation->channel;
+        $service = match ($channel?->type) {
+            Channel::TYPE_TELEGRAM => new TelegramService($channel),
+            Channel::TYPE_WHATSAPP => new WhatsAppService($channel),
+            default                => new WhatsAppService(),
+        };
+
+        return new MessageSender($service);
     }
 
     private function normalizeDocument(string $document): ?string
