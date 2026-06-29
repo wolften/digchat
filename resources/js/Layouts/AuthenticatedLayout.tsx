@@ -248,7 +248,7 @@ export default function Authenticated({
                             onClick={() => setSidebarOpen(false)}
                             title={collapsed ? item.label : undefined}
                             className={cn(
-                                'group flex h-10 items-center rounded-xl text-sm font-medium transition-all',
+                                'group flex h-9 items-center rounded-xl text-xs font-medium transition-all',
                                 collapsed ? 'justify-center px-0' : 'gap-3 px-3',
                                 item.active
                                     ? 'bg-accent text-canvas hover:bg-accent/90 dark:text-black dark:hover:text-black'
@@ -258,7 +258,7 @@ export default function Authenticated({
                             <div className="relative shrink-0">
                                 <Icon
                                     className={cn(
-                                        'h-4 w-4 transition-colors',
+                                        'h-3.5 w-3.5 transition-colors',
                                         item.active
                                             ? 'text-canvas dark:text-black'
                                             : 'text-ink/40 group-hover:text-ink',
