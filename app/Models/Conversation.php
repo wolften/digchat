@@ -32,6 +32,21 @@ class Conversation extends Model
             ]);
         });
 
+        static::updating(function (Conversation $conversation): void {
+            if ($conversation->isDirty('status')) {
+                $newStatus = $conversation->status;
+                $oldStatus = $conversation->getOriginal('status');
+
+                if ($newStatus === self::STATUS_QUEUED) {
+                    $conversation->queued_at = now();
+                }
+
+                if ($newStatus === self::STATUS_OPEN && $oldStatus === self::STATUS_QUEUED) {
+                    $conversation->first_response_at = now();
+                }
+            }
+        });
+
         static::saved(fn (Conversation $conversation) => ConversationUpdated::dispatch($conversation));
     }
 
@@ -46,6 +61,8 @@ class Conversation extends Model
         'context',
         'survey_response_id',
         'last_message_at',
+        'queued_at',
+        'first_response_at',
         'last_ooh_notified_at',
         'protocol_number',
     ];
@@ -55,6 +72,8 @@ class Conversation extends Model
         return [
             'last_message_at'     => 'datetime',
             'last_read_at'        => 'datetime',
+            'queued_at'           => 'datetime',
+            'first_response_at'   => 'datetime',
             'last_ooh_notified_at' => 'datetime',
             'context'             => 'array',
         ];

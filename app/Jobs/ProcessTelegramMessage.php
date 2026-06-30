@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Events\ConversationUpdated;
+use App\Jobs\TranscribeAudioMessage;
 use App\Models\Channel;
 use App\Models\Contact;
 use App\Models\Conversation;
@@ -79,6 +80,10 @@ class ProcessTelegramMessage implements ShouldQueue
             'created_at'    => $waTimestamp,
             'updated_at'    => $waTimestamp,
         ]);
+
+        if ($type === 'audio') {
+            TranscribeAudioMessage::dispatch($message->id, $this->channelId);
+        }
 
         $conversation->forceFill(['last_message_at' => now()])->save();
 

@@ -52,7 +52,7 @@ export default function PesquisasCreate() {
         <AuthenticatedLayout>
             <Head title="Nova Pesquisa" />
 
-            <div className="flex-1 overflow-y-auto space-y-6 p-6">
+            <div className="flex-1 overflow-y-auto scrollbar-thin space-y-6 p-6">
                 <div className="flex items-center gap-3">
                     <Link href={route('pesquisas.index')}>
                         <Button variant="ghost" size="icon" className="h-8 w-8">

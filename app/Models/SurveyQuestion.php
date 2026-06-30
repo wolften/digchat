@@ -8,13 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SurveyQuestion extends Model
 {
-    protected $fillable = ['survey_id', 'position', 'text', 'options'];
+    protected $fillable = ['survey_id', 'position', 'text', 'options', 'is_rating'];
 
     protected function casts(): array
     {
         return [
-            'options'  => 'array',
-            'position' => 'integer',
+            'options'   => 'array',
+            'position'  => 'integer',
+            'is_rating' => 'boolean',
         ];
     }
 

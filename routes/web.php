@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BusinessHoursController;
+use App\Http\Controllers\InternalChatController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ConversationTagController;
@@ -37,6 +38,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/conversations/{conversation}/send-boleto', [IxcController::class, 'sendBoleto'])->name('conversations.send-boleto');
         Route::post('/conversations/{conversation}/send-pix', [IxcController::class, 'sendPix'])->name('conversations.send-pix');
     });
+
+    // Chat interno da equipe — todos os usuários autenticados.
+    Route::get('/chat-interno/messages', [InternalChatController::class, 'index'])->name('chat-interno.index');
+    Route::post('/chat-interno/messages', [InternalChatController::class, 'store'])->name('chat-interno.store');
 
     // Anotações de contato — todos os usuários autenticados.
     Route::patch('/contacts/{contact}/notes', [ContactController::class, 'updateNotes'])->name('contacts.notes.update');

@@ -36,8 +36,8 @@ class BusinessHoursController extends Controller
             'sectors'  => $sectors,
             'hoursMap' => $hoursMap,
             'global'   => [
-                'out_of_hours_enabled' => AppSetting::bool('out_of_hours_enabled'),
-                'out_of_hours_message' => AppSetting::get('out_of_hours_message', ''),
+                'out_of_hours_enabled'  => AppSetting::bool('out_of_hours_enabled'),
+                'out_of_hours_message'  => AppSetting::get('out_of_hours_message', ''),
             ],
         ]);
     }
@@ -51,8 +51,8 @@ class BusinessHoursController extends Controller
             'hours.*.opens_at'       => ['required', 'date_format:H:i'],
             'hours.*.closes_at'      => ['required', 'date_format:H:i'],
             'hours.*.is_active'      => ['boolean'],
-            'out_of_hours_enabled'   => ['boolean'],
-            'out_of_hours_message'   => ['nullable', 'string', 'max:1000'],
+            'out_of_hours_enabled'  => ['boolean'],
+            'out_of_hours_message'  => ['nullable', 'string', 'max:1000'],
         ]);
 
         $sectorId = $validated['sector_id'] ?? null;

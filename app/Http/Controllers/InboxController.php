@@ -366,6 +366,7 @@ class InboxController extends Controller
 
         // On auto-close, respect the inactivity survey toggle independently.
         if ($isAutoClose && ! AppSetting::bool('survey_on_inactivity_close_enabled', false)) {
+            $this->abandonPendingSurveyResponse($conversation);
             $conversation->forceFill(['status' => Conversation::STATUS_CLOSED])->save();
             return back()->with('success', 'Atendimento encerrado por inatividade.');
         }
@@ -376,6 +377,10 @@ class InboxController extends Controller
             $survey   = $surveyId ? Survey::with('questions')->find((int) $surveyId) : null;
 
             if ($survey && $survey->is_active && $survey->questions->isNotEmpty()) {
+                // Abandon any pre-existing in-progress response before creating a new one
+                // (prevents duplicates from double-clicks / request retries).
+                $this->abandonPendingSurveyResponse($conversation);
+
                 $response = SurveyResponse::create([
                     'survey_id'        => $survey->id,
                     'conversation_id'  => $conversation->id,
@@ -413,12 +418,23 @@ class InboxController extends Controller
     {
         abort_unless(request()->user()->isManager(), 403, 'Apenas administradores e gestores podem forçar o encerramento.');
 
+        $this->abandonPendingSurveyResponse($conversation);
+
         $conversation->forceFill([
             'status'             => Conversation::STATUS_CLOSED,
             'survey_response_id' => null,
         ])->save();
 
         return back()->with('success', 'Atendimento encerrado forçadamente.');
+    }
+
+    private function abandonPendingSurveyResponse(Conversation $conversation): void
+    {
+        if ($conversation->survey_response_id) {
+            SurveyResponse::where('id', $conversation->survey_response_id)
+                ->where('status', SurveyResponse::STATUS_IN_PROGRESS)
+                ->update(['status' => SurveyResponse::STATUS_ABANDONED]);
+        }
     }
 
     /**
@@ -502,6 +518,7 @@ class InboxController extends Controller
                 'media_url' => in_array($m->type, ['image', 'audio', 'video', 'document'], true)
                     ? route('inbox.messages.media', $m)
                     : null,
+                'transcription' => $m->transcription,
                 'status' => $m->status,
                 'sender' => $m->sender?->only(['id', 'name']),
                 'created_at' => $m->created_at?->toIso8601String(),

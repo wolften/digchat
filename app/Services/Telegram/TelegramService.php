@@ -30,11 +30,22 @@ class TelegramService implements MessagingChannel
 
     public function sendText(string $to, string $body): ?string
     {
-        return $this->callApi('sendMessage', [
+        $result = $this->callApi('sendMessage', [
             'chat_id'    => $to,
             'text'       => $body,
             'parse_mode' => 'Markdown',
         ]);
+
+        // Telegram rejects Markdown when the body contains special chars (e.g. PIX codes with '_').
+        // Retry as plain text so the message always goes through.
+        if ($result === null && str_contains((string) $this->lastErrorMessage, "parse")) {
+            $result = $this->callApi('sendMessage', [
+                'chat_id' => $to,
+                'text'    => $body,
+            ]);
+        }
+
+        return $result;
     }
 
     /**

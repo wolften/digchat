@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Conversation;
+use App\Models\SurveyAnswer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -51,11 +52,37 @@ class DashboardController extends Controller
         }
         $avgHandlingMins = (int) $avgHandlingQuery->value('avg_mins');
 
+        $avgTmeQuery = Conversation::where('status', Conversation::STATUS_CLOSED)
+            ->whereNotNull('queued_at')
+            ->whereNotNull('first_response_at')
+            ->whereRaw('first_response_at > queued_at')
+            ->selectRaw('COALESCE(AVG(TIMESTAMPDIFF(MINUTE, queued_at, first_response_at)), 0) as avg_mins');
+        if ($from) {
+            $avgTmeQuery->where('updated_at', '>=', $from);
+        }
+        $avgTmeMins = (int) $avgTmeQuery->value('avg_mins');
+
         $uniqueContactsQuery = Conversation::query();
         if ($from) {
             $uniqueContactsQuery->where('created_at', '>=', $from);
         }
         $uniqueContacts = $uniqueContactsQuery->distinct()->count('contact_id');
+
+        // ── CSAT médio ─────────────────────────────────────────────
+        $csatQuery = SurveyAnswer::query()
+            ->join('survey_questions as sq', 'survey_answers.survey_question_id', '=', 'sq.id')
+            ->join('survey_responses as sr', 'survey_answers.survey_response_id', '=', 'sr.id')
+            ->where('sq.is_rating', true)
+            ->where('sr.status', 'completed')
+            ->selectRaw('COALESCE(AVG(CAST(survey_answers.option_label AS DECIMAL(5,2))), 0) as avg_csat, COUNT(*) as csat_count');
+        if ($from) {
+            $csatQuery
+                ->join('conversations as c', 'sr.conversation_id', '=', 'c.id')
+                ->where('c.updated_at', '>=', $from);
+        }
+        $csatRow   = $csatQuery->first();
+        $csatCount = (int) ($csatRow?->csat_count ?? 0);
+        $avgCsat   = $csatCount > 0 ? round((float) $csatRow->avg_csat, 1) : null;
 
         // ── Gráfico de volume ───────────────────────────────────
         $volumeData = $this->buildVolumeData($period, $from);
@@ -90,7 +117,9 @@ class DashboardController extends Controller
             ]);
 
         // ── Ranking de atendentes ───────────────────────────────
-        $topQuery = Conversation::selectRaw('assigned_user_id, COUNT(*) as total')
+        $topQuery = Conversation::selectRaw(
+            'assigned_user_id, COUNT(*) as total, COALESCE(AVG(TIMESTAMPDIFF(MINUTE, created_at, updated_at)), 0) as avg_mins'
+        )
             ->where('status', Conversation::STATUS_CLOSED)
             ->whereNotNull('assigned_user_id')
             ->groupBy('assigned_user_id')
@@ -108,10 +137,11 @@ class DashboardController extends Controller
             ->keyBy('assigned_user_id');
 
         $topAttendants = $topQuery->with('assignedUser')->get()->map(fn ($row) => [
-            'user_id' => $row->assigned_user_id,
-            'name'    => $row->assignedUser?->name ?? 'Desconhecido',
-            'closed'  => (int) $row->total,
-            'open'    => (int) ($openPerAttendant->get($row->assigned_user_id)?->total ?? 0),
+            'user_id'  => $row->assigned_user_id,
+            'name'     => $row->assignedUser?->name ?? 'Desconhecido',
+            'closed'   => (int) $row->total,
+            'open'     => (int) ($openPerAttendant->get($row->assigned_user_id)?->total ?? 0),
+            'avg_mins' => (int) $row->avg_mins,
         ]);
 
         return Inertia::render('Dashboard', [
@@ -123,8 +153,11 @@ class DashboardController extends Controller
                 'closed'            => $closedCount,
                 'avg_wait_mins'     => $avgWaitMins,
                 'avg_handling_mins' => $avgHandlingMins,
+                'avg_tme_mins'      => $avgTmeMins,
                 'resolution_rate'   => $resolutionRate,
                 'unique_contacts'   => $uniqueContacts,
+                'avg_csat'          => $avgCsat,
+                'csat_count'        => $csatCount,
             ],
             'volumeData'    => $volumeData,
             'sectorStats'   => $sectorStats,

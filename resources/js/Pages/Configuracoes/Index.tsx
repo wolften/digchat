@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/Components/ui/tabs';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { AlertTriangle, Building2, CheckCircle2, Eye, EyeOff, ImageIcon, Loader2, MessageCircle, MessageSquare, Pencil, PlugZap, Plus, Save, Settings2, Trash2, Upload, Wifi } from 'lucide-react';
+import { AlertTriangle, Building2, CheckCircle2, Clock, Eye, EyeOff, ImageIcon, Loader2, MessageCircle, MessageSquare, Mic, Pencil, PlugZap, Plus, Save, Settings2, Trash2, Upload, Wifi } from 'lucide-react';
 import { ChangeEvent, FormEvent, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -163,6 +163,11 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
         String(settings.survey_on_inactivity_close_enabled ?? '0').toLowerCase(),
     );
 
+    const oohNotifyIntervalHours = Number.parseInt(
+        String(settings.ooh_notify_interval_hours ?? '4'),
+        10,
+    ) || 4;
+
     const sysForm = useForm<{
         app_name: string;
         app_subtitle: string;
@@ -173,6 +178,7 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
         survey_on_inactivity_close_enabled: boolean;
         survey_on_close_enabled: boolean;
         survey_on_close_survey_id: string;
+        ooh_notify_interval_hours: number;
     }>({
         app_name: settings.app_name ?? '',
         app_subtitle: settings.app_subtitle ?? '',
@@ -183,10 +189,21 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
         survey_on_inactivity_close_enabled: surveyOnInactivityCloseEnabled,
         survey_on_close_enabled: surveyOnCloseEnabled,
         survey_on_close_survey_id: surveyOnCloseSurveyId,
+        ooh_notify_interval_hours: oohNotifyIntervalHours,
     });
 
     const [iconPreview, setIconPreview] = useState<string | null>(appIconUrl ?? null);
     const fileRef = useRef<HTMLInputElement>(null);
+
+    /* ── Groq form ── */
+    const groqForm = useForm({
+        groq_api_key: settings.groq_api_key ?? '',
+    });
+
+    const submitGroq = (e: FormEvent) => {
+        e.preventDefault();
+        groqForm.post(route('configuracoes.update'), { preserveScroll: true });
+    };
 
     /* ── Integrações ── */
     const [integrationDialog, setIntegrationDialog] = useState<{
@@ -285,6 +302,10 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                         <TabsTrigger value="sistema" className="gap-1.5">
                             <Settings2 className="h-3.5 w-3.5" />
                             Sistema
+                        </TabsTrigger>
+                        <TabsTrigger value="ia" className="gap-1.5">
+                            <Mic className="h-3.5 w-3.5" />
+                            IA
                         </TabsTrigger>
                         <TabsTrigger value="integracoes" className="gap-1.5">
                             <PlugZap className="h-3.5 w-3.5" />
@@ -514,6 +535,40 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                                    </div>
                                </div>
 
+                                {/* ── Fora do horário ── */}
+                                <div className="space-y-3 rounded-lg border border-accent/10 bg-ink/[0.025] p-4">
+                                    <div className="flex items-center gap-2">
+                                        <Clock className="h-3.5 w-3.5 text-accent" />
+                                        <Label className="text-sm font-semibold">Fora do horário de atendimento</Label>
+                                    </div>
+                                    <div className="grid gap-2 sm:max-w-xs">
+                                        <Label htmlFor="ooh_notify_interval_hours" className="text-xs text-ink/70">
+                                            Intervalo de renotificação (horas)
+                                        </Label>
+                                        <Input
+                                            id="ooh_notify_interval_hours"
+                                            type="number"
+                                            min={1}
+                                            max={72}
+                                            step={1}
+                                            value={sysForm.data.ooh_notify_interval_hours}
+                                            onChange={(e) => {
+                                                const v = e.target.valueAsNumber;
+                                                sysForm.setData(
+                                                    'ooh_notify_interval_hours',
+                                                    Number.isFinite(v) ? Math.max(1, Math.min(72, v)) : 4,
+                                                );
+                                            }}
+                                        />
+                                        <p className="text-xs text-ink/45">
+                                            Intervalo mínimo entre mensagens automáticas de fora do horário enviadas para a mesma conversa.
+                                        </p>
+                                        {sysForm.errors.ooh_notify_interval_hours && (
+                                            <p className="text-sm text-red-300">{sysForm.errors.ooh_notify_interval_hours}</p>
+                                        )}
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
 
@@ -527,6 +582,52 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                         </div>
 
                     </form>
+                </TabsContent>
+
+                {/* ── Tab IA ── */}
+                <TabsContent value="ia" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div className="scrollbar-thin flex-1 overflow-y-auto px-6 py-6">
+                        <div className="max-w-lg space-y-6">
+
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <Mic className="h-4 w-4 text-accent" />
+                                    <h3 className="text-sm font-semibold text-ink/80">Transcrição de áudio</h3>
+                                </div>
+                                <p className="text-xs text-ink/45">
+                                    Áudios recebidos são transcritos automaticamente via Groq Whisper e exibidos abaixo do player para o atendente.
+                                </p>
+                            </div>
+
+                            <form onSubmit={submitGroq} className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="groq_api_key">Groq API Key</Label>
+                                    <SecretInput
+                                        id="groq_api_key"
+                                        value={groqForm.data.groq_api_key}
+                                        onChange={(v) => groqForm.setData('groq_api_key', v)}
+                                        placeholder="gsk_••••••••"
+                                    />
+                                    <p className="text-xs text-ink/40">
+                                        Crie sua chave grátis em <span className="font-mono">console.groq.com</span> — plano free inclui ~3 horas de áudio/dia.
+                                    </p>
+                                    {groqForm.errors.groq_api_key && (
+                                        <p className="text-sm text-red-400">{groqForm.errors.groq_api_key}</p>
+                                    )}
+                                </div>
+
+                                <Button type="submit" disabled={groqForm.processing}>
+                                    {groqForm.processing ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Save className="h-4 w-4" />
+                                    )}
+                                    Salvar chave
+                                </Button>
+                            </form>
+
+                        </div>
+                    </div>
                 </TabsContent>
 
                 {/* ── Tab Integrações ── */}

@@ -159,6 +159,7 @@ export default function HorariosIndex({ sectors, hoursMap, global }: Props) {
         <AuthenticatedLayout>
             <Head title="Horários de Atendimento" />
 
+            <div className="scrollbar-thin flex-1 overflow-y-auto">
             <div className="space-y-4 p-6">
                 {/* Header */}
                 <div>
@@ -294,7 +295,7 @@ export default function HorariosIndex({ sectors, hoursMap, global }: Props) {
                     <Clock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                     <p className="text-sm text-ink/70">
                         <strong className="font-semibold text-ink/85">Comportamento do bot:</strong>{' '}
-                        fora do horário, o fluxo não é executado e a mensagem automática é enviada (máximo 1 vez a cada 4 horas por conversa).
+                        fora do horário, o fluxo não é executado e a mensagem automática é enviada com frequência controlada por conversa (configurável em Configurações).
                         No editor de fluxos, use o nó{' '}
                         <code className="rounded bg-ink/[0.06] px-1 py-0.5 text-xs font-mono">horário de atendimento</code>{' '}
                         para criar ramificações aberto/fechado dentro do fluxo.
@@ -307,6 +308,7 @@ export default function HorariosIndex({ sectors, hoursMap, global }: Props) {
                         {processing ? 'Salvando…' : 'Salvar horários'}
                     </Button>
                 </div>
+            </div>
             </div>
         </AuthenticatedLayout>
     );

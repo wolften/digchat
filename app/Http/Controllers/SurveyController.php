@@ -56,10 +56,11 @@ class SurveyController extends Controller
                 'responses_count'           => $survey->responses_count,
                 'completed_responses_count' => $survey->completed_responses_count,
                 'questions'                 => $survey->questions->map(fn (SurveyQuestion $q) => [
-                    'id'       => $q->id,
-                    'text'     => $q->text,
-                    'position' => $q->position,
-                    'options'  => $q->options ?? [],
+                    'id'        => $q->id,
+                    'text'      => $q->text,
+                    'position'  => $q->position,
+                    'options'   => $q->options ?? [],
+                    'is_rating' => (bool) $q->is_rating,
                 ]),
                 'created_at' => $survey->created_at?->toIso8601String(),
             ],
@@ -78,6 +79,7 @@ class SurveyController extends Controller
             'questions.*.options'           => ['present', 'array', 'min:1', 'max:10'],
             'questions.*.options.*.id'      => ['required', 'string', 'max:50'],
             'questions.*.options.*.label'   => ['required', 'string', 'max:100'],
+            'questions.*.is_rating'         => ['nullable', 'boolean'],
         ]);
 
         $survey = DB::transaction(function () use ($validated, $request): Survey {
@@ -91,9 +93,10 @@ class SurveyController extends Controller
 
             foreach (($validated['questions'] ?? []) as $position => $q) {
                 $survey->questions()->create([
-                    'text'     => $q['text'],
-                    'position' => $position,
-                    'options'  => $q['options'],
+                    'text'      => $q['text'],
+                    'position'  => $position,
+                    'options'   => $q['options'],
+                    'is_rating' => ! empty($q['is_rating']),
                 ]);
             }
 
@@ -125,6 +128,7 @@ class SurveyController extends Controller
             'questions.*.options'           => ['present', 'array', 'min:1', 'max:10'],
             'questions.*.options.*.id'      => ['required', 'string', 'max:50'],
             'questions.*.options.*.label'   => ['required', 'string', 'max:100'],
+            'questions.*.is_rating'         => ['nullable', 'boolean'],
         ]);
 
         DB::transaction(function () use ($survey, $validated): void {
@@ -132,9 +136,10 @@ class SurveyController extends Controller
 
             foreach (($validated['questions'] ?? []) as $position => $q) {
                 $survey->questions()->create([
-                    'text'     => $q['text'],
-                    'position' => $position,
-                    'options'  => $q['options'],
+                    'text'      => $q['text'],
+                    'position'  => $position,
+                    'options'   => $q['options'],
+                    'is_rating' => ! empty($q['is_rating']),
                 ]);
             }
         });
@@ -182,7 +187,7 @@ class SurveyController extends Controller
             ->toArray();
 
         $recent = $survey->completedResponses()
-            ->with('contact:id,name,wa_id')
+            ->with(['contact:id,name,wa_id', 'conversation:id,channel_id', 'conversation.channel:id,type'])
             ->orderByDesc('completed_at')
             ->limit(50)
             ->get()
@@ -190,6 +195,7 @@ class SurveyController extends Controller
                 'id'              => $r->id,
                 'contact_name'    => $r->contact?->displayName() ?? '—',
                 'contact_wa_id'   => $r->contact?->wa_id,
+                'channel_type'    => $r->conversation?->channel?->type ?? 'whatsapp',
                 'completed_at'    => $r->completed_at?->toIso8601String(),
             ]);
 
@@ -203,7 +209,7 @@ class SurveyController extends Controller
     /** Returns individual Q&A for a single SurveyResponse. */
     public function responseDetail(SurveyResponse $response): JsonResponse
     {
-        $response->load(['contact:id,name,wa_id', 'answers.question']);
+        $response->load(['contact:id,name,wa_id', 'answers.question', 'conversation:id,channel_id', 'conversation.channel:id,type']);
 
         $answers = $response->answers->sortBy('survey_question_id')->map(fn ($a) => [
             'question_text' => $a->question?->text ?? '—',
@@ -213,6 +219,7 @@ class SurveyController extends Controller
         return response()->json([
             'contact_name'  => $response->contact?->displayName() ?? '—',
             'contact_wa_id' => $response->contact?->wa_id,
+            'channel_type'  => $response->conversation?->channel?->type ?? 'whatsapp',
             'completed_at'  => $response->completed_at?->toIso8601String(),
             'answers'       => $answers,
         ]);

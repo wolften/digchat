@@ -1,4 +1,5 @@
 import ApplicationLogo from '@/Components/ApplicationLogo';
+import { InternalChat } from '@/Components/InternalChat';
 import { Toaster } from '@/Components/ui/sonner';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useTheme } from '@/hooks/useTheme';
@@ -421,6 +422,7 @@ export default function Authenticated({
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
+                            <InternalChat />
 <button
                                 type="button"
                                 onClick={toggleTheme}

@@ -1,0 +1,27 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (Schema::hasColumn('conversations', 'survey_response_id')) {
+            return;
+        }
+
+        Schema::table('conversations', function (Blueprint $table) {
+            $table->foreignId('survey_response_id')->nullable()->after('id')->constrained('survey_responses')->nullOnDelete();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('conversations', function (Blueprint $table) {
+            $table->dropForeign(['survey_response_id']);
+            $table->dropColumn('survey_response_id');
+        });
+    }
+};

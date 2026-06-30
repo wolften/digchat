@@ -43,6 +43,7 @@ class SettingsController extends Controller
             'whatsapp_verify_token'   => ['nullable', 'string', 'max:255'],
             'whatsapp_app_secret'     => ['nullable', 'string', 'max:255'],
             'whatsapp_waba_id'        => ['nullable', 'string', 'max:100'],
+            'groq_api_key'            => ['nullable', 'string', 'max:255'],
         ]);
 
         // Preserve existing values for fields sent empty (don't overwrite with null unless explicitly cleared)
@@ -100,6 +101,7 @@ class SettingsController extends Controller
             'survey_on_close_enabled' => ['nullable', 'boolean'],
             'survey_on_close_survey_id' => ['nullable', 'integer', 'exists:surveys,id'],
             'survey_on_inactivity_close_enabled' => ['nullable', 'boolean'],
+            'ooh_notify_interval_hours'          => ['nullable', 'integer', 'min:1', 'max:72'],
         ]);
 
         if ($request->filled('app_name')) {
@@ -137,6 +139,11 @@ class SettingsController extends Controller
             'survey_on_inactivity_close_enabled',
             $request->boolean('survey_on_inactivity_close_enabled') ? '1' : '0',
         );
+
+        $intervalHours = $request->integer('ooh_notify_interval_hours');
+        if ($intervalHours >= 1) {
+            AppSetting::set('ooh_notify_interval_hours', (string) $intervalHours);
+        }
 
         if ($request->hasFile('app_icon')) {
             $old = AppSetting::get('app_icon_path');

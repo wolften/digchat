@@ -26,7 +26,9 @@ import {
     Loader2,
     MessageSquare,
     Pencil,
+    Phone,
     Plus,
+    Send,
     Smile,
     Trash2,
     TrendingUp,
@@ -62,6 +64,8 @@ interface QuestionStat {
     distribution: AnswerDist[];
 }
 
+type ChannelType = 'whatsapp' | 'telegram';
+
 interface ResponsesData {
     stats: QuestionStat[];
     totals: Record<string, number>;
@@ -69,6 +73,7 @@ interface ResponsesData {
         id: number;
         contact_name: string;
         contact_wa_id: string | null;
+        channel_type: ChannelType;
         completed_at: string;
     }[];
 }
@@ -76,12 +81,51 @@ interface ResponsesData {
 interface ResponseDetail {
     contact_name: string;
     contact_wa_id: string | null;
+    channel_type: ChannelType;
     completed_at: string;
     answers: { question_text: string; option_label: string }[];
 }
 
 interface Props {
     survey: Survey;
+}
+
+/* ── Helpers ─────────────────────────────────────────────────────── */
+
+function ChannelBadge({ type }: { type: ChannelType }) {
+    if (type === 'telegram') {
+        return (
+            <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-500">
+                <Send className="h-2.5 w-2.5" />
+                Telegram
+            </span>
+        );
+    }
+    return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+            <Phone className="h-2.5 w-2.5" />
+            WhatsApp
+        </span>
+    );
+}
+
+function contactLabel(name: string, waId: string | null, channelType: ChannelType): string {
+    if (channelType === 'telegram') {
+        return name && name !== waId ? name : (waId ? `ID: ${waId}` : '—');
+    }
+    // WhatsApp: if name is just the raw wa_id, show formatted phone as the name
+    return name && name !== waId ? name : (waId ? formatClientPhone(waId) : '—');
+}
+
+function contactSubLabel(name: string, waId: string | null, channelType: ChannelType): string | null {
+    if (!waId) return null;
+    if (channelType === 'telegram') {
+        // Always show the numeric Telegram ID — skip only if it's already the label
+        return name !== waId ? `ID: ${waId}` : null;
+    }
+    // WhatsApp: always show formatted phone as sub, skip if it would duplicate the label
+    const formatted = formatClientPhone(waId);
+    return formatted !== contactLabel(name, waId, channelType) ? formatted : null;
 }
 
 /* ── Page ───────────────────────────────────────────────────────── */
@@ -316,7 +360,7 @@ export default function PesquisasShow({ survey }: Props) {
                     </div>
 
                     {/* ── Questions tab ── */}
-                    <TabsContent value="questions" className="mt-0 flex-1 overflow-y-auto p-6">
+                    <TabsContent value="questions" className="mt-0 flex-1 overflow-y-auto scrollbar-thin p-6">
                         {!editingQs ? (
                             <div className="space-y-3">
                                 {survey.questions.length === 0 ? (
@@ -464,7 +508,7 @@ export default function PesquisasShow({ survey }: Props) {
                     </TabsContent>
 
                     {/* ── Responses tab ── */}
-                    <TabsContent value="responses" className="mt-0 flex-1 overflow-y-auto p-6">
+                    <TabsContent value="responses" className="mt-0 flex-1 overflow-y-auto scrollbar-thin p-6">
                         {respLoading && (
                             <div className="flex flex-col items-center gap-3 py-16">
                                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
@@ -617,7 +661,10 @@ export default function PesquisasShow({ survey }: Props) {
                                                     </span>
                                                 </div>
                                                 <div className="overflow-hidden rounded-xl border border-accent/10">
-                                                    {respData.recent.map((r, i) => (
+                                                    {respData.recent.map((r, i) => {
+                                                        const label = contactLabel(r.contact_name, r.contact_wa_id, r.channel_type);
+                                                        const sub = contactSubLabel(r.contact_name, r.contact_wa_id, r.channel_type);
+                                                        return (
                                                         <button
                                                             key={r.id}
                                                             type="button"
@@ -628,25 +675,18 @@ export default function PesquisasShow({ survey }: Props) {
                                                                     'border-t border-accent/[0.07]',
                                                             )}
                                                         >
-                                                            <div className="flex min-w-0 flex-col text-left">
-                                                                <span className="font-medium text-ink/75">
-                                                                    {r.contact_wa_id &&
-                                                                    r.contact_name ===
-                                                                        r.contact_wa_id
-                                                                        ? formatClientPhone(
-                                                                              r.contact_wa_id,
-                                                                          )
-                                                                        : r.contact_name}
-                                                                </span>
-                                                                {r.contact_wa_id &&
-                                                                    r.contact_name !==
-                                                                        r.contact_wa_id && (
-                                                                        <span className="text-xs text-ink/40">
-                                                                            {formatClientPhone(
-                                                                                r.contact_wa_id,
-                                                                            )}
-                                                                        </span>
-                                                                    )}
+                                                            <div className="flex min-w-0 flex-col gap-0.5 text-left">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-medium text-ink/75">
+                                                                        {label}
+                                                                    </span>
+                                                                    <ChannelBadge type={r.channel_type} />
+                                                                </div>
+                                                                {sub && (
+                                                                    <span className="text-xs text-ink/40">
+                                                                        {sub}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             <div className="flex shrink-0 items-center gap-2">
                                                                 <span className="text-xs text-ink/40">
@@ -663,7 +703,8 @@ export default function PesquisasShow({ survey }: Props) {
                                                                 <ChevronRight className="h-3.5 w-3.5 text-ink/25" />
                                                             </div>
                                                         </button>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
@@ -793,18 +834,17 @@ export default function PesquisasShow({ survey }: Props) {
                         {detailData && (
                             <DialogDescription asChild>
                                 <div className="flex flex-col gap-0.5 pt-0.5">
-                                    <span className="font-medium text-ink/70">
-                                        {detailData.contact_wa_id &&
-                                        detailData.contact_name === detailData.contact_wa_id
-                                            ? formatClientPhone(detailData.contact_wa_id)
-                                            : detailData.contact_name}
-                                    </span>
-                                    {detailData.contact_wa_id &&
-                                        detailData.contact_name !== detailData.contact_wa_id && (
-                                            <span className="text-xs text-ink/40">
-                                                {formatClientPhone(detailData.contact_wa_id)}
-                                            </span>
-                                        )}
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium text-ink/70">
+                                            {contactLabel(detailData.contact_name, detailData.contact_wa_id, detailData.channel_type)}
+                                        </span>
+                                        <ChannelBadge type={detailData.channel_type} />
+                                    </div>
+                                    {contactSubLabel(detailData.contact_name, detailData.contact_wa_id, detailData.channel_type) && (
+                                        <span className="text-xs text-ink/40">
+                                            {contactSubLabel(detailData.contact_name, detailData.contact_wa_id, detailData.channel_type)}
+                                        </span>
+                                    )}
                                     <span className="text-xs text-ink/35">
                                         {new Date(detailData.completed_at).toLocaleDateString(
                                             'pt-BR',

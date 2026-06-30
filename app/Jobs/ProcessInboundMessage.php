@@ -4,11 +4,13 @@ namespace App\Jobs;
 
 use App\Events\ConversationUpdated;
 use App\Jobs\FetchContactAvatar;
+use App\Jobs\TranscribeAudioMessage;
 use App\Models\Channel;
 use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
+use App\Models\AppSetting;
 use App\Services\BusinessHoursService;
 use App\Services\Flow\FlowEngine;
 use App\Services\Survey\SurveyRunner;
@@ -130,6 +132,10 @@ class ProcessInboundMessage implements ShouldQueue
             'updated_at' => $waTimestamp,
         ]);
 
+        if ($type === 'audio') {
+            TranscribeAudioMessage::dispatch($message->id, $this->channelId);
+        }
+
         $this->markPreviousOutboundMessagesAsRead($conversation, $message);
 
         $conversation->last_message_at = now();
@@ -145,7 +151,8 @@ class ProcessInboundMessage implements ShouldQueue
                 $oohMsg = $bhs->outOfHoursMessage($conversation->sector_id);
                 if ($oohMsg) {
                     $lastNotified = $conversation->last_ooh_notified_at;
-                    $shouldNotify = ! $lastNotified || now()->diffInHours($lastNotified) >= 4;
+                    $intervalHours = (int) AppSetting::get('ooh_notify_interval_hours', 4);
+                    $shouldNotify  = ! $lastNotified || now()->diffInHours($lastNotified) >= $intervalHours;
                     if ($shouldNotify) {
                         $waMessageId = $whatsApp->sendText($conversation->contact->wa_id, $oohMsg);
                         if ($waMessageId) {

@@ -51,6 +51,7 @@ import {
     PanelRight,
     Play,
     Send,
+    Smile,
     Square,
     Star,
     StickyNote,
@@ -60,6 +61,7 @@ import {
     UserRound,
     Video,
 } from 'lucide-react';
+import EmojiPicker, { Categories, EmojiClickData, Theme } from 'emoji-picker-react';
 import { ChangeEvent, SyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -118,6 +120,7 @@ interface Msg {
     type: string;
     body: string | null;
     media_url?: string | null;
+    transcription?: string | null;
     status: string | null;
     sender: { id: number; name: string } | null;
     created_at: string | null;
@@ -400,6 +403,19 @@ export default function InboxIndex({
     const [inactivityTick, setInactivityTick] = useState(0);
     const [slashMatches, setSlashMatches] = useState<QuickReply[]>([]);
     const [slashIndex, setSlashIndex] = useState(0);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!showEmojiPicker) return;
+        const handleOutsideClick = (e: MouseEvent) => {
+            if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target as Node)) {
+                setShowEmojiPicker(false);
+            }
+        };
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, [showEmojiPicker]);
 
     // Realtime: recarrega lista + thread a cada evento de broadcast.
     useEffect(() => {
@@ -1020,6 +1036,23 @@ export default function InboxIndex({
         });
     };
 
+    const insertEmoji = (emojiData: EmojiClickData) => {
+        const el = composerTextareaRef.current;
+        const emoji = emojiData.emoji;
+        if (!el) {
+            composer.setData('body', composer.data.body + emoji);
+            return;
+        }
+        const start = el.selectionStart ?? composer.data.body.length;
+        const end = el.selectionEnd ?? composer.data.body.length;
+        const newBody = composer.data.body.slice(0, start) + emoji + composer.data.body.slice(end);
+        composer.setData('body', newBody);
+        requestAnimationFrame(() => {
+            el.focus();
+            el.setSelectionRange(start + emoji.length, start + emoji.length);
+        });
+    };
+
     const hasTypedBody = composer.data.body.trim().length > 0;
     const hasPendingMedia = Boolean(composer.data.attachment || composer.data.audio);
     const canSubmit = hasTypedBody || hasPendingMedia;
@@ -1406,7 +1439,8 @@ export default function InboxIndex({
 
                             {selected && (
                                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                                    <div className="flex min-h-16 items-center justify-between border-b border-ink/[0.08] px-3">
+                                    <div className="flex flex-col border-b border-ink/[0.08] px-3 py-2 gap-1.5">
+                                        <div className="flex min-h-10 items-center justify-between">
                                         <div>
                                             <div className="font-semibold text-ink/90">
                                                 {formatClientDisplayName(
@@ -1428,92 +1462,21 @@ export default function InboxIndex({
                                                             navigator.clipboard.writeText(selected.protocol_number!);
                                                             toast.success('Protocolo copiado!');
                                                         }}
-                                                        className="inline-flex items-center gap-1 rounded-md border border-ink/[0.10] bg-ink/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-ink/50 transition-colors hover:bg-ink/[0.08] hover:text-ink/80"
+                                                        className="group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-ink/40 transition-colors hover:bg-ink/[0.06] hover:text-ink/65"
                                                     >
                                                         #{selected.protocol_number}
-                                                        <Copy className="h-2.5 w-2.5" />
+                                                        <Copy className="h-2.5 w-2.5 opacity-0 transition-opacity group-hover:opacity-100" />
                                                     </button>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            {/* ── Indicadores (não clicáveis) ── */}
-                                            <div className="flex items-center gap-1.5">
-                                                {selected.sector && (
-                                                    <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
-                                                        {selected.sector.name}
-                                                    </span>
-                                                )}
-                                                {selected.tags?.map((tag) => (
-                                                    <span
-                                                        key={tag.id}
-                                                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
-                                                    >
-                                                        {tag.name}
-                                                    </span>
-                                                ))}
-                                                {selected.channel_type === 'telegram' ? (
-                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
-                                                        <TelegramIcon className="h-3 w-3" />
-                                                        {selected.channel_name ?? 'Telegram'}
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-600 dark:bg-green-950/30 dark:text-green-400">
-                                                        <WhatsAppIcon className="h-3 w-3" />
-                                                        {selected.channel_name ?? 'WhatsApp'}
-                                                    </span>
-                                                )}
-                                                {selected.status === 'surveying' ? (
-                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
-                                                        <Star className="h-3 w-3" />
-                                                        Pesquisa
-                                                    </span>
-                                                ) : selected.status === 'bot' ? (
-                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
-                                                        <Bot className="h-3 w-3" />
-                                                        Automação
-                                                    </span>
-                                                ) : (
-                                                    <span className={cn(
-                                                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
-                                                        selected.status === 'open'
-                                                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
-                                                            : selected.status === 'queued'
-                                                              ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
-                                                              : 'bg-ink/[0.06] text-ink/50',
-                                                    )}>
-                                                        {selected.status === 'open' && (
-                                                            <span className="relative flex h-2 w-2 shrink-0">
-                                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                                                                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                                                            </span>
-                                                        )}
-                                                        {STATUS_LABEL[selected.status]}
-                                                    </span>
-                                                )}
-                                                {inactivityCountdown !== null && (
-                                                    <span
-                                                        className={cn(
-                                                            'inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium tabular-nums',
-                                                            inactivityCountdown <= 120
-                                                                ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400'
-                                                                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
-                                                        )}
-                                                        title="Tempo restante para encerramento automático por inatividade"
-                                                    >
-                                                        <Clock className="h-3 w-3 shrink-0" />
-                                                        {formatCountdown(inactivityCountdown)}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* ── Divisor visual + dropdown Ações ── */}
+                                            {/* ── Ações ── */}
                                             {((canAssignSelected && selected.status !== 'open') ||
                                               (canTransferSelected && (sectors.length > 0 || transfer_users.length > 0)) ||
                                               (canActSelected && selected.status !== 'closed' && selected.status !== 'surveying') ||
                                               (canForceCloseSelected && selected.status !== 'closed')) && (
                                                 <>
-                                                    <div className="h-5 w-px bg-ink/[0.12]" />
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button size="sm" variant="outline">
@@ -1562,26 +1525,22 @@ export default function InboxIndex({
 
                                             {/* ── IXC panel toggle ── */}
                                             {has_ixc && (
-                                                <>
-                                                    <div className="h-5 w-px bg-ink/[0.12]" />
-                                                    <button
-                                                        type="button"
-                                                        title="Painel IXC"
-                                                        onClick={() => { setIxcPanelOpen((v) => !v); setNotesPanelOpen(false); }}
-                                                        className={cn(
-                                                            'rounded p-1.5 transition-colors',
-                                                            ixcPanelOpen
-                                                                ? 'bg-accent/10 text-accent'
-                                                                : 'text-ink/40 hover:bg-ink/[0.06] hover:text-ink/70',
-                                                        )}
-                                                    >
-                                                        <PanelRight className="h-4 w-4" />
-                                                    </button>
-                                                </>
+                                                <button
+                                                    type="button"
+                                                    title="Painel IXC"
+                                                    onClick={() => { setIxcPanelOpen((v) => !v); setNotesPanelOpen(false); }}
+                                                    className={cn(
+                                                        'rounded p-1.5 transition-colors',
+                                                        ixcPanelOpen
+                                                            ? 'bg-accent/10 text-accent'
+                                                            : 'text-ink/40 hover:bg-ink/[0.06] hover:text-ink/70',
+                                                    )}
+                                                >
+                                                    <PanelRight className="h-4 w-4" />
+                                                </button>
                                             )}
 
                                             {/* ── Notes + Tags ── */}
-                                            {!has_ixc && <div className="h-5 w-px bg-ink/[0.12]" />}
                                             <button
                                                     type="button"
                                                     title="Anotações do cliente"
@@ -1628,6 +1587,75 @@ export default function InboxIndex({
                                                         })}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
+                                            )}
+                                        </div>
+                                        </div>
+                                        <div className="flex flex-wrap items-center justify-end gap-1.5 text-xs">
+                                            {selected.sector && (
+                                                <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-1 font-medium text-accent">
+                                                    {selected.sector.name}
+                                                </span>
+                                            )}
+                                            {selected.tags?.map((tag) => (
+                                                <span
+                                                    key={tag.id}
+                                                    className={`inline-flex items-center rounded-full border px-2.5 py-1 font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
+                                                >
+                                                    {tag.name}
+                                                </span>
+                                            ))}
+                                            {selected.channel_type === 'telegram' ? (
+                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
+                                                    <TelegramIcon className="h-3 w-3" />
+                                                    {selected.channel_name ?? 'Telegram'}
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 font-medium text-green-600 dark:bg-green-950/30 dark:text-green-400">
+                                                    <WhatsAppIcon className="h-3 w-3" />
+                                                    {selected.channel_name ?? 'WhatsApp'}
+                                                </span>
+                                            )}
+                                            {selected.status === 'surveying' ? (
+                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 font-medium text-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
+                                                    <Star className="h-3 w-3" />
+                                                    Pesquisa
+                                                </span>
+                                            ) : selected.status === 'bot' ? (
+                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+                                                    <Bot className="h-3 w-3" />
+                                                    Automação
+                                                </span>
+                                            ) : (
+                                                <span className={cn(
+                                                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium',
+                                                    selected.status === 'open'
+                                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                                                        : selected.status === 'queued'
+                                                          ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
+                                                          : 'bg-ink/[0.06] text-ink/50',
+                                                )}>
+                                                    {selected.status === 'open' && (
+                                                        <span className="relative flex h-2 w-2 shrink-0">
+                                                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                                                        </span>
+                                                    )}
+                                                    {STATUS_LABEL[selected.status]}
+                                                </span>
+                                            )}
+                                            {inactivityCountdown !== null && (
+                                                <span
+                                                    className={cn(
+                                                        'inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium tabular-nums',
+                                                        inactivityCountdown <= 120
+                                                            ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400'
+                                                            : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
+                                                    )}
+                                                    title="Tempo restante para encerramento automático por inatividade"
+                                                >
+                                                    <Clock className="h-3 w-3 shrink-0" />
+                                                    {formatCountdown(inactivityCountdown)}
+                                                </span>
                                             )}
                                         </div>
                                     </div>
@@ -1693,13 +1721,22 @@ export default function InboxIndex({
                                                             </div>
                                                         ) : m.type === 'audio' &&
                                                           m.media_url ? (
-                                                            <div className="space-y-2">
+                                                            <div className="space-y-1.5">
                                                                 <audio
                                                                     controls
                                                                     preload="metadata"
                                                                     src={m.media_url}
                                                                     className="h-10 w-[260px] max-w-full"
                                                                 />
+                                                                {m.transcription ? (
+                                                                    <p className="max-w-[260px] whitespace-pre-wrap break-words text-xs leading-relaxed opacity-80">
+                                                                        {m.transcription}
+                                                                    </p>
+                                                                ) : new Date(m.created_at ?? 0).getTime() > Date.now() - 120_000 ? (
+                                                                    <p className="text-[10px] opacity-40 italic">
+                                                                        Transcrevendo…
+                                                                    </p>
+                                                                ) : null}
                                                                 {caption && (
                                                                     <p className="whitespace-pre-wrap break-words">
                                                                         {caption}
@@ -1872,17 +1909,62 @@ export default function InboxIndex({
                                                 />
 
                                                 {!isRecording && !audioPreviewUrl && (
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        onClick={() =>
-                                                            attachmentInputRef.current?.click()
-                                                        }
-                                                        disabled={composer.processing}
-                                                    >
-                                                        <Paperclip />
-                                                    </Button>
+                                                    <>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            onClick={() =>
+                                                                attachmentInputRef.current?.click()
+                                                            }
+                                                            disabled={composer.processing}
+                                                        >
+                                                            <Paperclip />
+                                                        </Button>
+
+                                                        <div ref={emojiPickerRef} className="relative">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="icon"
+                                                                onClick={() => setShowEmojiPicker((v) => !v)}
+                                                                disabled={composer.processing}
+                                                            >
+                                                                <Smile />
+                                                            </Button>
+                                                            {showEmojiPicker && (
+                                                                <div
+                                                                    className="absolute bottom-11 left-0 z-50"
+                                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <EmojiPicker
+                                                                        theme={document.documentElement.classList.contains('dark') ? Theme.DARK : Theme.LIGHT}
+                                                                        onEmojiClick={(data) => {
+                                                                            insertEmoji(data);
+                                                                            setShowEmojiPicker(false);
+                                                                        }}
+                                                                        lazyLoadEmojis
+                                                                        searchPlaceholder="Buscar emoji..."
+                                                                        skinTonesDisabled
+                                                                        previewConfig={{ showPreview: false }}
+                                                                        height={380}
+                                                                        width={320}
+                                                                        categories={[
+                                                                            { category: Categories.SUGGESTED, name: 'Recentes' },
+                                                                            { category: Categories.SMILEYS_PEOPLE, name: 'Rostos e Pessoas' },
+                                                                            { category: Categories.ANIMALS_NATURE, name: 'Animais e Natureza' },
+                                                                            { category: Categories.FOOD_DRINK, name: 'Comida e Bebida' },
+                                                                            { category: Categories.TRAVEL_PLACES, name: 'Viagens e Lugares' },
+                                                                            { category: Categories.ACTIVITIES, name: 'Atividades' },
+                                                                            { category: Categories.OBJECTS, name: 'Objetos' },
+                                                                            { category: Categories.SYMBOLS, name: 'Símbolos' },
+                                                                            { category: Categories.FLAGS, name: 'Bandeiras' },
+                                                                        ]}
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </>
                                                 )}
 
                                                 {isRecording ? (

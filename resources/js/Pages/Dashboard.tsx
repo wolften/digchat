@@ -27,7 +27,9 @@ import {
     CheckCircle2,
     Clock,
     ClipboardList,
+    Hourglass,
     MessageSquare,
+    Star,
     Timer,
     TrendingUp,
     Users,
@@ -43,8 +45,11 @@ interface Stats {
     closed: number;
     avg_wait_mins: number;
     avg_handling_mins: number;
+    avg_tme_mins: number;
     resolution_rate: number;
     unique_contacts: number;
+    avg_csat: number | null;
+    csat_count: number;
 }
 
 interface VolumeDataPoint {
@@ -71,6 +76,7 @@ interface TopAttendant {
     name: string;
     closed: number;
     open: number;
+    avg_mins: number;
 }
 
 interface Props {
@@ -337,7 +343,7 @@ export default function Dashboard({ stats, volumeData, sectorStats, waiting, top
                         </p>
                         <div className="flex-1 border-t border-dashed border-ink/[0.10]" />
                     </div>
-                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                         <StatCard
                             label="Encerradas"
                             value={stats.closed}
@@ -353,18 +359,32 @@ export default function Dashboard({ stats, volumeData, sectorStats, waiting, top
                             iconBg="bg-indigo-50 dark:bg-indigo-900/20"
                         />
                         <StatCard
-                            label="Tempo médio"
-                            value={stats.avg_handling_mins > 0 ? formatDuration(stats.avg_handling_mins) : '—'}
-                            sub="por atendimento"
-                            icon={<Timer className="h-4 w-4 text-orange-600 dark:text-orange-400" />}
-                            iconBg="bg-orange-50 dark:bg-orange-900/20"
-                        />
-                        <StatCard
                             label="Taxa de resolução"
                             value={stats.resolution_rate > 0 ? `${stats.resolution_rate}%` : '—'}
                             sub="conversas encerradas"
                             icon={<Activity className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
                             iconBg="bg-rose-50 dark:bg-rose-900/20"
+                        />
+                        <StatCard
+                            label="TMA"
+                            value={stats.avg_handling_mins > 0 ? formatDuration(stats.avg_handling_mins) : '—'}
+                            sub="tempo médio de atendimento"
+                            icon={<Timer className="h-4 w-4 text-orange-600 dark:text-orange-400" />}
+                            iconBg="bg-orange-50 dark:bg-orange-900/20"
+                        />
+                        <StatCard
+                            label="TME"
+                            value={stats.avg_tme_mins > 0 ? formatDuration(stats.avg_tme_mins) : '—'}
+                            sub="tempo médio de espera na fila"
+                            icon={<Hourglass className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />}
+                            iconBg="bg-cyan-50 dark:bg-cyan-900/20"
+                        />
+                        <StatCard
+                            label="CSAT médio"
+                            value={stats.avg_csat !== null ? `${stats.avg_csat}/5` : '—'}
+                            sub={stats.csat_count > 0 ? `${stats.csat_count} avaliações` : 'sem avaliações de nota'}
+                            icon={<Star className="h-4 w-4 text-amber-500 dark:text-amber-400" />}
+                            iconBg="bg-amber-50 dark:bg-amber-900/20"
                         />
                     </div>
                 </div>
@@ -569,6 +589,14 @@ export default function Dashboard({ stats, volumeData, sectorStats, waiting, top
                                                         </div>
                                                         <div className="mt-0.5 uppercase text-muted-foreground">Aber.</div>
                                                     </div>
+                                                    {leader.avg_mins > 0 && (
+                                                        <div className="rounded-lg border border-ink/[0.10] px-3 py-2 text-center">
+                                                            <div className="font-semibold text-ink/80">
+                                                                {formatDuration(leader.avg_mins)}
+                                                            </div>
+                                                            <div className="mt-0.5 uppercase text-muted-foreground">TMA</div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink/[0.08]">
@@ -621,6 +649,14 @@ export default function Dashboard({ stats, volumeData, sectorStats, waiting, top
                                                                         </div>
                                                                         <div className="uppercase text-muted-foreground">Aber.</div>
                                                                     </div>
+                                                                    {attendant.avg_mins > 0 && (
+                                                                        <div className="text-right">
+                                                                            <div className="font-semibold text-ink/60">
+                                                                                {formatDuration(attendant.avg_mins)}
+                                                                            </div>
+                                                                            <div className="uppercase text-muted-foreground">TMA</div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>

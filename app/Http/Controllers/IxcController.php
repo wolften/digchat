@@ -425,7 +425,7 @@ class IxcController extends Controller
             $message = $sender->sendAttachment($conversation, $file, null, $request->user());
 
             if ($message->status === 'failed') {
-                return response()->json(['error' => 'Falha ao enviar no WhatsApp. Verifique a integração.'], 422);
+                return response()->json(['error' => 'Falha ao enviar a mensagem. Verifique a integração do canal.'], 422);
             }
 
             return response()->json(['ok' => true]);
@@ -485,7 +485,7 @@ class IxcController extends Controller
         }
 
         if ($textMsg->status === 'failed') {
-            return response()->json(['error' => 'Falha ao enviar no WhatsApp. Verifique a integração.'], 422);
+            return response()->json(['error' => 'Falha ao enviar a mensagem. Verifique a integração do canal.'], 422);
         }
 
         return response()->json(['ok' => true]);

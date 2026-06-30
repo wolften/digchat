@@ -21,6 +21,7 @@ class Message extends Model
         'direction',
         'type',
         'body',
+        'transcription',
         'wa_message_id',
         'status',
         'sender_user_id',
