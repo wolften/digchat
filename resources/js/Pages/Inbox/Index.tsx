@@ -35,6 +35,7 @@ import {
     ArrowDownUp,
     ArrowRightLeft,
     Bot,
+    Building2,
     Check,
     ChevronDown,
     CheckCheck,
@@ -77,6 +78,12 @@ const TelegramIcon = ({ className }: { className?: string }) => (
     </svg>
 );
 
+const WebIcon = ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z"/>
+    </svg>
+);
+
 type Status = 'bot' | 'queued' | 'open' | 'closed' | 'surveying';
 
 interface Sector {
@@ -93,7 +100,7 @@ interface Tag {
 interface ConversationSummary {
     id: number;
     status: Status;
-    channel_type: 'whatsapp' | 'telegram' | null;
+    channel_type: 'whatsapp' | 'telegram' | 'web' | null;
     channel_name: string | null;
     assigned_user_id: number | null;
     assigned_user: { id: number; name: string } | null;
@@ -139,7 +146,7 @@ interface Selected {
     id: number;
     protocol_number: string | null;
     status: Status;
-    channel_type: 'whatsapp' | 'telegram' | null;
+    channel_type: 'whatsapp' | 'telegram' | 'web' | null;
     channel_name: string | null;
     assigned_user_id: number | null;
     assigned_user: { id: number; name: string } | null;
@@ -1082,7 +1089,7 @@ export default function InboxIndex({
 
             <div className="flex-1 min-h-0 grid grid-cols-1 overflow-hidden md:grid-cols-[340px_1fr]">
                         {/* Lista de conversas */}
-                        <div className="flex min-h-0 flex-col border-r border-ink/[0.08]">
+                        <div className="relative flex min-h-0 flex-col border-r border-ink/[0.08]">
                             <div className="flex h-16 items-center border-b border-ink/[0.08] px-2">
                                 <div className="grid w-full grid-cols-4 gap-1 rounded-2xl border border-ink/[0.08] bg-white p-1 shadow-sm dark:bg-ink/[0.03]">
                                     {filters.map((f) => {
@@ -1118,110 +1125,100 @@ export default function InboxIndex({
                                     })}
                                 </div>
                             </div>
-                            <div
-                                className={cn(
-                                    'grid items-center gap-2 border-b border-ink/[0.08] bg-ink/[0.015] px-2 py-2',
-                                    [sectors.length > 0, users.length > 0, tags.length > 0].filter(Boolean).length === 3
-                                        ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_3rem]'
-                                        : [sectors.length > 0, users.length > 0, tags.length > 0].filter(Boolean).length === 2
-                                          ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_3rem]'
-                                          : 'grid-cols-[minmax(0,1fr)_3rem]',
-                                )}
-                            >
+                            <div className="scrollbar-thin flex-1 overflow-y-auto">
+                                {(sectors.length > 0 || users.length > 0 || tags.length > 0) && (
+                                <div className="sticky top-0 z-10 flex items-center gap-1.5 border-b border-ink/[0.08] bg-canvas px-2 py-2">
+                                    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                                     {sectors.length > 0 && (
-                                        <Select
-                                            value={sector_id?.toString() ?? 'all'}
-                                            onValueChange={changeSector}
-                                        >
-                                            <SelectTrigger className="h-11 min-w-0 overflow-hidden rounded-xl border-ink/[0.1] bg-white px-2.5 py-1.5 text-left shadow-sm focus:border-accent/50 focus:ring-accent/20 dark:bg-ink/[0.04]">
-                                                <div className="min-w-0 flex-1 overflow-hidden">
-                                                    <span className="block text-[9px] font-bold uppercase leading-none tracking-[0.08em] text-ink/35">
-                                                        Setor
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <button className={cn(
+                                                    'flex h-7 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-colors',
+                                                    sector_id
+                                                        ? 'border-accent/30 bg-accent/10 text-accent'
+                                                        : 'border-ink/[0.12] bg-white text-ink/60 shadow-sm hover:bg-ink/[0.05] dark:bg-ink/[0.04] dark:hover:bg-ink/[0.08]',
+                                                )}>
+                                                    <Building2 className="h-3 w-3 shrink-0" />
+                                                    <span className="max-w-[72px] truncate">
+                                                        {sector_id ? (sectors.find(s => s.id === sector_id)?.name ?? 'Setor') : 'Setor'}
                                                     </span>
-                                                    <SelectValue
-                                                        className="mt-1 block truncate text-xs font-semibold text-ink/85"
-                                                        placeholder="Todos"
-                                                    />
-                                                </div>
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">Todos</SelectItem>
-                                                {sectors.map((s) => (
-                                                    <SelectItem key={s.id} value={s.id.toString()}>
-                                                        {s.name}
-                                                    </SelectItem>
+                                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="start" className="min-w-[160px]">
+                                                <DropdownMenuItem onClick={() => changeSector('all')}>
+                                                    <span className={cn('w-full', !sector_id && 'font-semibold text-accent')}>Todos os setores</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                {sectors.map(s => (
+                                                    <DropdownMenuItem key={s.id} onClick={() => changeSector(s.id.toString())}>
+                                                        <span className={cn('w-full', sector_id === s.id && 'font-semibold text-accent')}>{s.name}</span>
+                                                    </DropdownMenuItem>
                                                 ))}
-                                            </SelectContent>
-                                        </Select>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     )}
                                     {users.length > 0 && (
-                                        <Select
-                                            value={user_id?.toString() ?? 'all'}
-                                            onValueChange={changeUser}
-                                        >
-                                            <SelectTrigger className="h-11 min-w-0 overflow-hidden rounded-xl border-ink/[0.1] bg-white px-2.5 py-1.5 text-left shadow-sm focus:border-accent/50 focus:ring-accent/20 dark:bg-ink/[0.04]">
-                                                <div className="min-w-0 flex-1 overflow-hidden">
-                                                    <span className="block text-[9px] font-bold uppercase leading-none tracking-[0.08em] text-ink/35">
-                                                        Atendente
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <button className={cn(
+                                                    'flex h-7 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-colors',
+                                                    user_id
+                                                        ? 'border-accent/30 bg-accent/10 text-accent'
+                                                        : 'border-ink/[0.12] bg-white text-ink/60 shadow-sm hover:bg-ink/[0.05] dark:bg-ink/[0.04] dark:hover:bg-ink/[0.08]',
+                                                )}>
+                                                    <UserRound className="h-3 w-3 shrink-0" />
+                                                    <span className="max-w-[72px] truncate">
+                                                        {user_id ? (users.find(u => u.id === user_id)?.name ?? 'Atendente') : 'Atendente'}
                                                     </span>
-                                                    <SelectValue
-                                                        className="mt-1 block truncate text-xs font-semibold text-ink/85"
-                                                        placeholder="Todos"
-                                                    />
-                                                </div>
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">Todos</SelectItem>
-                                                {users.map((u) => (
-                                                    <SelectItem key={u.id} value={u.id.toString()}>
-                                                        {u.name}
-                                                    </SelectItem>
+                                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="start" className="min-w-[160px]">
+                                                <DropdownMenuItem onClick={() => changeUser('all')}>
+                                                    <span className={cn('w-full', !user_id && 'font-semibold text-accent')}>Todos os atendentes</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                {users.map(u => (
+                                                    <DropdownMenuItem key={u.id} onClick={() => changeUser(u.id.toString())}>
+                                                        <span className={cn('w-full', user_id === u.id && 'font-semibold text-accent')}>{u.name}</span>
+                                                    </DropdownMenuItem>
                                                 ))}
-                                            </SelectContent>
-                                        </Select>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     )}
                                     {tags.length > 0 && (
-                                        <Select
-                                            value={tag_id?.toString() ?? 'all'}
-                                            onValueChange={changeTag}
-                                        >
-                                            <SelectTrigger className="h-11 min-w-0 overflow-hidden rounded-xl border-ink/[0.1] bg-white px-2.5 py-1.5 text-left shadow-sm focus:border-accent/50 focus:ring-accent/20 dark:bg-ink/[0.04]">
-                                                <div className="min-w-0 flex-1 overflow-hidden">
-                                                    <span className="block text-[9px] font-bold uppercase leading-none tracking-[0.08em] text-ink/35">
-                                                        Etiqueta
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <button className={cn(
+                                                    'flex h-7 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-colors',
+                                                    tag_id
+                                                        ? 'border-accent/30 bg-accent/10 text-accent'
+                                                        : 'border-ink/[0.12] bg-white text-ink/60 shadow-sm hover:bg-ink/[0.05] dark:bg-ink/[0.04] dark:hover:bg-ink/[0.08]',
+                                                )}>
+                                                    <TagIcon className="h-3 w-3 shrink-0" />
+                                                    <span className="max-w-[72px] truncate">
+                                                        {tag_id ? (tags.find(t => t.id === tag_id)?.name ?? 'Etiqueta') : 'Etiqueta'}
                                                     </span>
-                                                    <SelectValue
-                                                        className="mt-1 block truncate text-xs font-semibold text-ink/85"
-                                                        placeholder="Todas"
-                                                    />
-                                                </div>
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">Todas</SelectItem>
-                                                {tags.map((t) => (
-                                                    <SelectItem key={t.id} value={t.id.toString()}>
-                                                        {t.name}
-                                                    </SelectItem>
+                                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="start" className="min-w-[160px]">
+                                                <DropdownMenuItem onClick={() => changeTag('all')}>
+                                                    <span className={cn('w-full', !tag_id && 'font-semibold text-accent')}>Todas as etiquetas</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                {tags.map(t => (
+                                                    <DropdownMenuItem key={t.id} onClick={() => changeTag(t.id.toString())}>
+                                                        <span className={cn('w-full', tag_id === t.id && 'font-semibold text-accent')}>{t.name}</span>
+                                                    </DropdownMenuItem>
                                                 ))}
-                                            </SelectContent>
-                                        </Select>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     )}
-                                <button
-                                    onClick={changeSort}
-                                    aria-label={sort === 'newest' ? 'Mais recentes primeiro. Clique para inverter.' : 'Mais antigas primeiro. Clique para inverter.'}
-                                    title={sort === 'newest' ? 'Mais recentes primeiro — clique para inverter' : 'Mais antigas primeiro — clique para inverter'}
-                                    className={cn(
-                                        'flex h-11 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border text-[9px] font-bold uppercase leading-none transition-colors',
-                                        sort === 'oldest'
-                                            ? 'border-accent/25 bg-accent/15 text-accent'
-                                            : 'border-ink/[0.08] bg-canvas text-ink/50 shadow-sm hover:bg-ink/[0.06] hover:text-ink/80',
-                                    )}
-                                >
-                                    <ArrowDownUp className="h-3.5 w-3.5" />
-                                    {sort === 'newest' ? 'Novo' : 'Antigo'}
-                                </button>
-                            </div>
-                            <div className="scrollbar-thin flex-1 overflow-y-auto">
+                                    </div>
+                                </div>
+                                )}
                                 {conversations.length === 0 && (
                                     <div className="flex min-h-[280px] flex-col items-center justify-center px-6 py-10 text-center">
                                         <div className="relative mb-5 h-20 w-20">
@@ -1255,10 +1252,9 @@ export default function InboxIndex({
                                 {conversations.map((c) => {
                                     const preview = mediaPreview(c);
                                     const PreviewIcon = preview?.icon;
-                                    const contactName = formatClientDisplayName(
-                                        c.contact.name,
-                                        c.contact.wa_id,
-                                    );
+                                    const contactName = c.channel_type === 'web'
+                                        ? (c.contact.name && !c.contact.name.startsWith('web_') ? c.contact.name : 'Visitante')
+                                        : formatClientDisplayName(c.contact.name, c.contact.wa_id);
                                     const convExpiresAt =
                                         auto_close_enabled && c.status === 'open' && c.last_message_at && c.last_message_direction === 'out'
                                             ? new Date(c.last_message_at).getTime() + auto_close_minutes * 60 * 1000
@@ -1304,12 +1300,16 @@ export default function InboxIndex({
                                                         "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-canvas",
                                                         c.channel_type === 'telegram'
                                                             ? "bg-blue-500 text-white"
+                                                            : c.channel_type === 'web'
+                                                            ? "bg-violet-500 text-white"
                                                             : "bg-green-500 text-white",
                                                     )}
-                                                    title={c.channel_name ?? (c.channel_type === 'telegram' ? 'Telegram' : 'WhatsApp')}
+                                                    title={c.channel_name ?? (c.channel_type === 'telegram' ? 'Telegram' : c.channel_type === 'web' ? 'Chat Web' : 'WhatsApp')}
                                                 >
                                                     {c.channel_type === 'telegram' ? (
                                                         <TelegramIcon className="h-2.5 w-2.5" />
+                                                    ) : c.channel_type === 'web' ? (
+                                                        <WebIcon className="h-2.5 w-2.5" />
                                                     ) : (
                                                         <WhatsAppIcon className="h-2.5 w-2.5" />
                                                     )}
@@ -1426,6 +1426,19 @@ export default function InboxIndex({
                                     );
                                 })}
                             </div>
+                            <button
+                                onClick={changeSort}
+                                aria-label={sort === 'newest' ? 'Mais recentes primeiro. Clique para inverter.' : 'Mais antigas primeiro. Clique para inverter.'}
+                                title={sort === 'newest' ? 'Mais recentes primeiro — clique para inverter' : 'Mais antigas primeiro — clique para inverter'}
+                                className={cn(
+                                    'absolute bottom-4 right-4 flex h-9 w-9 items-center justify-center rounded-full border shadow-md transition-colors',
+                                    sort === 'oldest'
+                                        ? 'border-accent/30 bg-accent text-white'
+                                        : 'border-ink/[0.12] bg-white text-ink/50 hover:text-ink/80 dark:bg-zinc-800 dark:border-white/10',
+                                )}
+                            >
+                                <ArrowDownUp className="h-3.5 w-3.5" />
+                            </button>
                         </div>
 
                         {/* Thread + IXC Panel */}
@@ -1439,19 +1452,19 @@ export default function InboxIndex({
 
                             {selected && (
                                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                                    <div className="flex flex-col border-b border-ink/[0.08] px-3 py-2 gap-1.5">
-                                        <div className="flex min-h-10 items-center justify-between">
-                                        <div>
-                                            <div className="font-semibold text-ink/90">
-                                                {formatClientDisplayName(
-                                                    selected.contact.name,
-                                                    selected.contact.wa_id,
-                                                )}
+                                    <div className="flex h-16 shrink-0 items-center gap-3 border-b border-ink/[0.08] px-3">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-sm font-semibold text-ink/90">
+                                                {selected.channel_type === 'web'
+                                                    ? (selected.contact.name && !selected.contact.name.startsWith('web_') ? selected.contact.name : 'Visitante')
+                                                    : formatClientDisplayName(selected.contact.name, selected.contact.wa_id)}
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs text-ink/45">
+                                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                                <span className="text-[11px] text-ink/45">
                                                     {selected.channel_type === 'telegram'
                                                         ? `ID: ${selected.contact.wa_id}`
+                                                        : selected.channel_type === 'web'
+                                                        ? 'Chat Web'
                                                         : formatClientPhone(selected.contact.wa_id)}
                                                 </span>
                                                 {selected.protocol_number && (
@@ -1462,11 +1475,69 @@ export default function InboxIndex({
                                                             navigator.clipboard.writeText(selected.protocol_number!);
                                                             toast.success('Protocolo copiado!');
                                                         }}
-                                                        className="group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-ink/40 transition-colors hover:bg-ink/[0.06] hover:text-ink/65"
+                                                        className="group inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium text-ink/40 transition-colors hover:bg-ink/[0.06] hover:text-ink/65"
                                                     >
                                                         #{selected.protocol_number}
                                                         <Copy className="h-2.5 w-2.5 opacity-0 transition-opacity group-hover:opacity-100" />
                                                     </button>
+                                                )}
+                                                {selected.channel_type === 'telegram' ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
+                                                        <TelegramIcon className="h-2.5 w-2.5" />{selected.channel_name ?? 'Telegram'}
+                                                    </span>
+                                                ) : selected.channel_type === 'web' ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:bg-violet-950/30 dark:text-violet-400">
+                                                        <WebIcon className="h-2.5 w-2.5" />{selected.channel_name ?? 'Chat Web'}
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:bg-green-950/30 dark:text-green-400">
+                                                        <WhatsAppIcon className="h-2.5 w-2.5" />{selected.channel_name ?? 'WhatsApp'}
+                                                    </span>
+                                                )}
+                                                {selected.status === 'surveying' ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
+                                                        <Star className="h-2.5 w-2.5" />Pesquisa
+                                                    </span>
+                                                ) : selected.status === 'bot' ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+                                                        <Bot className="h-2.5 w-2.5" />Automação
+                                                    </span>
+                                                ) : (
+                                                    <span className={cn(
+                                                        'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                                                        selected.status === 'open'
+                                                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
+                                                            : selected.status === 'queued'
+                                                              ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
+                                                              : 'bg-ink/[0.06] text-ink/50',
+                                                    )}>
+                                                        {selected.status === 'open' && (
+                                                            <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                                                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                                            </span>
+                                                        )}
+                                                        {STATUS_LABEL[selected.status]}
+                                                    </span>
+                                                )}
+                                                {selected.sector && (
+                                                    <span className="inline-flex items-center rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                                                        {selected.sector.name}
+                                                    </span>
+                                                )}
+                                                {inactivityCountdown !== null && (
+                                                    <span
+                                                        className={cn(
+                                                            'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums',
+                                                            inactivityCountdown <= 120
+                                                                ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400'
+                                                                : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
+                                                        )}
+                                                        title="Tempo restante para encerramento automático por inatividade"
+                                                    >
+                                                        <Clock className="h-2.5 w-2.5 shrink-0" />
+                                                        {formatCountdown(inactivityCountdown)}
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>
@@ -1554,6 +1625,13 @@ export default function InboxIndex({
                                                 >
                                                     <StickyNote className="h-4 w-4" />
                                                 </button>
+                                            {(selected.tags?.length ?? 0) > 0 && (
+                                                <div className="flex items-center gap-0.5 mr-0.5">
+                                                    {selected.tags?.slice(0, 3).map(tag => (
+                                                        <span key={tag.id} className={`h-2 w-2 rounded-full ${TAG_DOT_CLASSES[tag.color] ?? 'bg-ink/20'}`} title={tag.name} />
+                                                    ))}
+                                                </div>
+                                            )}
                                             {tags.length > 0 && (
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -1587,75 +1665,6 @@ export default function InboxIndex({
                                                         })}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
-                                            )}
-                                        </div>
-                                        </div>
-                                        <div className="flex flex-wrap items-center justify-end gap-1.5 text-xs">
-                                            {selected.sector && (
-                                                <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-1 font-medium text-accent">
-                                                    {selected.sector.name}
-                                                </span>
-                                            )}
-                                            {selected.tags?.map((tag) => (
-                                                <span
-                                                    key={tag.id}
-                                                    className={`inline-flex items-center rounded-full border px-2.5 py-1 font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
-                                                >
-                                                    {tag.name}
-                                                </span>
-                                            ))}
-                                            {selected.channel_type === 'telegram' ? (
-                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
-                                                    <TelegramIcon className="h-3 w-3" />
-                                                    {selected.channel_name ?? 'Telegram'}
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 font-medium text-green-600 dark:bg-green-950/30 dark:text-green-400">
-                                                    <WhatsAppIcon className="h-3 w-3" />
-                                                    {selected.channel_name ?? 'WhatsApp'}
-                                                </span>
-                                            )}
-                                            {selected.status === 'surveying' ? (
-                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 font-medium text-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
-                                                    <Star className="h-3 w-3" />
-                                                    Pesquisa
-                                                </span>
-                                            ) : selected.status === 'bot' ? (
-                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
-                                                    <Bot className="h-3 w-3" />
-                                                    Automação
-                                                </span>
-                                            ) : (
-                                                <span className={cn(
-                                                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium',
-                                                    selected.status === 'open'
-                                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
-                                                        : selected.status === 'queued'
-                                                          ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
-                                                          : 'bg-ink/[0.06] text-ink/50',
-                                                )}>
-                                                    {selected.status === 'open' && (
-                                                        <span className="relative flex h-2 w-2 shrink-0">
-                                                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                                                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                                                        </span>
-                                                    )}
-                                                    {STATUS_LABEL[selected.status]}
-                                                </span>
-                                            )}
-                                            {inactivityCountdown !== null && (
-                                                <span
-                                                    className={cn(
-                                                        'inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium tabular-nums',
-                                                        inactivityCountdown <= 120
-                                                            ? 'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400'
-                                                            : 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
-                                                    )}
-                                                    title="Tempo restante para encerramento automático por inatividade"
-                                                >
-                                                    <Clock className="h-3 w-3 shrink-0" />
-                                                    {formatCountdown(inactivityCountdown)}
-                                                </span>
                                             )}
                                         </div>
                                     </div>

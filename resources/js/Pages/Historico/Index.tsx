@@ -48,6 +48,12 @@ const TelegramIcon = ({ className }: { className?: string }) => (
     </svg>
 );
 
+const WebIcon = ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z"/>
+    </svg>
+);
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface Tag {
@@ -68,7 +74,7 @@ interface ConvItem {
     survey_completed: boolean;
     last_message_at: string | null;
     created_at: string | null;
-    channel_type: 'whatsapp' | 'telegram' | null;
+    channel_type: 'whatsapp' | 'telegram' | 'web' | null;
     channel_name: string | null;
     tags: Tag[];
 }
@@ -340,12 +346,20 @@ function StatCard({
 
 // ─── ChannelBadge ─────────────────────────────────────────────────────────────
 
-function ChannelBadge({ type, name }: { type: 'whatsapp' | 'telegram' | null; name: string | null }) {
+function ChannelBadge({ type, name }: { type: 'whatsapp' | 'telegram' | 'web' | null; name: string | null }) {
     if (type === 'telegram') {
         return (
             <span className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full border border-blue-300/50 bg-blue-50 px-1.5 text-[10px] font-medium text-blue-600 dark:border-blue-400/25 dark:bg-blue-950/40 dark:text-blue-400">
                 <TelegramIcon className="h-2.5 w-2.5" />
                 {name ?? 'Telegram'}
+            </span>
+        );
+    }
+    if (type === 'web') {
+        return (
+            <span className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full border border-violet-300/50 bg-violet-50 px-1.5 text-[10px] font-medium text-violet-600 dark:border-violet-400/25 dark:bg-violet-950/40 dark:text-violet-400">
+                <WebIcon className="h-2.5 w-2.5" />
+                {name ?? 'Chat Web'}
             </span>
         );
     }

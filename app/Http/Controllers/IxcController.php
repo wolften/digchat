@@ -381,6 +381,46 @@ class IxcController extends Controller
         ]);
     }
 
+    public function consumoDiario(Contact $contact, string $contractId): JsonResponse
+    {
+        $config = $contact->integrationConfig ?? IntegrationConfig::activeIxc();
+
+        if (! $config) {
+            return response()->json(['error' => 'Integração IXC não encontrada.'], 422);
+        }
+
+        $client    = new IxcClient($config);
+        $radResult = $client->getLoginStatusByContrato($contractId);
+        $rad       = ($radResult['registros'] ?? [])[0] ?? null;
+
+        if (! $rad) {
+            return response()->json([]);
+        }
+
+        $loginId = (string) ($rad['id'] ?? '');
+
+        if ($loginId === '') {
+            return response()->json([]);
+        }
+
+        $result    = $client->getConsumoDiario($loginId);
+        $registros = $result['registros'] ?? [];
+
+        if (! is_array($registros)) {
+            $registros = [];
+        }
+
+        $data = array_map(fn ($r) => [
+            'data'   => substr((string) ($r['data'] ?? ''), 0, 10),
+            'consumo' => (int) ($r['consumo'] ?? 0),
+            'upload' => (int) ($r['consumo_upload'] ?? 0),
+        ], $registros);
+
+        usort($data, fn ($a, $b) => strcmp((string) $a['data'], (string) $b['data']));
+
+        return response()->json(array_values($data));
+    }
+
     public function sendBoleto(Request $request, Conversation $conversation): JsonResponse
     {
         abort_unless($conversation->canBeViewedBy($request->user()), 403);

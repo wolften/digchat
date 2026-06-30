@@ -14,6 +14,7 @@ use App\Models\Survey;
 use App\Models\SurveyResponse;
 use App\Models\User;
 use App\Services\Telegram\TelegramService;
+use App\Services\WebChat\WebChatService;
 use App\Services\WhatsApp\MessageSender;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Http\UploadedFile;
@@ -446,6 +447,7 @@ class InboxController extends Controller
 
         $service = match ($channel?->type) {
             Channel::TYPE_TELEGRAM => new TelegramService($channel),
+            Channel::TYPE_WEB      => new WebChatService($channel),
             Channel::TYPE_WHATSAPP => new WhatsAppService($channel),
             default                => new WhatsAppService(),
         };

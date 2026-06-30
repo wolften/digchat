@@ -440,6 +440,19 @@ class IxcClient
         ]);
     }
 
+    public function getConsumoDiario(string $loginId, int $rp = 31): array
+    {
+        return $this->listRequest('radusuarios_consumo_d', [
+            'qtype'     => 'radusuarios_consumo_d.id_login',
+            'query'     => $loginId,
+            'oper'      => '=',
+            'page'      => '1',
+            'rp'        => (string) $rp,
+            'sortname'  => 'radusuarios_consumo_d.data',
+            'sortorder' => 'desc',
+        ]);
+    }
+
     public function testConnection(): bool
     {
         try {

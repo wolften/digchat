@@ -254,13 +254,17 @@ class FlowEngine
         }
 
         if ($waMessageId) {
-            $preview = $text . "\n" . implode(' | ', array_column($options, 'label'));
+            $payload = count($options) <= 3
+                ? ['buttons' => $buttons]
+                : ['rows' => $rows];
+
             $conversation->messages()->create([
                 'direction'     => Message::DIRECTION_OUT,
                 'type'          => 'interactive',
-                'body'          => $preview,
+                'body'          => $text,
                 'wa_message_id' => $waMessageId,
                 'status'        => 'sent',
+                'payload'       => $payload,
             ]);
         }
     }
@@ -395,7 +399,7 @@ class FlowEngine
 
     private function interpolate(string $text, Conversation $conversation): string
     {
-        $name = $conversation->contact->profile_name ?? 'Cliente';
+        $name = $conversation->contact->name ?? $conversation->contact->profile_name ?? 'Cliente';
         return str_replace(['{{nome}}', '{{name}}'], $name, $text);
     }
 }

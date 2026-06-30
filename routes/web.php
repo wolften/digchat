@@ -35,6 +35,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/contacts/{contact}/unlink', [IxcController::class, 'unlink'])->name('contacts.unlink');
         Route::get('/contacts/{contact}/contracts', [IxcController::class, 'contracts'])->name('contacts.contracts');
         Route::get('/contacts/{contact}/contracts/{contractId}', [IxcController::class, 'contractDetails'])->name('contracts.details');
+        Route::get('/contacts/{contact}/contracts/{contractId}/consumo', [IxcController::class, 'consumoDiario'])->name('contracts.consumo');
         Route::post('/conversations/{conversation}/send-boleto', [IxcController::class, 'sendBoleto'])->name('conversations.send-boleto');
         Route::post('/conversations/{conversation}/send-pix', [IxcController::class, 'sendPix'])->name('conversations.send-pix');
     });
@@ -116,6 +117,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/canais/{channel}', [ChannelController::class, 'destroy'])->name('canais.destroy');
         Route::post('/canais/{channel}/test', [ChannelController::class, 'testConnection'])->name('canais.test');
         Route::post('/canais/{channel}/webhook', [ChannelController::class, 'registerWebhook'])->name('canais.webhook');
+        Route::post('/canais/{channel}/regenerate-key', [ChannelController::class, 'regenerateApiKey'])->name('canais.regenerate-key');
 
         Route::middleware('role:admin')->group(function () {
             Route::get('/configuracoes', [SettingsController::class, 'index'])->name('configuracoes.index');

@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from '@/Components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/Components/ui/dialog';
 
 const TIPO_SERVICO_LABEL: Record<string, string> = {
     I:    'Internet',
@@ -14,6 +14,7 @@ import axios from 'axios';
 import {
     ArrowDownToLine,
     ArrowUpFromLine,
+    BarChart3,
     Building2,
     ChevronRight,
     ClipboardList,
@@ -184,6 +185,12 @@ interface ContractDetails {
     tickets: Ticket[];
 }
 
+interface ConsumoItem {
+    data: string;
+    consumo: number;
+    upload: number;
+}
+
 interface Props {
     contact: IxcContact;
     conversationId: number;
@@ -238,6 +245,165 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     );
 }
 
+function fmtBytes(b: number): string {
+    if (b >= 1_073_741_824) return (b / 1_073_741_824).toFixed(1) + ' GB';
+    if (b >= 1_048_576) return Math.round(b / 1_048_576) + ' MB';
+    if (b >= 1024) return Math.round(b / 1024) + ' KB';
+    return b + ' B';
+}
+
+function ConsumoChart({ data, loading }: { data: ConsumoItem[]; loading: boolean }) {
+    const [hovered, setHovered] = useState<number | null>(null);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-8 text-ink/30">
+                <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+        );
+    }
+
+    if (!data.length) {
+        return <p className="text-xs text-ink/40">Sem dados de consumo.</p>;
+    }
+
+    const BAR_W  = 8;
+    const GAP    = 3;
+    const CH     = 80;
+    const PL     = 40;
+    const PR     = 4;
+    const PT     = 6;
+    const PB     = 18;
+    const TIP_W  = 78;
+    const TIP_H  = 36;
+
+    const maxTotal = Math.max(...data.map((d) => d.consumo + d.upload), 1);
+    const svgW = data.length * (BAR_W + GAP) - GAP + PL + PR;
+    const svgH = CH + PT + PB;
+    const step = Math.ceil(data.length / 5);
+
+    const tip = hovered !== null ? data[hovered] : null;
+    const tipBarX = hovered !== null ? PL + hovered * (BAR_W + GAP) : 0;
+    const tipX = hovered !== null
+        ? Math.max(PL, Math.min(svgW - PR - TIP_W, tipBarX + BAR_W / 2 - TIP_W / 2))
+        : 0;
+    const tipTotalH = tip ? ((tip.consumo + tip.upload) / maxTotal) * CH : 0;
+    const tipY = Math.max(PT, PT + CH - tipTotalH - TIP_H - 5);
+
+    return (
+        <div>
+            <svg
+                viewBox={`0 0 ${svgW} ${svgH}`}
+                style={{ width: '100%', height: 'auto', display: 'block' }}
+            >
+                {[0, 0.5, 1].map((frac) => {
+                    const y = PT + CH - frac * CH;
+                    return (
+                        <g key={frac}>
+                            <line
+                                x1={PL} y1={y} x2={svgW - PR} y2={y}
+                                stroke="currentColor"
+                                strokeOpacity={frac === 0 ? 0.1 : 0.05}
+                                strokeWidth={1}
+                            />
+                            <text
+                                x={PL - 3} y={y + 3.5}
+                                fontSize={5} textAnchor="end"
+                                fill="currentColor" fillOpacity={0.35}
+                            >
+                                {frac === 0 ? '0' : fmtBytes(frac * maxTotal)}
+                            </text>
+                        </g>
+                    );
+                })}
+
+                {data.map((d, i) => {
+                    const x        = PL + i * (BAR_W + GAP);
+                    const dlH      = (d.consumo / maxTotal) * CH;
+                    const ulH      = (d.upload / maxTotal) * CH;
+                    const isHov    = hovered === i;
+                    const showLabel = i === 0 || i === data.length - 1 || i % step === 0;
+
+                    return (
+                        <g
+                            key={d.data}
+                            onMouseEnter={() => setHovered(i)}
+                            onMouseLeave={() => setHovered(null)}
+                            style={{ cursor: 'default' }}
+                        >
+                            {/* transparent hit area */}
+                            <rect x={x - 1} y={PT} width={BAR_W + 2} height={CH} fill="transparent" />
+
+                            {dlH > 0 && (
+                                <rect
+                                    x={x} y={PT + CH - dlH}
+                                    width={BAR_W} height={dlH}
+                                    rx={1.5}
+                                    fill="#0ea5e9"
+                                    fillOpacity={isHov ? 1 : 0.75}
+                                />
+                            )}
+                            {ulH > 0 && (
+                                <rect
+                                    x={x} y={PT + CH - dlH - ulH}
+                                    width={BAR_W} height={ulH}
+                                    rx={1.5}
+                                    fill="#8b5cf6"
+                                    fillOpacity={isHov ? 1 : 0.75}
+                                />
+                            )}
+                            {showLabel && (
+                                <text
+                                    x={x + BAR_W / 2} y={PT + CH + PB - 2}
+                                    fontSize={5} textAnchor="middle"
+                                    fill="currentColor" fillOpacity={isHov ? 0.7 : 0.35}
+                                >
+                                    {d.data.slice(8, 10)}/{d.data.slice(5, 7)}
+                                </text>
+                            )}
+                        </g>
+                    );
+                })}
+
+                {/* Tooltip */}
+                {tip && (
+                    <g style={{ pointerEvents: 'none' }}>
+                        <rect
+                            x={tipX} y={tipY}
+                            width={TIP_W} height={TIP_H}
+                            rx={3}
+                            fill="#0f172a" fillOpacity={0.88}
+                        />
+                        <text x={tipX + 5} y={tipY + 9} fontSize={5} fill="white" fillOpacity={0.5}>
+                            {tip.data.slice(8, 10)}/{tip.data.slice(5, 7)}/{tip.data.slice(0, 4)}
+                        </text>
+                        <text x={tipX + 5} y={tipY + 20} fontSize={5.5} fill="#38bdf8">
+                            ↓ {fmtBytes(tip.consumo)}
+                        </text>
+                        <text x={tipX + 5} y={tipY + 31} fontSize={5.5} fill="#a78bfa">
+                            ↑ {fmtBytes(tip.upload)}
+                        </text>
+                    </g>
+                )}
+            </svg>
+
+            <div className="mt-2 flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-sm" style={{ background: 'rgba(14,165,233,0.75)' }} />
+                    <span className="text-[10px] text-ink/40">Download</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-sm" style={{ background: 'rgba(139,92,246,0.75)' }} />
+                    <span className="text-[10px] text-ink/40">Upload</span>
+                </div>
+                <span className="ml-auto text-[10px] text-ink/30">
+                    Total: {fmtBytes(data.reduce((s, d) => s + d.consumo, 0))} ↓ · {fmtBytes(data.reduce((s, d) => s + d.upload, 0))} ↑
+                </span>
+            </div>
+        </div>
+    );
+}
+
 export default function IxcPanel({ contact, conversationId, onClose, onLinked, onUnlinked }: Props) {
     const [query, setQuery]                       = useState('');
     const [searchResults, setSearchResults]       = useState<IxcSearchResult[]>([]);
@@ -261,6 +427,8 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
     const [boletoFeedback, setBoletoFeedback]         = useState<{ id: string; ok: boolean; msg: string } | null>(null);
     const [sendingPix, setSendingPix]                 = useState<string | null>(null);
     const [pixFeedback, setPixFeedback]               = useState<{ id: string; ok: boolean; msg: string } | null>(null);
+    const [consumo, setConsumo]                       = useState<ConsumoItem[]>([]);
+    const [loadingConsumo, setLoadingConsumo]         = useState(false);
 
     const isLinked = Boolean(contact.ixc_customer_id);
 
@@ -334,11 +502,18 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
         setShowSenhaCentral(false);
         setActiveTab('conexao');
         setLoadingDetails(true);
+        setConsumo([]);
+        setLoadingConsumo(true);
         axios
             .get(route('ixc.contracts.details', { contact: contact.id, contractId: c.id }))
             .then((res) => setDetails(res.data))
-            .catch(() => setDetails({ connection: null, invoices: [], comodatos: [], servicos: [], central_assinante: null, ordens: [], tickets: [] }))
+            .catch(() => setDetails({ connection: null, invoices: [], comodatos: [], servicos: [], linhas_sip: [], linhas_mvno: [], central_assinante: null, ordens: [], tickets: [] }))
             .finally(() => setLoadingDetails(false));
+        axios
+            .get(route('ixc.contracts.consumo', { contact: contact.id, contractId: c.id }))
+            .then((res) => setConsumo(res.data))
+            .catch(() => setConsumo([]))
+            .finally(() => setLoadingConsumo(false));
     };
 
     const handleSearch = (value: string) => {
@@ -603,7 +778,7 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
 
             {/* ── Modal de detalhes do contrato ── */}
             <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-                <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0">
+                <DialogContent aria-describedby={undefined} className="max-w-5xl gap-0 overflow-hidden p-0">
                     {/* Status accent stripe */}
                     <div
                         className={`h-1 w-full ${
@@ -632,9 +807,9 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
                                 />
                             </div>
                             <div className="min-w-0">
-                                <p className="text-base font-semibold leading-tight text-ink/90">
+                                <DialogTitle className="text-base font-semibold leading-tight text-ink/90">
                                     Contrato #{selectedContract?.id}
-                                </p>
+                                </DialogTitle>
                                 <div className="mt-1.5 flex items-center gap-2">
                                     <span
                                         className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
@@ -851,6 +1026,17 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
                                             ) : (
                                                 <p className="text-xs text-ink/40">Sem dados de conexão.</p>
                                             )}
+                                        </section>
+
+                                        {/* ── Consumo Diário ── */}
+                                        <section>
+                                            <h3 className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-ink/30">
+                                                <BarChart3 className="h-3 w-3" />
+                                                Consumo diário (últimos 31 dias)
+                                            </h3>
+                                            <div className="overflow-hidden rounded-xl border border-ink/[0.08] p-3">
+                                                <ConsumoChart data={consumo} loading={loadingConsumo} />
+                                            </div>
                                         </section>
 
                                     </>

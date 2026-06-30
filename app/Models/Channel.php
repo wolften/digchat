@@ -9,6 +9,7 @@ class Channel extends Model
 {
     public const TYPE_WHATSAPP = 'whatsapp';
     public const TYPE_TELEGRAM = 'telegram';
+    public const TYPE_WEB      = 'web';
 
     protected $fillable = ['type', 'name', 'config', 'is_active'];
 
@@ -45,6 +46,10 @@ class Channel extends Model
         if ($this->type === self::TYPE_TELEGRAM) {
             $base = rtrim($this->config['webhook_base_url'] ?? config('app.url'), '/');
             return $base . '/api/webhooks/telegram/' . $this->id;
+        }
+
+        if ($this->type === self::TYPE_WEB) {
+            return rtrim(config('app.url'), '/') . '/webchat/widget.js';
         }
 
         return route('webhooks.whatsapp');

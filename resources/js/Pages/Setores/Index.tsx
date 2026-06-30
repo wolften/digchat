@@ -39,19 +39,6 @@ interface Props {
     attendants: Attendant[];
 }
 
-const AVATAR_COLORS = [
-    'bg-blue-500',
-    'bg-emerald-500',
-    'bg-violet-500',
-    'bg-orange-500',
-    'bg-pink-500',
-    'bg-teal-500',
-    'bg-indigo-500',
-    'bg-rose-500',
-    'bg-amber-500',
-    'bg-cyan-500',
-];
-
 function initials(name: string): string {
     return name
         .trim()
@@ -60,10 +47,6 @@ function initials(name: string): string {
         .map((p) => p[0])
         .join('')
         .toUpperCase();
-}
-
-function avatarColor(id: number): string {
-    return AVATAR_COLORS[id % AVATAR_COLORS.length];
 }
 
 export default function SetoresIndex({ sectors: initialSectors, attendants }: Props) {
@@ -182,9 +165,9 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-ink/[0.08] px-6 py-4">
                     <div>
-                        <h1 className="font-manrope text-xl font-bold">Departamentos</h1>
+                        <h1 className="font-manrope text-xl font-bold">Setores</h1>
                         <p className="text-sm text-ink/60">
-                            Gerencie os usuários da sua empresa por departamentos
+                            Gerencie os usuários da sua empresa por setores
                         </p>
                     </div>
                     <Button onClick={openCreate}>
@@ -220,7 +203,7 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                                         <div className="flex items-start justify-between p-4 pb-3">
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-2">
-                                                    <h3 className="truncate font-semibold leading-tight">
+                                                    <h3 className="font-manrope truncate font-semibold leading-tight">
                                                         {sector.name}
                                                     </h3>
                                                     {!sector.is_active && (
@@ -285,9 +268,7 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                                                             key={user.id}
                                                             className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-ink/[0.04]"
                                                         >
-                                                            <div
-                                                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${avatarColor(user.id)}`}
-                                                            >
+                                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/15 font-manrope text-[10px] font-bold text-accent">
                                                                 {initials(user.name)}
                                                             </div>
                                                             <span className="flex-1 truncate text-sm text-ink/80">
@@ -342,9 +323,7 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                                         onDragStart={(e) => onDragStart(e, att.id)}
                                         className="flex cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-ink/[0.04] active:cursor-grabbing"
                                     >
-                                        <div
-                                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${avatarColor(att.id)}`}
-                                        >
+                                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/15 font-manrope text-[10px] font-bold text-accent">
                                             {initials(att.name)}
                                         </div>
                                         <span className="flex-1 truncate text-sm text-ink/80">

@@ -204,7 +204,7 @@ export function InternalChat() {
                     <div className="flex shrink-0 items-center justify-between border-b border-accent/10 px-4 py-3">
                         <div className="flex items-center gap-2">
                             <MessageCircle className="h-4 w-4 text-accent" />
-                            <span className="text-xs font-semibold text-ink/82">Chat da Equipe</span>
+                            <span className="text-xs font-semibold text-ink/82">Chat Interno</span>
                         </div>
                         <button
                             type="button"
@@ -259,7 +259,7 @@ export function InternalChat() {
                             value={body}
                             onChange={(e) => setBody(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            placeholder="Mensagem… (Enter envia)"
+                            placeholder=""
                             rows={1}
                             className="scrollbar-thin flex-1 resize-none rounded-xl border border-accent/20 bg-transparent px-3 py-2 text-xs text-ink placeholder-ink/30 outline-none focus:border-accent/50"
                             style={{ maxHeight: '80px' }}

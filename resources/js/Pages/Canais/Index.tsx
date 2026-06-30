@@ -25,11 +25,13 @@ import axios from 'axios';
 import {
     AlertTriangle,
     CheckCircle2,
+    Code2,
     Copy,
     Loader2,
     Pencil,
     Plus,
     RefreshCw,
+    RotateCcw,
     Send,
     Trash2,
 } from 'lucide-react';
@@ -44,11 +46,17 @@ type ChannelMeta = {
     has_app_secret?: boolean;
     has_webhook_secret?: boolean;
     webhook_base_url?: string;
+    // web
+    api_key?: string;
+    position?: string;
+    accent_color?: string;
+    title?: string;
+    subtitle?: string;
 };
 
 type Channel = {
     id: number;
-    type: 'whatsapp' | 'telegram';
+    type: 'whatsapp' | 'telegram' | 'web';
     name: string;
     is_active: boolean;
     webhook_url: string;
@@ -60,7 +68,7 @@ type Props = {
 };
 
 type FormData = {
-    type: 'whatsapp' | 'telegram';
+    type: 'whatsapp' | 'telegram' | 'web';
     name: string;
     is_active: boolean;
     config: {
@@ -73,6 +81,11 @@ type FormData = {
         bot_token?: string;
         webhook_secret?: string;
         webhook_base_url?: string;
+        // web
+        position?: string;
+        accent_color?: string;
+        title?: string;
+        subtitle?: string;
     };
 };
 
@@ -88,6 +101,8 @@ export default function CanaisIndex({ channels }: Props) {
     const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
     const [testingId, setTestingId] = useState<number | null>(null);
     const [webhookId, setWebhookId] = useState<number | null>(null);
+    const [regeneratingId, setRegeneratingId] = useState<number | null>(null);
+    const [embedChannel, setEmbedChannel] = useState<Channel | null>(null);
 
     const form = useForm<FormData>(emptyForm());
 
@@ -106,7 +121,12 @@ export default function CanaisIndex({ channels }: Props) {
             type: ch.type,
             name: ch.name,
             is_active: ch.is_active,
-            config: {
+            config: ch.type === 'web' ? {
+                position:     ch.meta.position ?? 'bottom-right',
+                accent_color: ch.meta.accent_color ?? '#6d28d9',
+                title:        ch.meta.title ?? 'Suporte',
+                subtitle:     ch.meta.subtitle ?? 'Responderemos em breve',
+            } : {
                 api_version: ch.meta.api_version ?? 'v21.0',
                 phone_number_id: ch.meta.phone_number_id ?? '',
                 waba_id: ch.meta.waba_id ?? '',
@@ -176,6 +196,37 @@ export default function CanaisIndex({ channels }: Props) {
             .catch(() => {});
     }
 
+    function regenerateApiKey(ch: Channel) {
+        if (!confirm('Gerar nova chave de API? A chave atual deixará de funcionar imediatamente.')) return;
+        setRegeneratingId(ch.id);
+        axios
+            .post<{ status: string; api_key: string }>(route('canais.regenerate-key', ch.id))
+            .then(({ data }) => {
+                if (data.status === 'ok') {
+                    toast.success('Nova chave gerada!');
+                    router.reload({ only: ['channels'] });
+                }
+            })
+            .catch(() => toast.error('Falha ao gerar chave.'))
+            .finally(() => setRegeneratingId(null));
+    }
+
+    function buildEmbedCode(ch: Channel): string {
+        const origin = window.location.origin;
+        const pos    = ch.meta.position ?? 'bottom-right';
+        const color  = ch.meta.accent_color ?? '#6d28d9';
+        const title  = ch.meta.title ?? 'Suporte';
+        const sub    = ch.meta.subtitle ?? 'Responderemos em breve';
+        const key    = ch.meta.api_key ?? '';
+        return `<script\n  src="${origin}/webchat/widget.js"\n  data-channel="${ch.id}"\n  data-key="${key}"\n  data-position="${pos}"\n  data-color="${color}"\n  data-title="${title}"\n  data-subtitle="${sub}"\n  async\n></script>`;
+    }
+
+    function copyEmbed(ch: Channel) {
+        navigator.clipboard.writeText(buildEmbedCode(ch))
+            .then(() => toast.success('Código copiado!'))
+            .catch(() => {});
+    }
+
     return (
         <AuthenticatedLayout>
             <Head title="Canais" />
@@ -185,7 +236,7 @@ export default function CanaisIndex({ channels }: Props) {
                     <div>
                         <h1 className="font-manrope text-xl font-bold">Canais</h1>
                         <p className="text-sm text-ink/60">
-                            Configure WhatsApp e Telegram para receber e enviar mensagens.
+                            Configure WhatsApp, Telegram e Web Chat para receber e enviar mensagens.
                         </p>
                     </div>
                     <Button onClick={openCreate}>
@@ -222,7 +273,11 @@ export default function CanaisIndex({ channels }: Props) {
                                     <td className="px-4 py-3 font-mono text-xs text-ink/60">
                                         {ch.type === 'whatsapp'
                                             ? ch.meta.phone_number_id ?? '—'
-                                            : ch.meta.has_token ? 'Token configurado' : '—'}
+                                            : ch.type === 'telegram'
+                                            ? (ch.meta.has_token ? 'Token configurado' : '—')
+                                            : (ch.meta.api_key
+                                                ? ch.meta.api_key.slice(0, 8) + '••••••••'
+                                                : '—')}
                                     </td>
                                     <td className="px-4 py-3">
                                         {ch.is_active ? (
@@ -267,6 +322,29 @@ export default function CanaisIndex({ channels }: Props) {
                                                     </Button>
                                                 </>
                                             )}
+                                            {ch.type === 'web' && (
+                                                <>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        onClick={() => setEmbedChannel(ch)}
+                                                        title="Ver código de embed"
+                                                    >
+                                                        <Code2 className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        onClick={() => regenerateApiKey(ch)}
+                                                        title="Regenerar chave de API"
+                                                        disabled={regeneratingId === ch.id}
+                                                    >
+                                                        {regeneratingId === ch.id
+                                                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                            : <RotateCcw className="h-4 w-4" />}
+                                                    </Button>
+                                                </>
+                                            )}
                                             <Button
                                                 size="icon"
                                                 variant="ghost"
@@ -302,7 +380,7 @@ export default function CanaisIndex({ channels }: Props) {
                             <DialogDescription>
                                 {editingChannel
                                     ? 'Atualize as configurações do canal. Deixe campos de token em branco para mantê-los.'
-                                    : 'Configure um novo canal de atendimento WhatsApp ou Telegram.'}
+                                    : 'Configure um novo canal de atendimento WhatsApp, Telegram ou Web Chat.'}
                             </DialogDescription>
                         </DialogHeader>
 
@@ -315,8 +393,12 @@ export default function CanaisIndex({ channels }: Props) {
                                         onValueChange={(v) =>
                                             form.setData((d) => ({
                                                 ...d,
-                                                type: v as 'whatsapp' | 'telegram',
-                                                config: v === 'whatsapp' ? { api_version: 'v21.0' } : {},
+                                                type: v as 'whatsapp' | 'telegram' | 'web',
+                                                config: v === 'whatsapp'
+                                                    ? { api_version: 'v21.0' }
+                                                    : v === 'web'
+                                                    ? { position: 'bottom-right', accent_color: '#6d28d9', title: 'Suporte', subtitle: 'Responderemos em breve' }
+                                                    : {},
                                             }))
                                         }
                                         disabled={!!editingChannel}
@@ -327,6 +409,7 @@ export default function CanaisIndex({ channels }: Props) {
                                         <SelectContent>
                                             <SelectItem value="whatsapp">WhatsApp</SelectItem>
                                             <SelectItem value="telegram">Telegram</SelectItem>
+                                            <SelectItem value="web">Web Chat</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -357,8 +440,10 @@ export default function CanaisIndex({ channels }: Props) {
 
                             {form.data.type === 'whatsapp' ? (
                                 <WhatsAppFields form={form} editing={!!editingChannel} />
-                            ) : (
+                            ) : form.data.type === 'telegram' ? (
                                 <TelegramFields form={form} editing={!!editingChannel} />
+                            ) : (
+                                <WebFields form={form} editing={!!editingChannel} />
                             )}
                         </div>
 
@@ -372,6 +457,37 @@ export default function CanaisIndex({ channels }: Props) {
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+            {/* Embed Code Dialog */}
+            <Dialog open={!!embedChannel} onOpenChange={(o) => !o && setEmbedChannel(null)}>
+                <DialogContent className="max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>Código de incorporação</DialogTitle>
+                        <DialogDescription>
+                            Cole este código no HTML do site onde deseja exibir o chat flutuante.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {embedChannel && (
+                        <div className="space-y-4 py-2">
+                            <div className="rounded-lg border border-ink/[0.08] bg-ink/[0.03] p-3">
+                                <pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-ink/80">
+                                    {buildEmbedCode(embedChannel)}
+                                </pre>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setEmbedChannel(null)}>Fechar</Button>
+                                <Button onClick={() => copyEmbed(embedChannel)}>
+                                    <Copy className="mr-1.5 h-4 w-4" />
+                                    Copiar código
+                                </Button>
+                            </div>
+                            <p className="text-xs text-ink/45">
+                                A posição e as cores do widget podem ser ajustadas editando o canal.
+                                Para trocar a chave de API, use o botão <RotateCcw className="inline h-3 w-3" /> na lista.
+                            </p>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </AuthenticatedLayout>
@@ -390,7 +506,13 @@ const TelegramIcon = ({ className }: { className?: string }) => (
     </svg>
 );
 
-function TypeBadge({ type }: { type: 'whatsapp' | 'telegram' }) {
+const WebIcon = ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+    </svg>
+);
+
+function TypeBadge({ type }: { type: 'whatsapp' | 'telegram' | 'web' }) {
     if (type === 'whatsapp') {
         return (
             <Badge variant="secondary" className="gap-1">
@@ -399,10 +521,18 @@ function TypeBadge({ type }: { type: 'whatsapp' | 'telegram' }) {
             </Badge>
         );
     }
+    if (type === 'telegram') {
+        return (
+            <Badge variant="secondary" className="gap-1">
+                <TelegramIcon className="h-3 w-3 text-blue-500" />
+                Telegram
+            </Badge>
+        );
+    }
     return (
         <Badge variant="secondary" className="gap-1">
-            <TelegramIcon className="h-3 w-3 text-blue-500" />
-            Telegram
+            <WebIcon className="h-3 w-3 text-violet-600" />
+            Web Chat
         </Badge>
     );
 }
@@ -560,6 +690,90 @@ function TelegramFields({ form, editing }: FieldProps) {
                 <p>2. Salve o canal — o webhook é registrado automaticamente.</p>
                 <p>3. Use o botão <Send className="inline h-3 w-3" /> para registrar novamente se necessário.</p>
             </div>
+        </div>
+    );
+}
+
+const POSITION_OPTIONS = [
+    { value: 'bottom-right', label: 'Inferior direito' },
+    { value: 'bottom-left',  label: 'Inferior esquerdo' },
+    { value: 'top-right',    label: 'Superior direito' },
+    { value: 'top-left',     label: 'Superior esquerdo' },
+];
+
+function WebFields({ form, editing }: FieldProps) {
+    const set = (key: string, value: string) =>
+        form.setData('config', { ...form.data.config, [key]: value });
+
+    return (
+        <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                    <Label>Posição do botão</Label>
+                    <Select
+                        value={form.data.config.position ?? 'bottom-right'}
+                        onValueChange={(v) => set('position', v)}
+                    >
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {POSITION_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {form.errors['config.position'] && (
+                        <p className="text-xs text-red-500">{form.errors['config.position']}</p>
+                    )}
+                </div>
+
+                <div className="space-y-1.5">
+                    <Label>Cor principal</Label>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="color"
+                            value={form.data.config.accent_color ?? '#6d28d9'}
+                            onChange={(e) => set('accent_color', e.target.value)}
+                            className="h-9 w-12 cursor-pointer rounded border border-input p-0.5"
+                        />
+                        <Input
+                            value={form.data.config.accent_color ?? '#6d28d9'}
+                            onChange={(e) => set('accent_color', e.target.value)}
+                            placeholder="#6d28d9"
+                            className="font-mono text-sm"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-1.5">
+                <Label>Título do widget</Label>
+                <Input
+                    value={form.data.config.title ?? ''}
+                    onChange={(e) => set('title', e.target.value)}
+                    placeholder="Suporte"
+                    maxLength={80}
+                />
+            </div>
+
+            <div className="space-y-1.5">
+                <Label>Subtítulo</Label>
+                <Input
+                    value={form.data.config.subtitle ?? ''}
+                    onChange={(e) => set('subtitle', e.target.value)}
+                    placeholder="Responderemos em breve"
+                    maxLength={120}
+                />
+            </div>
+
+            {!editing && (
+                <div className="rounded-lg bg-violet-50 px-3 py-2.5 text-xs text-violet-700 space-y-1 border border-violet-100">
+                    <p className="font-semibold">Após salvar:</p>
+                    <p>Use o botão <Code2 className="inline h-3 w-3" /> na lista para obter o código de incorporação.</p>
+                    <p>A chave de API é gerada automaticamente e pode ser rotacionada com <RotateCcw className="inline h-3 w-3" />.</p>
+                </div>
+            )}
         </div>
     );
 }

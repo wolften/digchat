@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Channel;
 use App\Services\Telegram\TelegramService;
+use App\Services\WebChat\WebChatService;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -31,10 +33,17 @@ class ChannelController extends Controller
     {
         $data = $this->validated($request);
 
+        $config = $data['config'];
+
+        // Gera a api_key automaticamente para canais web (nunca vem do front).
+        if ($data['type'] === Channel::TYPE_WEB) {
+            $config['api_key'] = Str::random(40);
+        }
+
         $channel = Channel::create([
             'type'      => $data['type'],
             'name'      => $data['name'],
-            'config'    => $data['config'],
+            'config'    => $config,
             'is_active' => $data['is_active'] ?? true,
         ]);
 
@@ -54,10 +63,17 @@ class ChannelController extends Controller
     {
         $data = $this->validated($request);
 
+        $config = $data['config'];
+
+        // Preserva a api_key ao atualizar canal web (não pode ser alterada pelo front).
+        if ($channel->type === Channel::TYPE_WEB && ! empty($channel->config['api_key'])) {
+            $config['api_key'] = $channel->config['api_key'];
+        }
+
         $channel->update([
             'type'      => $data['type'],
             'name'      => $data['name'],
-            'config'    => $data['config'],
+            'config'    => $config,
             'is_active' => $data['is_active'] ?? $channel->is_active,
         ]);
 
@@ -85,10 +101,23 @@ class ChannelController extends Controller
             ->with('success', 'Canal removido.');
     }
 
+    public function regenerateApiKey(Channel $channel): JsonResponse
+    {
+        if ($channel->type !== Channel::TYPE_WEB) {
+            return response()->json(['status' => 'error', 'message' => 'Apenas canais Web possuem API Key.'], 422);
+        }
+
+        $newKey = Str::random(40);
+        $channel->update(['config' => array_merge($channel->config ?? [], ['api_key' => $newKey])]);
+
+        return response()->json(['status' => 'ok', 'api_key' => $newKey]);
+    }
+
     public function testConnection(Channel $channel): JsonResponse
     {
         $result = match ($channel->type) {
             Channel::TYPE_TELEGRAM => (new TelegramService($channel))->healthCheck(),
+            Channel::TYPE_WEB      => (new WebChatService($channel))->healthCheck(),
             default                => (new WhatsAppService($channel))->healthCheck(),
         };
 
@@ -123,10 +152,10 @@ class ChannelController extends Controller
         $type = $request->input('type');
 
         $rules = [
-            'type'             => 'required|in:whatsapp,telegram',
-            'name'             => 'required|string|max:255',
-            'is_active'        => 'boolean',
-            'config'           => 'required|array',
+            'type'      => 'required|in:whatsapp,telegram,web',
+            'name'      => 'required|string|max:255',
+            'is_active' => 'boolean',
+            'config'    => 'required|array',
         ];
 
         if ($type === Channel::TYPE_WHATSAPP) {
@@ -136,10 +165,16 @@ class ChannelController extends Controller
             $rules['config.verify_token']    = 'nullable|string';
             $rules['config.app_secret']      = 'nullable|string';
             $rules['config.waba_id']         = 'nullable|string';
-        } else {
+        } elseif ($type === Channel::TYPE_TELEGRAM) {
             $rules['config.bot_token']        = 'required|string';
             $rules['config.webhook_secret']   = 'nullable|string';
             $rules['config.webhook_base_url'] = 'nullable|url';
+        } else {
+            // Web: apenas configurações visuais/posição vindas do front
+            $rules['config.position']    = 'nullable|in:bottom-right,bottom-left,top-right,top-left';
+            $rules['config.accent_color'] = 'nullable|string|max:20';
+            $rules['config.title']        = 'nullable|string|max:80';
+            $rules['config.subtitle']     = 'nullable|string|max:120';
         }
 
         return $request->validate($rules);
@@ -163,6 +198,16 @@ class ChannelController extends Controller
                 'has_token'          => ! empty($channel->config['bot_token']),
                 'has_webhook_secret' => ! empty($channel->config['webhook_secret']),
                 'webhook_base_url'   => $channel->config['webhook_base_url'] ?? null,
+            ];
+        }
+
+        if ($channel->type === Channel::TYPE_WEB) {
+            return [
+                'api_key'      => $channel->config['api_key'] ?? null,
+                'position'     => $channel->config['position'] ?? 'bottom-right',
+                'accent_color' => $channel->config['accent_color'] ?? '#6d28d9',
+                'title'        => $channel->config['title'] ?? 'Suporte',
+                'subtitle'     => $channel->config['subtitle'] ?? 'Responderemos em breve',
             ];
         }
 
