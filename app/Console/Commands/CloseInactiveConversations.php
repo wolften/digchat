@@ -7,6 +7,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Survey;
 use App\Models\SurveyResponse;
+use App\Services\Survey\SurveyQuestionSender;
 use App\Services\WhatsApp\MessageSender;
 use Illuminate\Console\Command;
 
@@ -31,7 +32,6 @@ class CloseInactiveConversations extends Command
 
         // Resolve survey to send on inactivity close (loaded once, used across all conversations).
         $survey = null;
-        $sender = null;
         if (
             AppSetting::bool('survey_on_inactivity_close_enabled')
             && AppSetting::bool('survey_on_close_enabled')
@@ -41,7 +41,6 @@ class CloseInactiveConversations extends Command
                 $candidate = Survey::with('questions')->find($surveyId);
                 if ($candidate && $candidate->is_active && $candidate->questions->isNotEmpty()) {
                     $survey = $candidate;
-                    $sender = app(MessageSender::class);
                 }
             }
         }
@@ -49,7 +48,7 @@ class CloseInactiveConversations extends Command
         Conversation::query()
             ->where('status', Conversation::STATUS_OPEN)
             ->where('last_message_at', '<=', $cutoff)
-            ->chunkById(100, function ($conversations) use (&$closed, $cutoff, $survey, $sender): void {
+            ->chunkById(100, function ($conversations) use (&$closed, $cutoff, $survey): void {
                 foreach ($conversations as $conversation) {
                     $lastMessage = $conversation->messages()->latest()->first();
 
@@ -65,7 +64,7 @@ class CloseInactiveConversations extends Command
                         continue;
                     }
 
-                    if ($survey && $sender) {
+                    if ($survey) {
                         $response = SurveyResponse::create([
                             'survey_id'        => $survey->id,
                             'conversation_id'  => $conversation->id,
@@ -81,15 +80,14 @@ class CloseInactiveConversations extends Command
                         ])->save();
 
                         $firstQuestion = $survey->questions->first();
-                        $buttons = collect($firstQuestion->options ?? [])
-                            ->take(3)
-                            ->map(fn ($opt) => ['id' => $opt['id'], 'title' => mb_substr($opt['label'], 0, 20)])
-                            ->values()
-                            ->all();
-
-                        $sender->sendButtons($conversation, $firstQuestion->text, $buttons, $survey->name);
+                        $sender = MessageSender::forConversation($conversation);
+                        (new SurveyQuestionSender($sender))
+                            ->send($conversation, $firstQuestion, $survey->name);
                     } else {
-                        $conversation->forceFill(['status' => Conversation::STATUS_CLOSED])->save();
+                        $conversation->forceFill([
+                            'status'    => Conversation::STATUS_CLOSED,
+                            'sector_id' => null,
+                        ])->save();
                     }
 
                     $closed++;

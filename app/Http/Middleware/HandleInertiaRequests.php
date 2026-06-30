@@ -43,6 +43,7 @@ class HandleInertiaRequests extends Middleware
             'appName'    => fn () => AppSetting::get('app_name', config('app.name')) ?: config('app.name'),
             'appIconUrl'  => fn () => AppSetting::get('app_icon_url'),
             'appSubtitle' => fn () => AppSetting::get('app_subtitle', 'Atendimento inteligente') ?: 'Atendimento inteligente',
+            'appTimezone' => (string) config('app.timezone', 'America/Sao_Paulo'),
             'inboxBadgeCount' => function () use ($request) {
                 $user = $request->user();
                 if (! $user) {

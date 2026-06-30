@@ -1625,13 +1625,6 @@ export default function InboxIndex({
                                                 >
                                                     <StickyNote className="h-4 w-4" />
                                                 </button>
-                                            {(selected.tags?.length ?? 0) > 0 && (
-                                                <div className="flex items-center gap-0.5 mr-0.5">
-                                                    {selected.tags?.slice(0, 3).map(tag => (
-                                                        <span key={tag.id} className={`h-2 w-2 rounded-full ${TAG_DOT_CLASSES[tag.color] ?? 'bg-ink/20'}`} title={tag.name} />
-                                                    ))}
-                                                </div>
-                                            )}
                                             {tags.length > 0 && (
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -1639,13 +1632,32 @@ export default function InboxIndex({
                                                             type="button"
                                                             title="Etiquetas"
                                                             className={cn(
-                                                                'rounded p-1.5 transition-colors',
+                                                                'inline-flex items-center gap-1 rounded p-1.5 transition-colors',
                                                                 (selected.tags?.length ?? 0) > 0
                                                                     ? 'bg-accent/10 text-accent'
                                                                     : 'text-ink/40 hover:bg-ink/[0.06] hover:text-ink/70',
                                                             )}
                                                         >
-                                                            <TagIcon className="h-4 w-4" />
+                                                            {(selected.tags?.length ?? 0) > 0 && (
+                                                                <span className="flex items-center gap-0.5">
+                                                                    {selected.tags?.slice(0, 3).map((tag) => (
+                                                                        <span
+                                                                            key={tag.id}
+                                                                            className={cn(
+                                                                                'block h-2 w-2 shrink-0 rounded-full',
+                                                                                TAG_DOT_CLASSES[tag.color] ?? 'bg-ink/20',
+                                                                            )}
+                                                                            title={tag.name}
+                                                                        />
+                                                                    ))}
+                                                                    {(selected.tags?.length ?? 0) > 3 && (
+                                                                        <span className="text-[9px] font-medium leading-none text-ink/50">
+                                                                            +{(selected.tags?.length ?? 0) - 3}
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            )}
+                                                            <TagIcon className="h-4 w-4 shrink-0" />
                                                         </button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="w-44">

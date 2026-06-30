@@ -35,6 +35,10 @@ interface Props {
     sectors: Sector[];
     hoursMap: Record<string, HourRow[]>;  // 'global' | sector_id string
     global: { out_of_hours_enabled: boolean; out_of_hours_message: string };
+    timezone: string;
+    currentTime: string;
+    currentWeekday: number;
+    openStatus: Record<string, boolean>;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -93,7 +97,15 @@ function buildInitialStates(
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function HorariosIndex({ sectors, hoursMap, global }: Props) {
+export default function HorariosIndex({
+    sectors,
+    hoursMap,
+    global,
+    timezone,
+    currentTime,
+    currentWeekday,
+    openStatus,
+}: Props) {
     const [activeTab, setActiveTab] = useState<string>('global');
     const [states, setStates] = useState<Record<string, TabState>>(() =>
         buildInitialStates(sectors, hoursMap, global),
@@ -101,6 +113,7 @@ export default function HorariosIndex({ sectors, hoursMap, global }: Props) {
     const [processing, setProcessing] = useState(false);
 
     const tab = states[activeTab] ?? states['global'];
+    const isCurrentlyOpen = openStatus[activeTab] ?? openStatus['global'] ?? true;
 
     // ── Mutators ──────────────────────────────────────────────────────────────
 
@@ -165,8 +178,31 @@ export default function HorariosIndex({ sectors, hoursMap, global }: Props) {
                 <div>
                     <h1 className="font-manrope text-xl font-bold">Horários de Atendimento</h1>
                     <p className="text-sm text-ink/60">
-                        Configure os horários por setor. Fora do horário, o bot envia uma resposta automática.
+                        Configure os horários por setor. Fora do horário, o bot envia uma resposta automática em todos os canais.
                     </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ink/[0.08] bg-ink/[0.02] px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm text-ink/70">
+                        <Clock className="h-4 w-4 text-accent" />
+                        <span>
+                            Fuso: <strong className="text-ink/85">{timezone}</strong>
+                            {' · '}
+                            Agora: <strong className="text-ink/85">{currentTime}</strong>
+                            {' · '}
+                            {WEEKDAY_LABELS[currentWeekday]}
+                        </span>
+                    </div>
+                    <span
+                        className={cn(
+                            'rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                            isCurrentlyOpen
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                : 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+                        )}
+                    >
+                        {isCurrentlyOpen ? 'Aberto agora' : 'Fechado agora'}
+                    </span>
                 </div>
 
                 {/* Tabs */}
@@ -295,7 +331,7 @@ export default function HorariosIndex({ sectors, hoursMap, global }: Props) {
                     <Clock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                     <p className="text-sm text-ink/70">
                         <strong className="font-semibold text-ink/85">Comportamento do bot:</strong>{' '}
-                        fora do horário, o fluxo não é executado e a mensagem automática é enviada com frequência controlada por conversa (configurável em Configurações).
+                        fora do horário, o fluxo não é executado em WhatsApp, Telegram e chat web, e a mensagem automática é enviada com frequência controlada por conversa (configurável em Configurações).
                         No editor de fluxos, use o nó{' '}
                         <code className="rounded bg-ink/[0.06] px-1 py-0.5 text-xs font-mono">horário de atendimento</code>{' '}
                         para criar ramificações aberto/fechado dentro do fluxo.

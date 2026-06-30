@@ -9,13 +9,26 @@ return new class extends Migration
     {
         // Mark in_progress survey_responses as abandoned when their conversation
         // is already closed — these were orphaned by forceClose() not calling abandon.
-        DB::statement("
-            UPDATE survey_responses sr
-            JOIN conversations c ON c.id = sr.conversation_id
-            SET sr.status = 'abandoned'
-            WHERE sr.status = 'in_progress'
-              AND c.status = 'closed'
-        ");
+        $driver = DB::getDriverName();
+
+        if ($driver === 'sqlite') {
+            DB::statement("
+                UPDATE survey_responses
+                SET status = 'abandoned'
+                WHERE status = 'in_progress'
+                  AND conversation_id IN (
+                      SELECT id FROM conversations WHERE status = 'closed'
+                  )
+            ");
+        } else {
+            DB::statement("
+                UPDATE survey_responses sr
+                JOIN conversations c ON c.id = sr.conversation_id
+                SET sr.status = 'abandoned'
+                WHERE sr.status = 'in_progress'
+                  AND c.status = 'closed'
+            ");
+        }
     }
 
     public function down(): void

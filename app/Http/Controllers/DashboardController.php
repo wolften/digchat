@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\SurveyAnswer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
@@ -28,7 +29,9 @@ class DashboardController extends Controller
         $surveyingCount = Conversation::where('status', Conversation::STATUS_SURVEYING)->count();
 
         $avgWaitMins = (int) Conversation::where('status', Conversation::STATUS_QUEUED)
-            ->selectRaw('COALESCE(AVG(TIMESTAMPDIFF(MINUTE, updated_at, NOW())), 0) as avg_mins')
+            ->selectRaw(
+                'COALESCE(AVG(' . $this->sqlMinutesBetween('COALESCE(queued_at, updated_at)', $this->sqlTimestamp(now())) . '), 0) as avg_mins'
+            )
             ->value('avg_mins');
 
         // ── Métricas do período ─────────────────────────────────
@@ -46,7 +49,7 @@ class DashboardController extends Controller
         $resolutionRate = $totalCreated > 0 ? round(($closedCount / $totalCreated) * 100) : 0;
 
         $avgHandlingQuery = Conversation::where('status', Conversation::STATUS_CLOSED)
-            ->selectRaw('COALESCE(AVG(TIMESTAMPDIFF(MINUTE, created_at, updated_at)), 0) as avg_mins');
+            ->selectRaw('COALESCE(AVG(' . $this->sqlMinutesBetween('created_at', 'updated_at') . '), 0) as avg_mins');
         if ($from) {
             $avgHandlingQuery->where('updated_at', '>=', $from);
         }
@@ -56,9 +59,9 @@ class DashboardController extends Controller
             ->whereNotNull('queued_at')
             ->whereNotNull('first_response_at')
             ->whereRaw('first_response_at > queued_at')
-            ->selectRaw('COALESCE(AVG(TIMESTAMPDIFF(MINUTE, queued_at, first_response_at)), 0) as avg_mins');
+            ->selectRaw('COALESCE(AVG(' . $this->sqlMinutesBetween('queued_at', 'first_response_at') . '), 0) as avg_mins');
         if ($from) {
-            $avgTmeQuery->where('updated_at', '>=', $from);
+            $avgTmeQuery->where('first_response_at', '>=', $from);
         }
         $avgTmeMins = (int) $avgTmeQuery->value('avg_mins');
 
@@ -101,24 +104,23 @@ class DashboardController extends Controller
                 'total' => (int) $row->total,
             ]);
 
-        // ── Fila de espera ──────────────────────────────────────
-        $waiting = Conversation::with(['contact', 'sector'])
-            ->where('status', Conversation::STATUS_QUEUED)
-            ->orderBy('updated_at', 'asc')
-            ->limit(20)
+        // ── Distribuição por canal ──────────────────────────────
+        $channelStats = Conversation::with('channel')
+            ->selectRaw('channel_id, COUNT(*) as total')
+            ->whereNotNull('channel_id')
+            ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
+            ->groupBy('channel_id')
+            ->orderByDesc('total')
             ->get()
-            ->map(fn ($c) => [
-                'id'            => $c->id,
-                'contact_name'  => $c->contact?->name ?: $c->contact?->profile_name ?: $c->contact?->wa_id ?? 'Desconhecido',
-                'contact_wa'    => $c->contact?->wa_id,
-                'sector'        => $c->sector?->name,
-                'waiting_since' => $c->updated_at?->toIso8601String(),
-                'waiting_mins'  => $c->updated_at ? (int) $c->updated_at->diffInMinutes(now()) : 0,
+            ->map(fn ($row) => [
+                'name'  => $row->channel?->name ?? 'Desconhecido',
+                'type'  => $row->channel?->type ?? 'whatsapp',
+                'total' => (int) $row->total,
             ]);
 
         // ── Ranking de atendentes ───────────────────────────────
         $topQuery = Conversation::selectRaw(
-            'assigned_user_id, COUNT(*) as total, COALESCE(AVG(TIMESTAMPDIFF(MINUTE, created_at, updated_at)), 0) as avg_mins'
+            'assigned_user_id, COUNT(*) as total, COALESCE(AVG(' . $this->sqlMinutesBetween('created_at', 'updated_at') . '), 0) as avg_mins'
         )
             ->where('status', Conversation::STATUS_CLOSED)
             ->whereNotNull('assigned_user_id')
@@ -161,19 +163,41 @@ class DashboardController extends Controller
             ],
             'volumeData'    => $volumeData,
             'sectorStats'   => $sectorStats,
-            'waiting'       => $waiting,
+            'channelStats'  => $channelStats,
             'topAttendants' => $topAttendants,
             'period'        => $period,
         ]);
     }
 
+    private function sqlMinutesBetween(string $from, string $to): string
+    {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return "CAST((julianday({$to}) - julianday({$from})) * 1440 AS INTEGER)";
+        }
+
+        return "TIMESTAMPDIFF(MINUTE, {$from}, {$to})";
+    }
+
+    private function sqlTimestamp(Carbon $value): string
+    {
+        return "'" . $value->format('Y-m-d H:i:s') . "'";
+    }
+
+    private function sqlHourExpression(string $column): string
+    {
+        return DB::connection()->getDriverName() === 'sqlite'
+            ? "CAST(strftime('%H', {$column}) AS INTEGER)"
+            : "HOUR({$column})";
+    }
+
     private function buildVolumeData(string $period, ?Carbon $from): array
     {
         if ($period === 'today') {
-            $rows = Conversation::selectRaw('HOUR(created_at) as h, COUNT(*) as total')
+            $hourExpr = $this->sqlHourExpression('created_at');
+            $rows = Conversation::selectRaw("{$hourExpr} as h, COUNT(*) as total")
                 ->where('created_at', '>=', Carbon::now()->startOfDay())
-                ->groupByRaw('HOUR(created_at)')
-                ->orderByRaw('HOUR(created_at)')
+                ->groupByRaw($hourExpr)
+                ->orderByRaw($hourExpr)
                 ->get()
                 ->keyBy('h');
 

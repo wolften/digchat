@@ -1,4 +1,5 @@
 import ApplicationLogo from '@/Components/ApplicationLogo';
+import { HeaderClock } from '@/Components/HeaderClock';
 import { InternalChat } from '@/Components/InternalChat';
 import { Toaster } from '@/Components/ui/sonner';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -422,8 +423,9 @@ export default function Authenticated({
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
+                            <HeaderClock />
                             <InternalChat />
-<button
+                            <button
                                 type="button"
                                 onClick={toggleTheme}
                                 title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}

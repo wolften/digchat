@@ -23,7 +23,6 @@ import {
     BarChart3,
     CheckCircle2,
     ChevronRight,
-    Loader2,
     MessageSquare,
     Pencil,
     Phone,
@@ -64,7 +63,13 @@ interface QuestionStat {
     distribution: AnswerDist[];
 }
 
-type ChannelType = 'whatsapp' | 'telegram';
+type ChannelType = 'whatsapp' | 'telegram' | 'web';
+
+const WebIcon = ({ className }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z" />
+    </svg>
+);
 
 interface ResponsesData {
     stats: QuestionStat[];
@@ -101,6 +106,14 @@ function ChannelBadge({ type }: { type: ChannelType }) {
             </span>
         );
     }
+    if (type === 'web') {
+        return (
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400">
+                <WebIcon className="h-2.5 w-2.5" />
+                Chat Web
+            </span>
+        );
+    }
     return (
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
             <Phone className="h-2.5 w-2.5" />
@@ -113,6 +126,9 @@ function contactLabel(name: string, waId: string | null, channelType: ChannelTyp
     if (channelType === 'telegram') {
         return name && name !== waId ? name : (waId ? `ID: ${waId}` : '—');
     }
+    if (channelType === 'web') {
+        return name && !name.startsWith('web_') ? name : 'Visitante';
+    }
     // WhatsApp: if name is just the raw wa_id, show formatted phone as the name
     return name && name !== waId ? name : (waId ? formatClientPhone(waId) : '—');
 }
@@ -122,6 +138,9 @@ function contactSubLabel(name: string, waId: string | null, channelType: Channel
     if (channelType === 'telegram') {
         // Always show the numeric Telegram ID — skip only if it's already the label
         return name !== waId ? `ID: ${waId}` : null;
+    }
+    if (channelType === 'web') {
+        return null;
     }
     // WhatsApp: always show formatted phone as sub, skip if it would duplicate the label
     const formatted = formatClientPhone(waId);
@@ -831,46 +850,59 @@ export default function PesquisasShow({ survey }: Props) {
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle>Respostas do contato</DialogTitle>
-                        {detailData && (
-                            <DialogDescription asChild>
-                                <div className="flex flex-col gap-0.5 pt-0.5">
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-medium text-ink/70">
-                                            {contactLabel(detailData.contact_name, detailData.contact_wa_id, detailData.channel_type)}
-                                        </span>
-                                        <ChannelBadge type={detailData.channel_type} />
-                                    </div>
-                                    {contactSubLabel(detailData.contact_name, detailData.contact_wa_id, detailData.channel_type) && (
-                                        <span className="text-xs text-ink/40">
-                                            {contactSubLabel(detailData.contact_name, detailData.contact_wa_id, detailData.channel_type)}
-                                        </span>
-                                    )}
-                                    <span className="text-xs text-ink/35">
-                                        {new Date(detailData.completed_at).toLocaleDateString(
-                                            'pt-BR',
-                                            {
-                                                day: '2-digit',
-                                                month: 'long',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            },
+                        <DialogDescription asChild>
+                            <div className="flex flex-col gap-0.5 pt-0.5">
+                                {detailLoading ? (
+                                    <>
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-4 w-28 animate-pulse rounded bg-ink/10" />
+                                            <div className="h-5 w-[4.5rem] animate-pulse rounded-full bg-ink/10" />
+                                        </div>
+                                        <div className="h-3 w-44 animate-pulse rounded bg-ink/10" />
+                                    </>
+                                ) : detailData ? (
+                                    <>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium text-ink/70">
+                                                {contactLabel(detailData.contact_name, detailData.contact_wa_id, detailData.channel_type)}
+                                            </span>
+                                            <ChannelBadge type={detailData.channel_type} />
+                                        </div>
+                                        {contactSubLabel(detailData.contact_name, detailData.contact_wa_id, detailData.channel_type) && (
+                                            <span className="text-xs text-ink/40">
+                                                {contactSubLabel(detailData.contact_name, detailData.contact_wa_id, detailData.channel_type)}
+                                            </span>
                                         )}
-                                    </span>
-                                </div>
-                            </DialogDescription>
-                        )}
+                                        <span className="text-xs text-ink/35">
+                                            {new Date(detailData.completed_at).toLocaleDateString(
+                                                'pt-BR',
+                                                {
+                                                    day: '2-digit',
+                                                    month: 'long',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                },
+                                            )}
+                                        </span>
+                                    </>
+                                ) : null}
+                            </div>
+                        </DialogDescription>
                     </DialogHeader>
 
-                    {detailLoading && (
-                        <div className="flex items-center justify-center py-10">
-                            <Loader2 className="h-5 w-5 animate-spin text-ink/35" />
-                        </div>
-                    )}
-
-                    {detailData && (
-                        <div className="space-y-3 pt-1">
-                            {detailData.answers.map((a, i) => (
+                    <div className="space-y-3 pt-1">
+                        {detailLoading
+                            ? Array.from({ length: Math.max(survey.questions.length, 1) }).map((_, i) => (
+                                <div
+                                    key={i}
+                                    className="rounded-lg border border-accent/10 bg-ink/[0.02] p-3"
+                                >
+                                    <div className="h-3 w-4/5 max-w-[85%] animate-pulse rounded bg-ink/10" />
+                                    <div className="mt-2 h-4 w-20 animate-pulse rounded bg-ink/10" />
+                                </div>
+                            ))
+                            : detailData?.answers.map((a, i) => (
                                 <div
                                     key={i}
                                     className="rounded-lg border border-accent/10 bg-ink/[0.02] p-3"
@@ -883,8 +915,7 @@ export default function PesquisasShow({ survey }: Props) {
                                     </p>
                                 </div>
                             ))}
-                        </div>
-                    )}
+                    </div>
                 </DialogContent>
             </Dialog>
         </AuthenticatedLayout>

@@ -9,6 +9,7 @@ use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
 use App\Services\Flow\FlowEngine;
+use App\Services\OutOfHoursGate;
 use App\Services\WebChat\WebChatService;
 use App\Services\WhatsApp\MessageSender;
 use Illuminate\Http\JsonResponse;
@@ -100,7 +101,9 @@ class WebChatController extends Controller
             // Dispara o fluxo de forma síncrona para que a saudação já esteja na resposta do init.
             if ($conversation->status === Conversation::STATUS_BOT) {
                 $webchat = new WebChatService($channel);
-                (new FlowEngine($webchat))->run($conversation, '', []);
+                if (! (new OutOfHoursGate())->blocksBotFlow($conversation, $webchat)) {
+                    (new FlowEngine($webchat))->run($conversation, '', []);
+                }
                 $conversation->refresh();
             }
         }

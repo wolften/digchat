@@ -36,7 +36,7 @@ export default function NotesPanel({ contactId, initialNotes, onClose }: Props) 
     };
 
     return (
-        <div className="flex w-72 shrink-0 flex-col border-l border-ink/[0.08] bg-canvas">
+        <div className="flex w-72 shrink-0 flex-col border-l border-ink/[0.08]">
             <div className="flex h-16 shrink-0 items-center justify-between border-b border-ink/[0.08] px-4">
                 <div className="flex items-center gap-2.5 min-w-0">
                     <StickyNote className="h-4 w-4 shrink-0 text-ink/50" />

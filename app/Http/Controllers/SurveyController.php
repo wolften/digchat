@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Channel;
 use App\Models\Survey;
 use App\Models\SurveyAnswer;
 use App\Models\SurveyQuestion;
@@ -187,7 +188,12 @@ class SurveyController extends Controller
             ->toArray();
 
         $recent = $survey->completedResponses()
-            ->with(['contact:id,name,wa_id', 'conversation:id,channel_id', 'conversation.channel:id,type'])
+            ->with([
+                'contact:id,name,wa_id,channel_id',
+                'contact.channel:id,type',
+                'conversation:id,channel_id',
+                'conversation.channel:id,type',
+            ])
             ->orderByDesc('completed_at')
             ->limit(50)
             ->get()
@@ -195,7 +201,7 @@ class SurveyController extends Controller
                 'id'              => $r->id,
                 'contact_name'    => $r->contact?->displayName() ?? '—',
                 'contact_wa_id'   => $r->contact?->wa_id,
-                'channel_type'    => $r->conversation?->channel?->type ?? 'whatsapp',
+                'channel_type'    => $this->resolveChannelType($r),
                 'completed_at'    => $r->completed_at?->toIso8601String(),
             ]);
 
@@ -209,7 +215,13 @@ class SurveyController extends Controller
     /** Returns individual Q&A for a single SurveyResponse. */
     public function responseDetail(SurveyResponse $response): JsonResponse
     {
-        $response->load(['contact:id,name,wa_id', 'answers.question', 'conversation:id,channel_id', 'conversation.channel:id,type']);
+        $response->load([
+            'contact:id,name,wa_id,channel_id',
+            'contact.channel:id,type',
+            'answers.question',
+            'conversation:id,channel_id',
+            'conversation.channel:id,type',
+        ]);
 
         $answers = $response->answers->sortBy('survey_question_id')->map(fn ($a) => [
             'question_text' => $a->question?->text ?? '—',
@@ -219,9 +231,29 @@ class SurveyController extends Controller
         return response()->json([
             'contact_name'  => $response->contact?->displayName() ?? '—',
             'contact_wa_id' => $response->contact?->wa_id,
-            'channel_type'  => $response->conversation?->channel?->type ?? 'whatsapp',
+            'channel_type'  => $this->resolveChannelType($response),
             'completed_at'  => $response->completed_at?->toIso8601String(),
             'answers'       => $answers,
         ]);
+    }
+
+    private function resolveChannelType(SurveyResponse $response): string
+    {
+        $fromConversation = $response->conversation?->channel?->type;
+        if ($fromConversation) {
+            return $fromConversation;
+        }
+
+        $fromContact = $response->contact?->channel?->type;
+        if ($fromContact) {
+            return $fromContact;
+        }
+
+        $waId = $response->contact?->wa_id ?? '';
+        if (str_starts_with($waId, 'web_')) {
+            return Channel::TYPE_WEB;
+        }
+
+        return Channel::TYPE_WHATSAPP;
     }
 }

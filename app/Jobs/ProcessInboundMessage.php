@@ -10,9 +10,8 @@ use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
-use App\Models\AppSetting;
-use App\Services\BusinessHoursService;
 use App\Services\Flow\FlowEngine;
+use App\Services\OutOfHoursGate;
 use App\Services\Survey\SurveyRunner;
 use App\Services\WhatsApp\MessageSender;
 use App\Services\WhatsApp\WhatsAppService;
@@ -146,27 +145,7 @@ class ProcessInboundMessage implements ShouldQueue
         if ($conversation->status === Conversation::STATUS_SURVEYING) {
             (new SurveyRunner(new MessageSender($whatsApp)))->handle($conversation, $body, $waMessage);
         } elseif ($conversation->status === Conversation::STATUS_BOT) {
-            $bhs = new BusinessHoursService();
-            if (! $bhs->isOpen($conversation->sector_id)) {
-                $oohMsg = $bhs->outOfHoursMessage($conversation->sector_id);
-                if ($oohMsg) {
-                    $lastNotified = $conversation->last_ooh_notified_at;
-                    $intervalHours = (int) AppSetting::get('ooh_notify_interval_hours', 4);
-                    $shouldNotify  = ! $lastNotified || now()->diffInHours($lastNotified) >= $intervalHours;
-                    if ($shouldNotify) {
-                        $waMessageId = $whatsApp->sendText($conversation->contact->wa_id, $oohMsg);
-                        if ($waMessageId) {
-                            $conversation->messages()->create([
-                                'direction'     => Message::DIRECTION_OUT,
-                                'type'          => 'text',
-                                'body'          => $oohMsg,
-                                'wa_message_id' => $waMessageId,
-                                'status'        => 'sent',
-                            ]);
-                        }
-                        $conversation->update(['last_ooh_notified_at' => now()]);
-                    }
-                }
+            if ((new OutOfHoursGate())->blocksBotFlow($conversation, $whatsApp)) {
                 return;
             }
             (new FlowEngine($whatsApp))->run($conversation, $body, $waMessage);

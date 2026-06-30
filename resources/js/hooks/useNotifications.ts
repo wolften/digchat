@@ -65,12 +65,13 @@ export function useNotifications(currentUserId: number) {
             const title = data.contact.name ?? 'Nova mensagem';
             const body = messagePreview(data.message.type, data.message.body);
 
-            const notification = new Notification(title, {
+            const options: NotificationOptions & { renotify?: boolean } = {
                 body,
                 icon: '/favicon.ico',
                 tag: `conv-${data.message.conversation_id}`,
                 renotify: true,
-            });
+            };
+            const notification = new Notification(title, options);
 
             notification.onclick = () => {
                 window.focus();

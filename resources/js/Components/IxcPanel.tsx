@@ -199,28 +199,40 @@ interface Props {
     onUnlinked: () => void;
 }
 
+const IXC_DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** IXC date-only fields (Y-m-d) must not go through `new Date(string)` — JS treats them as UTC midnight. */
+function parseIxcDate(dt: string): Date | null {
+    const dateOnly = dt.match(IXC_DATE_ONLY_RE);
+    if (dateOnly) {
+        const [, y, m, d] = dateOnly;
+        return new Date(Number(y), Number(m) - 1, Number(d));
+    }
+
+    const parsed = new Date(dt);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function formatDate(dt: string | null): string {
     if (!dt) return '—';
-    try {
-        return new Date(dt).toLocaleString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    } catch {
-        return dt;
-    }
+    const parsed = parseIxcDate(dt);
+    if (!parsed) return dt;
+
+    return parsed.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
 }
 
 function formatDateShort(dt: string | null): string {
     if (!dt) return '—';
-    try {
-        return new Date(dt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-    } catch {
-        return dt;
-    }
+    const parsed = parseIxcDate(dt);
+    if (!parsed) return dt;
+
+    return parsed.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
 function formatBrPhone(raw: string | null): string {
@@ -233,7 +245,12 @@ function formatBrPhone(raw: string | null): string {
 
 function isOverdue(dataVencimento: string | null): boolean {
     if (!dataVencimento) return false;
-    try { return new Date(dataVencimento) < new Date(); } catch { return false; }
+    const due = parseIxcDate(dataVencimento);
+    if (!due) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return due < today;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -252,8 +269,31 @@ function fmtBytes(b: number): string {
     return b + ' B';
 }
 
+function fmtAxisBytes(b: number): string {
+    if (b >= 1_073_741_824) return (b / 1_073_741_824).toFixed(b >= 10_737_418_240 ? 0 : 1) + 'G';
+    if (b >= 1_048_576) return Math.round(b / 1_048_576) + 'M';
+    if (b >= 1024) return Math.round(b / 1024) + 'K';
+    return String(b);
+}
+
+const CONSUMO_CHART_HEIGHT = 156;
+
 function ConsumoChart({ data, loading }: { data: ConsumoItem[]; loading: boolean }) {
     const [hovered, setHovered] = useState<number | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [containerWidth, setContainerWidth] = useState(0);
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const update = () => setContainerWidth(el.getBoundingClientRect().width);
+        update();
+
+        const ro = new ResizeObserver(() => update());
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [data.length, loading]);
 
     if (loading) {
         return (
@@ -267,136 +307,153 @@ function ConsumoChart({ data, loading }: { data: ConsumoItem[]; loading: boolean
         return <p className="text-xs text-ink/40">Sem dados de consumo.</p>;
     }
 
-    const BAR_W  = 8;
-    const GAP    = 3;
-    const CH     = 80;
-    const PL     = 40;
-    const PR     = 4;
-    const PT     = 6;
-    const PB     = 18;
-    const TIP_W  = 78;
-    const TIP_H  = 36;
+    const PL    = 42;
+    const PR    = 8;
+    const PT    = 8;
+    const CH    = 78;
+    const PB    = 22;
+    const VB_H  = PT + CH + PB;
+    const TIP_W = 108;
+    const TIP_H = 48;
+
+    const vbW = Math.max(
+        containerWidth > 0 ? containerWidth * (VB_H / CONSUMO_CHART_HEIGHT) : 360,
+        PL + PR + data.length * 6,
+    );
+    const plotW = vbW - PL - PR;
+    const slotW = plotW / data.length;
+    const barW  = Math.max(4, Math.min(12, slotW * 0.62));
+    const step  = Math.max(1, Math.ceil(data.length / 6));
 
     const maxTotal = Math.max(...data.map((d) => d.consumo + d.upload), 1);
-    const svgW = data.length * (BAR_W + GAP) - GAP + PL + PR;
-    const svgH = CH + PT + PB;
-    const step = Math.ceil(data.length / 5);
 
     const tip = hovered !== null ? data[hovered] : null;
-    const tipBarX = hovered !== null ? PL + hovered * (BAR_W + GAP) : 0;
+    const tipSlotX = hovered !== null ? PL + hovered * slotW : 0;
+    const tipBarX  = tipSlotX + (slotW - barW) / 2;
     const tipX = hovered !== null
-        ? Math.max(PL, Math.min(svgW - PR - TIP_W, tipBarX + BAR_W / 2 - TIP_W / 2))
+        ? Math.max(PL, Math.min(vbW - PR - TIP_W, tipBarX + barW / 2 - TIP_W / 2))
         : 0;
     const tipTotalH = tip ? ((tip.consumo + tip.upload) / maxTotal) * CH : 0;
-    const tipY = Math.max(PT, PT + CH - tipTotalH - TIP_H - 5);
+    const tipY = Math.max(PT, PT + CH - tipTotalH - TIP_H - 6);
 
     return (
         <div>
-            <svg
-                viewBox={`0 0 ${svgW} ${svgH}`}
-                style={{ width: '100%', height: 'auto', display: 'block' }}
+            <div
+                ref={containerRef}
+                className="w-full"
+                style={{ height: CONSUMO_CHART_HEIGHT }}
             >
-                {[0, 0.5, 1].map((frac) => {
-                    const y = PT + CH - frac * CH;
-                    return (
-                        <g key={frac}>
-                            <line
-                                x1={PL} y1={y} x2={svgW - PR} y2={y}
-                                stroke="currentColor"
-                                strokeOpacity={frac === 0 ? 0.1 : 0.05}
-                                strokeWidth={1}
-                            />
-                            <text
-                                x={PL - 3} y={y + 3.5}
-                                fontSize={5} textAnchor="end"
-                                fill="currentColor" fillOpacity={0.35}
+                <svg
+                    viewBox={`0 0 ${vbW} ${VB_H}`}
+                    width="100%"
+                    height={CONSUMO_CHART_HEIGHT}
+                    className="block"
+                >
+                    {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
+                        const y = PT + CH - frac * CH;
+                        return (
+                            <g key={frac}>
+                                <line
+                                    x1={PL} y1={y} x2={vbW - PR} y2={y}
+                                    stroke="currentColor"
+                                    strokeOpacity={frac === 0 ? 0.12 : 0.05}
+                                    strokeWidth={0.8}
+                                />
+                                <text
+                                    x={PL - 6} y={y + 4}
+                                    fontSize={9} textAnchor="end"
+                                    fill="currentColor" fillOpacity={0.4}
+                                >
+                                    {frac === 0 ? '0' : fmtAxisBytes(frac * maxTotal)}
+                                </text>
+                            </g>
+                        );
+                    })}
+
+                    {data.map((d, i) => {
+                        const slotX      = PL + i * slotW;
+                        const x          = slotX + (slotW - barW) / 2;
+                        const dlH        = (d.consumo / maxTotal) * CH;
+                        const ulH        = (d.upload / maxTotal) * CH;
+                        const isHov      = hovered === i;
+                        const showLabel  = i === 0 || i === data.length - 1 || i % step === 0;
+
+                        return (
+                            <g
+                                key={d.data}
+                                onMouseEnter={() => setHovered(i)}
+                                onMouseLeave={() => setHovered(null)}
+                                style={{ cursor: 'default' }}
                             >
-                                {frac === 0 ? '0' : fmtBytes(frac * maxTotal)}
+                                <rect
+                                    x={slotX} y={PT}
+                                    width={slotW} height={CH}
+                                    fill="transparent"
+                                />
+
+                                {dlH > 0 && (
+                                    <rect
+                                        x={x} y={PT + CH - dlH}
+                                        width={barW} height={dlH}
+                                        rx={2}
+                                        fill="#0ea5e9"
+                                        fillOpacity={isHov ? 1 : 0.8}
+                                    />
+                                )}
+                                {ulH > 0 && (
+                                    <rect
+                                        x={x} y={PT + CH - dlH - ulH}
+                                        width={barW} height={ulH}
+                                        rx={2}
+                                        fill="#8b5cf6"
+                                        fillOpacity={isHov ? 1 : 0.8}
+                                    />
+                                )}
+                                {showLabel && (
+                                    <text
+                                        x={slotX + slotW / 2} y={PT + CH + 14}
+                                        fontSize={8} textAnchor="middle"
+                                        fill="currentColor" fillOpacity={isHov ? 0.75 : 0.45}
+                                    >
+                                        {d.data.slice(8, 10)}/{d.data.slice(5, 7)}
+                                    </text>
+                                )}
+                            </g>
+                        );
+                    })}
+
+                    {tip && (
+                        <g style={{ pointerEvents: 'none' }}>
+                            <rect
+                                x={tipX} y={tipY}
+                                width={TIP_W} height={TIP_H}
+                                rx={4}
+                                fill="#0f172a" fillOpacity={0.9}
+                            />
+                            <text x={tipX + 8} y={tipY + 13} fontSize={8} fill="white" fillOpacity={0.55}>
+                                {tip.data.slice(8, 10)}/{tip.data.slice(5, 7)}/{tip.data.slice(0, 4)}
+                            </text>
+                            <text x={tipX + 8} y={tipY + 28} fontSize={9} fill="#38bdf8">
+                                ↓ {fmtBytes(tip.consumo)}
+                            </text>
+                            <text x={tipX + 8} y={tipY + 41} fontSize={9} fill="#a78bfa">
+                                ↑ {fmtBytes(tip.upload)}
                             </text>
                         </g>
-                    );
-                })}
+                    )}
+                </svg>
+            </div>
 
-                {data.map((d, i) => {
-                    const x        = PL + i * (BAR_W + GAP);
-                    const dlH      = (d.consumo / maxTotal) * CH;
-                    const ulH      = (d.upload / maxTotal) * CH;
-                    const isHov    = hovered === i;
-                    const showLabel = i === 0 || i === data.length - 1 || i % step === 0;
-
-                    return (
-                        <g
-                            key={d.data}
-                            onMouseEnter={() => setHovered(i)}
-                            onMouseLeave={() => setHovered(null)}
-                            style={{ cursor: 'default' }}
-                        >
-                            {/* transparent hit area */}
-                            <rect x={x - 1} y={PT} width={BAR_W + 2} height={CH} fill="transparent" />
-
-                            {dlH > 0 && (
-                                <rect
-                                    x={x} y={PT + CH - dlH}
-                                    width={BAR_W} height={dlH}
-                                    rx={1.5}
-                                    fill="#0ea5e9"
-                                    fillOpacity={isHov ? 1 : 0.75}
-                                />
-                            )}
-                            {ulH > 0 && (
-                                <rect
-                                    x={x} y={PT + CH - dlH - ulH}
-                                    width={BAR_W} height={ulH}
-                                    rx={1.5}
-                                    fill="#8b5cf6"
-                                    fillOpacity={isHov ? 1 : 0.75}
-                                />
-                            )}
-                            {showLabel && (
-                                <text
-                                    x={x + BAR_W / 2} y={PT + CH + PB - 2}
-                                    fontSize={5} textAnchor="middle"
-                                    fill="currentColor" fillOpacity={isHov ? 0.7 : 0.35}
-                                >
-                                    {d.data.slice(8, 10)}/{d.data.slice(5, 7)}
-                                </text>
-                            )}
-                        </g>
-                    );
-                })}
-
-                {/* Tooltip */}
-                {tip && (
-                    <g style={{ pointerEvents: 'none' }}>
-                        <rect
-                            x={tipX} y={tipY}
-                            width={TIP_W} height={TIP_H}
-                            rx={3}
-                            fill="#0f172a" fillOpacity={0.88}
-                        />
-                        <text x={tipX + 5} y={tipY + 9} fontSize={5} fill="white" fillOpacity={0.5}>
-                            {tip.data.slice(8, 10)}/{tip.data.slice(5, 7)}/{tip.data.slice(0, 4)}
-                        </text>
-                        <text x={tipX + 5} y={tipY + 20} fontSize={5.5} fill="#38bdf8">
-                            ↓ {fmtBytes(tip.consumo)}
-                        </text>
-                        <text x={tipX + 5} y={tipY + 31} fontSize={5.5} fill="#a78bfa">
-                            ↑ {fmtBytes(tip.upload)}
-                        </text>
-                    </g>
-                )}
-            </svg>
-
-            <div className="mt-2 flex items-center gap-4">
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-sm" style={{ background: 'rgba(14,165,233,0.75)' }} />
-                    <span className="text-[10px] text-ink/40">Download</span>
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: 'rgba(14,165,233,0.8)' }} />
+                    <span className="text-xs text-ink/45">Download</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-sm" style={{ background: 'rgba(139,92,246,0.75)' }} />
-                    <span className="text-[10px] text-ink/40">Upload</span>
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: 'rgba(139,92,246,0.8)' }} />
+                    <span className="text-xs text-ink/45">Upload</span>
                 </div>
-                <span className="ml-auto text-[10px] text-ink/30">
+                <span className="text-xs text-ink/35 sm:ml-auto">
                     Total: {fmtBytes(data.reduce((s, d) => s + d.consumo, 0))} ↓ · {fmtBytes(data.reduce((s, d) => s + d.upload, 0))} ↑
                 </span>
             </div>
@@ -575,7 +632,7 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
 
     return (
         <>
-            <div className="flex h-full w-72 shrink-0 flex-col border-l border-ink/[0.08] bg-canvas">
+            <div className="flex h-full w-72 shrink-0 flex-col border-l border-ink/[0.08]">
                 {/* Header */}
                 <div className="flex h-16 items-center justify-between border-b border-ink/[0.08] px-4">
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -1034,7 +1091,7 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
                                                 <BarChart3 className="h-3 w-3" />
                                                 Consumo diário (últimos 31 dias)
                                             </h3>
-                                            <div className="overflow-hidden rounded-xl border border-ink/[0.08] p-3">
+                                            <div className="overflow-hidden rounded-xl border border-ink/[0.08] px-3 py-4">
                                                 <ConsumoChart data={consumo} loading={loadingConsumo} />
                                             </div>
                                         </section>

@@ -10,6 +10,7 @@ use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
 use App\Services\Flow\FlowEngine;
+use App\Services\OutOfHoursGate;
 use App\Services\Survey\SurveyRunner;
 use App\Services\Telegram\TelegramService;
 use App\Services\WhatsApp\MessageSender;
@@ -95,6 +96,9 @@ class ProcessTelegramMessage implements ShouldQueue
             $telegram->sendChatAction($chatId);
             (new SurveyRunner(new MessageSender($telegram)))->handle($conversation, $body, $rawMessage);
         } elseif ($conversation->status === Conversation::STATUS_BOT) {
+            if ((new OutOfHoursGate())->blocksBotFlow($conversation, $telegram)) {
+                return;
+            }
             $telegram->sendChatAction($chatId);
             (new FlowEngine($telegram))->run($conversation, $body, $rawMessage);
         }
@@ -166,6 +170,9 @@ class ProcessTelegramMessage implements ShouldQueue
             $telegram->sendChatAction($chatId);
             (new SurveyRunner(new MessageSender($telegram)))->handle($conversation, $data, $rawMessage);
         } elseif ($conversation->status === Conversation::STATUS_BOT) {
+            if ((new OutOfHoursGate())->blocksBotFlow($conversation, $telegram)) {
+                return;
+            }
             $telegram->sendChatAction($chatId);
             (new FlowEngine($telegram))->run($conversation, $data, $rawMessage);
         }

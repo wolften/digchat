@@ -3,9 +3,13 @@
 namespace App\Services\WhatsApp;
 
 use App\Contracts\MessagingChannel;
+use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use App\Services\Telegram\TelegramService;
+use App\Services\WebChat\WebChatService;
+use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
@@ -13,6 +17,21 @@ class MessageSender
 {
     public function __construct(private MessagingChannel $whatsApp)
     {
+    }
+
+    public static function forConversation(Conversation $conversation): self
+    {
+        $conversation->loadMissing('channel');
+        $channel = $conversation->channel;
+
+        $service = match ($channel?->type) {
+            Channel::TYPE_TELEGRAM => new TelegramService($channel),
+            Channel::TYPE_WEB      => new WebChatService($channel),
+            Channel::TYPE_WHATSAPP => new WhatsAppService($channel),
+            default                => new WhatsAppService(),
+        };
+
+        return new self($service);
     }
 
     public function lastErrorMessage(): ?string
@@ -53,6 +72,20 @@ class MessageSender
         $waMessageId = $this->whatsApp->sendList($conversation->contact->wa_id, $body, $buttonText, $rows, $sectionTitle);
 
         return $this->record($conversation, 'interactive', $body, $waMessageId, null, ['rows' => $rows]);
+    }
+
+    /**
+     * Send inline buttons arranged in a grid (Telegram) or fall back to reply buttons.
+     *
+     * @param  array<int, array{id: string, title: string}>  $buttons
+     */
+    public function sendButtonGrid(Conversation $conversation, string $body, array $buttons, int $columns = 3, ?string $header = null): Message
+    {
+        $waMessageId = method_exists($this->whatsApp, 'sendButtonGrid')
+            ? $this->whatsApp->sendButtonGrid($conversation->contact->wa_id, $body, $buttons, $columns, $header)
+            : $this->whatsApp->sendButtons($conversation->contact->wa_id, $body, $buttons, $header);
+
+        return $this->record($conversation, 'interactive', $body, $waMessageId, null, ['buttons' => $buttons]);
     }
 
     /**

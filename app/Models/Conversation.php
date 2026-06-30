@@ -26,6 +26,12 @@ class Conversation extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (Conversation $conversation): void {
+            if ($conversation->status === self::STATUS_QUEUED && $conversation->queued_at === null) {
+                $conversation->queued_at = now();
+            }
+        });
+
         static::created(function (Conversation $conversation): void {
             $conversation->updateQuietly([
                 'protocol_number' => str_pad((string) $conversation->id, 8, '0', STR_PAD_LEFT),
@@ -37,11 +43,15 @@ class Conversation extends Model
                 $newStatus = $conversation->status;
                 $oldStatus = $conversation->getOriginal('status');
 
-                if ($newStatus === self::STATUS_QUEUED) {
+                if ($newStatus === self::STATUS_QUEUED && $conversation->first_response_at === null) {
                     $conversation->queued_at = now();
                 }
 
-                if ($newStatus === self::STATUS_OPEN && $oldStatus === self::STATUS_QUEUED) {
+                if (
+                    $newStatus === self::STATUS_OPEN
+                    && $oldStatus === self::STATUS_QUEUED
+                    && $conversation->first_response_at === null
+                ) {
                     $conversation->first_response_at = now();
                 }
             }
@@ -213,8 +223,9 @@ class Conversation extends Model
             ->whereKeyNot($this->id)
             ->active()
             ->update([
-                'status' => self::STATUS_CLOSED,
+                'status'           => self::STATUS_CLOSED,
                 'assigned_user_id' => null,
+                'sector_id'        => null,
             ]);
     }
 }

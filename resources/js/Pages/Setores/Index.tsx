@@ -13,10 +13,12 @@ import {
     DropdownMenuTrigger,
 } from '@/Components/ui/dropdown-menu';
 import { Button } from '@/Components/ui/button';
+import { Card } from '@/Components/ui/card';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
 import { Switch } from '@/Components/ui/switch';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { cn } from '@/lib/utils';
 import { Head, router, useForm } from '@inertiajs/react';
 import { GripVertical, MoreVertical, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { DragEvent, FormEvent, useEffect, useState } from 'react';
@@ -187,17 +189,15 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                         ) : (
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                                 {sectors.map((sector) => (
-                                    <div
+                                    <Card
                                         key={sector.id}
                                         onDragOver={(e) => onDragOver(e, sector.id)}
                                         onDragLeave={onDragLeave}
                                         onDrop={(e) => onDrop(e, sector)}
-                                        className={[
-                                            'rounded-xl border bg-card transition-all',
-                                            dragOverId === sector.id
-                                                ? 'border-accent/50 ring-2 ring-accent/20 bg-accent/[0.03]'
-                                                : 'border-ink/[0.08]',
-                                        ].join(' ')}
+                                        className={cn(
+                                            dragOverId === sector.id &&
+                                                'border-accent/50 ring-2 ring-accent/20 bg-accent/[0.03]',
+                                        )}
                                     >
                                         {/* Card header */}
                                         <div className="flex items-start justify-between p-4 pb-3">
@@ -288,14 +288,14 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
+                                    </Card>
                                 ))}
                             </div>
                         )}
                     </div>
 
                     {/* Attendants sidebar */}
-                    <div className="w-64 shrink-0 overflow-y-auto rounded-xl border border-ink/[0.08] bg-card p-4">
+                    <Card className="w-64 shrink-0 overflow-y-auto p-4">
                         <div className="relative mb-3">
                             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/40" />
                             <Input
@@ -334,7 +334,7 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                                 ))
                             )}
                         </div>
-                    </div>
+                    </Card>
                 </div>
             </div>
 

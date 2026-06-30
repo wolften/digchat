@@ -9,6 +9,7 @@ use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
 use App\Services\Flow\FlowEngine;
+use App\Services\OutOfHoursGate;
 use App\Services\Survey\SurveyRunner;
 use App\Services\WebChat\WebChatService;
 use App\Services\WhatsApp\MessageSender;
@@ -88,6 +89,9 @@ class ProcessWebChatMessage implements ShouldQueue
         if ($conversation->status === Conversation::STATUS_SURVEYING) {
             (new SurveyRunner(new MessageSender($webchat)))->handle($conversation, $inputValue, $rawMessage);
         } elseif ($conversation->status === Conversation::STATUS_BOT) {
+            if ((new OutOfHoursGate())->blocksBotFlow($conversation, $webchat)) {
+                return;
+            }
             (new FlowEngine($webchat))->run($conversation, $inputValue, $rawMessage);
         }
     }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AppSetting;
 use App\Models\BusinessHour;
 use App\Models\Sector;
+use App\Services\BusinessHoursService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,6 +33,14 @@ class BusinessHoursController extends Controller
             ];
         }
 
+        $businessHours = new BusinessHoursService;
+        $now           = now();
+        $openStatus    = ['global' => $businessHours->isOpen(null)];
+
+        foreach ($sectors as $sector) {
+            $openStatus[(string) $sector->id] = $businessHours->isOpen($sector->id);
+        }
+
         return Inertia::render('Horarios/Index', [
             'sectors'  => $sectors,
             'hoursMap' => $hoursMap,
@@ -39,6 +48,10 @@ class BusinessHoursController extends Controller
                 'out_of_hours_enabled'  => AppSetting::bool('out_of_hours_enabled'),
                 'out_of_hours_message'  => AppSetting::get('out_of_hours_message', ''),
             ],
+            'timezone'      => config('app.timezone'),
+            'currentTime'   => $now->format('H:i'),
+            'currentWeekday' => (int) $now->format('w'),
+            'openStatus'    => $openStatus,
         ]);
     }
 

@@ -13,6 +13,7 @@ use App\Models\Tag;
 use App\Models\Survey;
 use App\Models\SurveyResponse;
 use App\Models\User;
+use App\Services\Survey\SurveyQuestionSender;
 use App\Services\Telegram\TelegramService;
 use App\Services\WebChat\WebChatService;
 use App\Services\WhatsApp\MessageSender;
@@ -368,7 +369,10 @@ class InboxController extends Controller
         // On auto-close, respect the inactivity survey toggle independently.
         if ($isAutoClose && ! AppSetting::bool('survey_on_inactivity_close_enabled', false)) {
             $this->abandonPendingSurveyResponse($conversation);
-            $conversation->forceFill(['status' => Conversation::STATUS_CLOSED])->save();
+            $conversation->forceFill([
+                'status'    => Conversation::STATUS_CLOSED,
+                'sector_id' => null,
+            ])->save();
             return back()->with('success', 'Atendimento encerrado por inatividade.');
         }
 
@@ -396,21 +400,18 @@ class InboxController extends Controller
                     'survey_response_id' => $response->id,
                 ])->save();
 
-                // Send first question as buttons
                 $firstQuestion = $survey->questions->first();
-                $buttons = collect($firstQuestion->options ?? [])
-                    ->take(3) // WhatsApp allows max 3 buttons
-                    ->map(fn ($opt) => ['id' => $opt['id'], 'title' => mb_substr($opt['label'], 0, 20)])
-                    ->values()
-                    ->all();
-
-                $sender->sendButtons($conversation, $firstQuestion->text, $buttons, $survey->name);
+                (new SurveyQuestionSender($sender))
+                    ->send($conversation, $firstQuestion, $survey->name);
 
                 return back()->with('success', 'Atendimento encerrado. Pesquisa de satisfação enviada.');
             }
         }
 
-        $conversation->forceFill(['status' => Conversation::STATUS_CLOSED])->save();
+        $conversation->forceFill([
+            'status'    => Conversation::STATUS_CLOSED,
+            'sector_id' => null,
+        ])->save();
 
         return back()->with('success', 'Atendimento encerrado.');
     }
@@ -424,6 +425,7 @@ class InboxController extends Controller
         $conversation->forceFill([
             'status'             => Conversation::STATUS_CLOSED,
             'survey_response_id' => null,
+            'sector_id'          => null,
         ])->save();
 
         return back()->with('success', 'Atendimento encerrado forçadamente.');

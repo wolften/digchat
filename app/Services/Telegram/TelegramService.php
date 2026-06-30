@@ -53,12 +53,35 @@ class TelegramService implements MessagingChannel
      */
     public function sendButtons(string $to, string $body, array $buttons, ?string $header = null): ?string
     {
-        $text = $header ? "*{$header}*\n{$body}" : $body;
+        return $this->sendButtonGrid($to, $body, $buttons, 1, $header);
+    }
 
-        $keyboard = array_map(
-            fn ($b) => [['text' => mb_substr((string) $b['title'], 0, 64), 'callback_data' => (string) $b['id']]],
-            array_slice($buttons, 0, 10),
-        );
+    /**
+     * @param  array<int, array{id: string, title: string}>  $buttons
+     */
+    public function sendButtonGrid(string $to, string $body, array $buttons, int $columns = 3, ?string $header = null): ?string
+    {
+        $text = $header ? "*{$header}*\n{$body}" : $body;
+        $columns = max(1, min($columns, 8));
+
+        $keyboard = [];
+        $row = [];
+
+        foreach (array_slice($buttons, 0, 10) as $button) {
+            $row[] = [
+                'text'          => mb_substr((string) $button['title'], 0, 64),
+                'callback_data' => (string) $button['id'],
+            ];
+
+            if (count($row) >= $columns) {
+                $keyboard[] = $row;
+                $row = [];
+            }
+        }
+
+        if ($row !== []) {
+            $keyboard[] = $row;
+        }
 
         return $this->callApi('sendMessage', [
             'chat_id'      => $to,

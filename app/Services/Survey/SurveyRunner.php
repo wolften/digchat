@@ -37,9 +37,11 @@ class SurveyRunner
             return;
         }
 
-        // Extract button reply ID from raw WhatsApp payload when available.
-        $optionId    = $waMessage['interactive']['button_reply']['id'] ?? null;
+        $optionId    = $waMessage['interactive']['button_reply']['id']
+            ?? $waMessage['interactive']['list_reply']['id']
+            ?? null;
         $optionLabel = $waMessage['interactive']['button_reply']['title']
+            ?? $waMessage['interactive']['list_reply']['title']
             ?? $waMessage['button']['text']
             ?? $body;
 
@@ -68,13 +70,7 @@ class SurveyRunner
 
     private function sendQuestion(Conversation $conversation, SurveyQuestion $question, ?string $header = null): void
     {
-        $buttons = collect($question->options ?? [])
-            ->take(3)
-            ->map(fn ($opt) => ['id' => $opt['id'], 'title' => mb_substr($opt['label'], 0, 20)])
-            ->values()
-            ->all();
-
-        $this->sender->sendButtons($conversation, $question->text, $buttons, $header);
+        (new SurveyQuestionSender($this->sender))->send($conversation, $question, $header);
     }
 
     private function finish(Conversation $conversation, SurveyResponse $response, ?string $thankYouMessage): void
@@ -91,6 +87,7 @@ class SurveyRunner
         $conversation->forceFill([
             'status'             => Conversation::STATUS_CLOSED,
             'survey_response_id' => null,
+            'sector_id'          => null,
         ])->save();
     }
 }

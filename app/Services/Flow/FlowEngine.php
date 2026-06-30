@@ -173,6 +173,7 @@ class FlowEngine
                 case 'end':
                     $conversation->update([
                         'status'          => Conversation::STATUS_CLOSED,
+                        'sector_id'       => null,
                         'flow_id'         => null,
                         'current_node_id' => null,
                     ]);

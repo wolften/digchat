@@ -305,11 +305,11 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                         </TabsTrigger>
                         <TabsTrigger value="ia" className="gap-1.5">
                             <Mic className="h-3.5 w-3.5" />
-                            IA
+                            Transcrição de áudio
                         </TabsTrigger>
                         <TabsTrigger value="integracoes" className="gap-1.5">
                             <PlugZap className="h-3.5 w-3.5" />
-                            Integrações
+                            Integrações externas
                         </TabsTrigger>
                     </TabsList>
                 </div>
@@ -589,15 +589,9 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                     <div className="scrollbar-thin flex-1 overflow-y-auto px-6 py-6">
                         <div className="max-w-lg space-y-6">
 
-                            <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                    <Mic className="h-4 w-4 text-accent" />
-                                    <h3 className="text-sm font-semibold text-ink/80">Transcrição de áudio</h3>
-                                </div>
-                                <p className="text-xs text-ink/45">
-                                    Áudios recebidos são transcritos automaticamente via Groq Whisper e exibidos abaixo do player para o atendente.
-                                </p>
-                            </div>
+                            <p className="text-xs text-ink/45">
+                                Áudios recebidos são transcritos automaticamente via Groq Whisper e exibidos abaixo do player para o atendente.
+                            </p>
 
                             <form onSubmit={submitGroq} className="space-y-4">
                                 <div className="space-y-1.5">
@@ -634,11 +628,10 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                 <TabsContent value="integracoes" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden">
                     <div className="scrollbar-thin flex-1 overflow-y-auto px-6 py-6">
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h3 className="text-sm font-semibold text-ink/80">Integrações externas</h3>
-                                    <p className="mt-0.5 text-xs text-ink/45">Conecte sistemas ERP como o IXC Provedor.</p>
-                                </div>
+                            <div className="flex items-center justify-between gap-4">
+                                <p className="text-xs text-ink/45">
+                                    Conecte sistemas ERP como o IXC Provedor.
+                                </p>
                                 <Button size="sm" onClick={openNewIntegration}>
                                     <Plus className="h-3.5 w-3.5" />
                                     Nova integração
