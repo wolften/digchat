@@ -46,15 +46,17 @@ class Conversation extends Model
         'context',
         'survey_response_id',
         'last_message_at',
+        'last_ooh_notified_at',
         'protocol_number',
     ];
 
     protected function casts(): array
     {
         return [
-            'last_message_at' => 'datetime',
-            'last_read_at'    => 'datetime',
-            'context'         => 'array',
+            'last_message_at'     => 'datetime',
+            'last_read_at'        => 'datetime',
+            'last_ooh_notified_at' => 'datetime',
+            'context'             => 'array',
         ];
     }
 

@@ -11,6 +11,7 @@ import {
     ChevronsLeft,
     ChevronsRight,
     CircleDot,
+    Clock,
     Gauge,
     GitBranch,
     History,
@@ -154,6 +155,13 @@ export default function Authenticated({
             routeName: 'tags.index',
             activePattern: 'tags.*',
             icon: Tag,
+            managerOnly: true,
+        },
+        {
+            label: 'Horários',
+            routeName: 'horarios.index',
+            activePattern: 'horarios.*',
+            icon: Clock,
             managerOnly: true,
         },
 {

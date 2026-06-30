@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
 use App\Contracts\MessagingChannel;
+use App\Services\BusinessHoursService;
 use Illuminate\Support\Facades\Log;
 
 class FlowEngine
@@ -143,6 +144,19 @@ class FlowEngine
                         return;
                     }
 
+                    $currentId = $nextId;
+                    continue 2;
+
+                case 'business_hours_check':
+                    $checkSectorId = isset($node['data']['sector_id']) && $node['data']['sector_id']
+                        ? (int) $node['data']['sector_id']
+                        : $conversation->sector_id;
+                    $isOpen = (new BusinessHoursService())->isOpen($checkSectorId);
+                    $nextId = $this->findEdgeTarget($flow, $currentId, $isOpen ? 'open' : 'closed');
+                    if (! $nextId) {
+                        $conversation->update(['status' => Conversation::STATUS_QUEUED, 'flow_id' => null, 'current_node_id' => null]);
+                        return;
+                    }
                     $currentId = $nextId;
                     continue 2;
 

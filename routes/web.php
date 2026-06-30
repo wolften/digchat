@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BusinessHoursController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ConversationTagController;
@@ -91,6 +92,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/respostas-rapidas', [QuickReplyController::class, 'store'])->name('respostas-rapidas.store');
         Route::put('/respostas-rapidas/{quickReply}', [QuickReplyController::class, 'update'])->name('respostas-rapidas.update');
         Route::delete('/respostas-rapidas/{quickReply}', [QuickReplyController::class, 'destroy'])->name('respostas-rapidas.destroy');
+
+        Route::get('/horarios', [BusinessHoursController::class, 'index'])->name('horarios.index');
+        Route::put('/horarios', [BusinessHoursController::class, 'update'])->name('horarios.update');
 
         Route::get('/etiquetas', [TagController::class, 'index'])->name('tags.index');
         Route::post('/etiquetas', [TagController::class, 'store'])->name('tags.store');

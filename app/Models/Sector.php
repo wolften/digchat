@@ -12,12 +12,15 @@ class Sector extends Model
         'name',
         'description',
         'is_active',
+        'out_of_hours_enabled',
+        'out_of_hours_message',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_active' => 'boolean',
+            'is_active'            => 'boolean',
+            'out_of_hours_enabled' => 'boolean',
         ];
     }
 
@@ -29,5 +32,10 @@ class Sector extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);
+    }
+
+    public function businessHours(): HasMany
+    {
+        return $this->hasMany(BusinessHour::class);
     }
 }
