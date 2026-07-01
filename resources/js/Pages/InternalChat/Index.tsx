@@ -60,6 +60,25 @@ function abbr(name: string): string {
         .toUpperCase();
 }
 
+function ChatUserAvatar({
+    name,
+    size = 'sm',
+}: {
+    name: string;
+    size?: 'sm' | 'md';
+}) {
+    return (
+        <div
+            className={cn(
+                'flex shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/15 font-manrope font-bold text-accent',
+                size === 'md' ? 'h-10 w-10 text-xs' : 'h-7 w-7 text-[10px]',
+            )}
+        >
+            {abbr(name)}
+        </div>
+    );
+}
+
 function fmtTime(iso: string): string {
     return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
@@ -529,10 +548,8 @@ export default function Index({ conversations: initialConversations, selected, u
                                             align={isMe ? 'end' : 'start'}
                                             variant={isMe ? 'outgoing-accent' : 'incoming'}
                                             avatar={
-                                                !isMe ? (
-                                                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-black/[0.08] bg-white text-[10px] font-bold text-accent shadow-sm dark:border-white/10 dark:bg-zinc-700">
-                                                        {abbr(msg.user_name)}
-                                                    </div>
+                                                !isMe && active.type === 'general' ? (
+                                                    <ChatUserAvatar name={msg.user_name} />
                                                 ) : undefined
                                             }
                                             header={
@@ -754,9 +771,7 @@ export default function Index({ conversations: initialConversations, selected, u
                                                 className="flex items-center justify-between gap-2"
                                             >
                                                 <span className="flex items-center gap-2 text-sm text-ink/80">
-                                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-[10px] font-bold text-accent">
-                                                        {abbr(viewer.name)}
-                                                    </span>
+                                                    <ChatUserAvatar name={viewer.name} />
                                                     {viewer.name}
                                                 </span>
                                                 <span className="shrink-0 text-[11px] text-ink/40">
