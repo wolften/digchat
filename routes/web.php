@@ -61,6 +61,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/inbox/{conversation}', [InboxController::class, 'show'])->name('inbox.show');
     Route::post('/inbox/{conversation}/assign', [InboxController::class, 'assign'])->name('inbox.assign');
     Route::post('/inbox/{conversation}/messages', [InboxController::class, 'sendMessage'])->name('inbox.messages.store');
+    Route::post('/inbox/{conversation}/internal-messages', [InboxController::class, 'sendInternalMessage'])->name('inbox.internal-messages.store');
     Route::post('/inbox/{conversation}/viewing', [InboxController::class, 'viewing'])->name('inbox.viewing');
     Route::post('/inbox/{conversation}/snooze', [InboxController::class, 'snooze'])->name('inbox.snooze');
     Route::post('/inbox/{conversation}/wake', [InboxController::class, 'wake'])->name('inbox.wake');

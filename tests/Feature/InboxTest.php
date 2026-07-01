@@ -178,6 +178,23 @@ class InboxTest extends TestCase
         ]);
     }
 
+    public function test_send_message_returns_json_when_requested(): void
+    {
+        Http::fake([
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.JSON']]], 200),
+        ]);
+
+        $atendente = User::factory()->create(['role' => User::ROLE_ATENDENTE]);
+        $conversation = $this->makeConversation(Conversation::STATUS_OPEN, $atendente);
+
+        $this->actingAs($atendente)
+            ->postJson("/inbox/{$conversation->id}/messages", ['body' => 'Resposta JSON'])
+            ->assertCreated()
+            ->assertJsonPath('body', 'Resposta JSON')
+            ->assertJsonPath('sender.id', $atendente->id)
+            ->assertJsonPath('status', 'sent');
+    }
+
     public function test_atendente_cannot_send_message_in_open_conversation_assigned_to_another_agent(): void
     {
         $atendente = User::factory()->create(['role' => User::ROLE_ATENDENTE]);

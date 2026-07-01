@@ -79,7 +79,7 @@ export default function Authenticated({
         }
     });
     const { theme, toggle: toggleTheme } = useTheme();
-    useNotifications(user.id);
+    useNotifications(user.id, isManager);
     useInternalChatNotifications(user.id);
 
     useEffect(() => {

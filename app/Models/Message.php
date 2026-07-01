@@ -25,6 +25,7 @@ class Message extends Model
         'wa_message_id',
         'status',
         'sender_user_id',
+        'is_internal',
         'payload',
     ];
 
@@ -32,6 +33,7 @@ class Message extends Model
     {
         return [
             'payload' => 'array',
+            'is_internal' => 'boolean',
         ];
     }
 

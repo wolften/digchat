@@ -169,7 +169,7 @@ class InboxController extends Controller
         return back()->with('success', 'Conversa atribuída a você.');
     }
 
-    public function sendMessage(Request $request, Conversation $conversation): RedirectResponse
+    public function sendMessage(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
     {
         $sender = $this->senderFor($conversation);
         $validated = $request->validate([
@@ -245,10 +245,59 @@ class InboxController extends Controller
 
         if ($message->status === 'failed') {
             $fallbackError = 'Falha ao enviar no WhatsApp. Verifique a integração e tente novamente.';
+            $error = $sender->lastErrorMessage() ?? $fallbackError;
 
-            return back()->withErrors([
-                'send' => $sender->lastErrorMessage() ?? $fallbackError,
+            if ($request->wantsJson()) {
+                return response()->json(['message' => $error], 422);
+            }
+
+            return back()->withErrors(['send' => $error]);
+        }
+
+        $message->load('sender:id,name,profile_photo_path');
+
+        if ($request->wantsJson()) {
+            return response()->json($this->formatMessage($message), 201);
+        }
+
+        return back();
+    }
+
+    public function sendInternalMessage(Request $request, Conversation $conversation): RedirectResponse|JsonResponse
+    {
+        abort_unless(
+            $conversation->canSendInternalNoteBy($request->user()),
+            403,
+            'Você não pode enviar mensagens internas nesta conversa.',
+        );
+
+        $validated = $request->validate([
+            'body' => ['required', 'string', 'max:4096'],
+        ]);
+
+        $body = trim($validated['body']);
+
+        if ($body === '') {
+            throw ValidationException::withMessages([
+                'body' => 'Digite uma mensagem interna.',
             ]);
+        }
+
+        $message = $conversation->messages()->create([
+            'direction' => Message::DIRECTION_OUT,
+            'type' => 'text',
+            'body' => $body,
+            'status' => 'accepted',
+            'sender_user_id' => $request->user()->id,
+            'is_internal' => true,
+        ]);
+
+        $conversation->update(['last_message_at' => now()]);
+
+        $message->load('sender:id,name,profile_photo_path');
+
+        if ($request->wantsJson()) {
+            return response()->json($this->formatMessage($message), 201);
         }
 
         return back();
@@ -277,19 +326,7 @@ class InboxController extends Controller
             ->orderBy('created_at')
             ->limit(300)
             ->get()
-            ->map(fn ($m) => [
-                'id' => $m->id,
-                'direction' => $m->direction,
-                'type' => $m->type,
-                'body' => $m->body,
-                'media_url' => in_array($m->type, ['image', 'audio', 'video', 'document'], true)
-                    ? route('inbox.messages.media', $m)
-                    : null,
-                'transcription' => $m->transcription,
-                'status' => $m->status,
-                'sender' => $m->sender?->publicSummary(),
-                'created_at' => $m->created_at?->toIso8601String(),
-            ]);
+            ->map(fn ($m) => $this->formatMessage($m));
 
         $survey = null;
         if ($conversation->surveyResponse) {
@@ -696,19 +733,7 @@ class InboxController extends Controller
             ->orderBy('created_at')
             ->limit(200)
             ->get()
-            ->map(fn ($m) => [
-                'id' => $m->id,
-                'direction' => $m->direction,
-                'type' => $m->type,
-                'body' => $m->body,
-                'media_url' => in_array($m->type, ['image', 'audio', 'video', 'document'], true)
-                    ? route('inbox.messages.media', $m)
-                    : null,
-                'transcription' => $m->transcription,
-                'status' => $m->status,
-                'sender' => $m->sender?->publicSummary(),
-                'created_at' => $m->created_at?->toIso8601String(),
-            ]);
+            ->map(fn ($m) => $this->formatMessage($m));
 
         return [
             'id' => $conversation->id,
@@ -721,6 +746,7 @@ class InboxController extends Controller
             'sector' => $conversation->sector?->only(['id', 'name']),
             'tags' => $conversation->contact->tags->map->only(['id', 'name', 'color'])->values()->all(),
             'can_act' => $conversation->canBeActedOnBy($user),
+            'can_send_internal' => $conversation->canSendInternalNoteBy($user),
             'can_assign' => $conversation->canBeAssignedBy($user),
             'can_transfer' => $conversation->canBeTransferredBy($user),
             'can_force_close' => $user->isManager(),
@@ -816,6 +842,27 @@ class InboxController extends Controller
             'created_at' => $conversation->created_at?->toIso8601String(),
             'last_message_at' => $conversation->last_message_at?->toIso8601String(),
             'last_message_preview' => $lastMessage?->body,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatMessage(Message $message): array
+    {
+        return [
+            'id' => $message->id,
+            'direction' => $message->direction,
+            'type' => $message->type,
+            'body' => $message->body,
+            'media_url' => in_array($message->type, ['image', 'audio', 'video', 'document'], true)
+                ? route('inbox.messages.media', $message)
+                : null,
+            'transcription' => $message->transcription,
+            'status' => $message->status,
+            'is_internal' => $message->is_internal,
+            'sender' => $message->sender?->publicSummary(),
+            'created_at' => $message->created_at?->toIso8601String(),
         ];
     }
 

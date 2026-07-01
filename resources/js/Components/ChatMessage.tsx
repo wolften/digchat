@@ -34,6 +34,7 @@ function bubbleHeaderClass(variant: ChatBubbleVariant): string {
             return 'mb-1 text-[11px] font-semibold leading-tight text-canvas/75 dark:text-black/65';
         case 'outgoing-attendant':
         case 'outgoing-automation':
+        case 'outgoing-internal':
             return 'mb-1 text-[11px] font-semibold leading-tight opacity-80';
         default:
             return 'mb-1 text-[11px] font-semibold leading-tight text-gray-900 dark:text-zinc-100';

@@ -190,6 +190,23 @@ class Conversation extends Model
         return $this->assigned_user_id === $user->id;
     }
 
+    public function canSendInternalNoteBy(User $user): bool
+    {
+        if (! in_array($this->status, [self::STATUS_OPEN, self::STATUS_SNOOZED], true)) {
+            return false;
+        }
+
+        if ($this->assigned_user_id === null) {
+            return false;
+        }
+
+        if (! $this->canBeViewedBy($user)) {
+            return false;
+        }
+
+        return $user->isManager() || $this->assigned_user_id === $user->id;
+    }
+
     public function canBeSnoozedBy(User $user): bool
     {
         return $this->status === self::STATUS_OPEN

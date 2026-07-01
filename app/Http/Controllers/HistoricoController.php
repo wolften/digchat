@@ -216,6 +216,7 @@ class HistoricoController extends Controller
                 'body'       => $m->body,
                 'media_url'  => in_array($m->type, ['image', 'audio', 'video', 'document'], true)
                     ? route('inbox.messages.media', $m) : null,
+                'is_internal' => $m->is_internal,
                 'sender'     => $m->sender?->publicSummary(),
                 'created_at' => $m->created_at?->toIso8601String(),
             ]);

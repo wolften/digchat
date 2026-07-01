@@ -116,6 +116,7 @@ class WebChatController extends Controller
         ]));
 
         $messages = $conversation->messages()
+            ->where('is_internal', false)
             ->orderBy('id')
             ->limit(60)
             ->get()
@@ -198,6 +199,7 @@ class WebChatController extends Controller
         $after = max(0, (int) $request->input('after', 0));
 
         $messages = $conversation->messages()
+            ->where('is_internal', false)
             ->where('id', '>', $after)
             ->orderBy('id')
             ->limit(30)

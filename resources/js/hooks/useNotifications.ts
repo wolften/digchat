@@ -7,6 +7,8 @@ type MessageNotificationPayload = {
         direction: string;
         type: string;
         body: string | null;
+        is_internal?: boolean;
+        sender_user_id?: number | null;
     };
     conversation: {
         status: string;
@@ -38,7 +40,7 @@ function messagePreview(type: string, body: string | null): string {
     return labels[type] ?? 'Nova mensagem';
 }
 
-export function useNotifications(currentUserId: number) {
+export function useNotifications(currentUserId: number, isManager = false) {
     const permissionRef = useRef<NotificationPermission>(
         typeof Notification !== 'undefined' ? Notification.permission : 'default',
     );
@@ -83,6 +85,25 @@ export function useNotifications(currentUserId: number) {
         };
 
         const onMessageCreated = (data: MessageNotificationPayload) => {
+            if (data.message.is_internal) {
+                if (data.message.sender_user_id === currentUserId) return;
+                if (!['open', 'snoozed'].includes(data.conversation.status)) return;
+
+                const isAssignee = data.conversation.assigned_user_id === currentUserId;
+                const senderIsAssignee =
+                    data.message.sender_user_id === data.conversation.assigned_user_id;
+
+                if (!isAssignee && !(isManager && senderIsAssignee)) return;
+
+                notify(
+                    'Mensagem interna',
+                    data.message.body ?? '',
+                    `conv-internal-${data.message.conversation_id}`,
+                    `/inbox/${data.message.conversation_id}`,
+                );
+                return;
+            }
+
             if (data.message.direction !== 'in') return;
             if (!['open', 'surveying'].includes(data.conversation.status)) return;
             if (data.conversation.assigned_user_id !== currentUserId) return;
@@ -119,5 +140,5 @@ export function useNotifications(currentUserId: number) {
             channel.stopListening('.message.created', onMessageCreated);
             channel.stopListening('.conversation.updated', onConversationUpdated);
         };
-    }, [currentUserId]);
+    }, [currentUserId, isManager]);
 }

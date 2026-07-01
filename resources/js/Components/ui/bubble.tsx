@@ -29,6 +29,8 @@ const bubbleContentVariants = cva(
                     'border-transparent bg-green-50 text-green-950 dark:bg-green-900 dark:text-green-50',
                 'outgoing-automation':
                     'border-transparent bg-sky-50 text-sky-950 dark:bg-sky-900 dark:text-sky-50',
+                'outgoing-internal':
+                    'border-transparent bg-red-50 text-red-950 dark:bg-red-950 dark:text-red-50',
                 'outgoing-accent':
                     'border-transparent bg-accent text-canvas dark:text-black',
                 'incoming-muted':

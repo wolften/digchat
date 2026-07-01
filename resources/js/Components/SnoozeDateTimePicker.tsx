@@ -27,7 +27,7 @@ export default function SnoozeDateTimePicker({
 
     return (
         <div className={cn('w-full space-y-2', className)}>
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9.5rem] sm:items-stretch">
+            <div className="grid gap-3 sm:h-[23rem] sm:grid-cols-[minmax(0,1fr)_9.5rem] sm:items-stretch">
                 <Calendar
                     mode="single"
                     selected={date}
@@ -36,10 +36,10 @@ export default function SnoozeDateTimePicker({
                     disabled={{ before: minDate }}
                     defaultMonth={date}
                     fixedWeeks
-                    className="w-full"
+                    className="w-full sm:h-full sm:min-h-0"
                 />
 
-                <div className={cn('flex h-full flex-col', pickerCardClass)}>
+                <div className={cn('flex h-full min-h-0 flex-col', pickerCardClass)}>
                     <div className="flex h-9 w-full shrink-0 items-center justify-center">
                         <span className="select-none text-sm font-medium text-ink/85">Horário</span>
                     </div>

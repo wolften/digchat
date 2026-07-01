@@ -37,6 +37,11 @@ import { Textarea } from '@/Components/ui/textarea';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { isMediaMessageType, mediaCaption, mediaTypeFromPlaceholder } from '@/lib/messageMedia';
 import { useInboxViewing } from '@/hooks/useInboxViewing';
+import {
+    inboxMessageFromRealtime,
+    type InboxRealtimeMessage,
+    useInboxRealtime,
+} from '@/hooks/useInboxRealtime';
 import { computeLiveSla, SLA_STATUS_META, type ConversationSla } from '@/lib/sla';
 import {
     defaultCustomSnoozeDate,
@@ -76,6 +81,7 @@ import {
     Play,
     Search,
     Send,
+    Shield,
     Smile,
     Square,
     Star,
@@ -88,7 +94,7 @@ import {
     X,
 } from 'lucide-react';
 import EmojiPicker, { Categories, EmojiClickData, Theme } from 'emoji-picker-react';
-import { ChangeEvent, SyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -159,11 +165,12 @@ interface Msg {
     media_url?: string | null;
     transcription?: string | null;
     status: string | null;
+    is_internal?: boolean;
     sender: { id: number; name: string } | null;
     created_at: string | null;
 }
 
-type MessageRole = 'client' | 'attendant' | 'automation';
+type MessageRole = 'client' | 'attendant' | 'automation' | 'internal';
 
 interface QuickReply {
     id: number;
@@ -201,6 +208,7 @@ interface Selected {
     assigned_user: { id: number; name: string; profile_photo_url?: string | null } | null;
     sector: Sector | null;
     can_act: boolean;
+    can_send_internal: boolean;
     can_assign: boolean;
     can_transfer: boolean;
     can_force_close: boolean;
@@ -397,7 +405,12 @@ function initials(name: string): string {
     return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
 }
 
+function messageDedupKey(message: Msg): string {
+    return `${message.body ?? ''}\0${message.is_internal ? '1' : '0'}\0${message.sender?.id ?? ''}`;
+}
+
 function messageRole(message: Msg): MessageRole {
+    if (message.is_internal) return 'internal';
     if (message.direction === 'in') return 'client';
     return message.sender ? 'attendant' : 'automation';
 }
@@ -418,6 +431,11 @@ const MESSAGE_ROLE_META = {
         tick: 'text-sky-950/70 dark:text-white/70',
         tickRead: 'text-sky-950 dark:text-white',
     },
+    internal: {
+        metaText: 'text-red-800/55 dark:text-red-200/60',
+        tick: 'text-red-950/70 dark:text-white/70',
+        tickRead: 'text-red-950 dark:text-white',
+    },
 } satisfies Record<
     MessageRole,
     {
@@ -431,7 +449,72 @@ const BUBBLE_VARIANT: Record<MessageRole, ChatBubbleVariant> = {
     client: 'incoming',
     attendant: 'outgoing-accent',
     automation: 'outgoing-automation',
+    internal: 'outgoing-internal',
 };
+
+function ComposerModeToggle({
+    mode,
+    onChange,
+}: {
+    mode: 'client' | 'internal';
+    onChange: (mode: 'client' | 'internal') => void;
+}) {
+    return (
+        <div
+            role="tablist"
+            aria-label="Tipo de mensagem"
+            className="grid grid-cols-2 gap-1 rounded-xl border border-ink/[0.08] bg-ink/[0.04] p-1 dark:border-white/[0.06]"
+        >
+            <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'client'}
+                onClick={() => onChange('client')}
+                className={cn(
+                    'relative flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
+                    mode === 'client'
+                        ? 'bg-accent text-canvas shadow-sm dark:text-black'
+                        : 'text-ink/45 hover:bg-ink/[0.06] hover:text-ink/70',
+                )}
+            >
+                <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                <span>Cliente</span>
+            </button>
+            <button
+                type="button"
+                role="tab"
+                aria-selected={mode === 'internal'}
+                title="Visível apenas para a equipe — o cliente não recebe."
+                onClick={() => onChange('internal')}
+                className={cn(
+                    'relative flex h-9 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/30',
+                    mode === 'internal'
+                        ? 'bg-red-600 text-white shadow-sm dark:bg-red-600 dark:text-white'
+                        : 'text-ink/45 hover:bg-ink/[0.06] hover:text-ink/70',
+                )}
+            >
+                <Shield className="h-3.5 w-3.5 shrink-0" />
+                <span>Interna</span>
+            </button>
+        </div>
+    );
+}
+
+function InternalComposerHeader() {
+    return (
+        <div
+            className="rounded-xl border border-ink/[0.08] bg-ink/[0.04] p-1 dark:border-white/[0.06]"
+            title="Visível apenas para a equipe — o cliente não recebe."
+        >
+            <div className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-semibold text-white shadow-sm dark:bg-red-600 dark:text-white">
+                <Shield className="h-3.5 w-3.5 shrink-0" />
+                <span>Mensagem interna</span>
+            </div>
+        </div>
+    );
+}
 
 function InboxMessageBubble({
     message: m,
@@ -455,13 +538,17 @@ function InboxMessageBubble({
         <ChatMessage
             align={align}
             variant={BUBBLE_VARIANT[role]}
+            header={role === 'internal' ? m.sender?.name : undefined}
+            headerInside={role === 'internal'}
             footerInside
             className={isOptimistic ? 'opacity-50' : undefined}
             footer={
                 <div
                     className={cn(
                         'flex items-center gap-1 text-[10px]',
-                        role === 'automation' ? 'justify-between' : 'justify-end',
+                        role === 'automation' || role === 'internal'
+                            ? 'justify-between'
+                            : 'justify-end',
                         roleMeta.metaText,
                     )}
                 >
@@ -470,6 +557,14 @@ function InboxMessageBubble({
                             <Bot className="h-3 w-3 shrink-0" />
                             <span className="text-[9px] font-medium leading-none">
                                 automação
+                            </span>
+                        </span>
+                    )}
+                    {role === 'internal' && (
+                        <span className="flex items-center gap-1 opacity-70">
+                            <Shield className="h-3 w-3 shrink-0" />
+                            <span className="text-[9px] font-medium leading-none">
+                                mensagem interna
                             </span>
                         </span>
                     )}
@@ -661,6 +756,8 @@ export default function InboxIndex({
         ixc_customer_name: string | null;
     } | null>(null);
     const [optimisticMessages, setOptimisticMessages] = useState<(Msg & { optimistic: true })[]>([]);
+    const [realtimeMessages, setRealtimeMessages] = useState<Msg[]>([]);
+    const [sendingMessage, setSendingMessage] = useState(false);
     const [liveTick, setLiveTick] = useState(0);
     const [slashMatches, setSlashMatches] = useState<QuickReply[]>([]);
     const [slashIndex, setSlashIndex] = useState(0);
@@ -684,23 +781,35 @@ export default function InboxIndex({
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, [showEmojiPicker]);
 
-    // Realtime: recarrega lista + thread a cada evento de broadcast.
-    useEffect(() => {
-        const echo = window.Echo;
-        if (!echo) return;
-
-        const channel = echo.private('conversations');
-        const reload = () =>
-            router.reload({ only: ['conversations', 'selected', 'counts'] });
-
-        channel.listen('.message.created', reload);
-        channel.listen('.conversation.updated', reload);
-
-        return () => {
-            channel.stopListening('.message.created', reload);
-            channel.stopListening('.conversation.updated', reload);
-        };
+    const appendMessage = useCallback((message: Msg) => {
+        setRealtimeMessages((prev) => {
+            if (prev.some((m) => m.id === message.id)) return prev;
+            return [...prev, message];
+        });
     }, []);
+
+    const handleRealtimeMessage = useCallback(
+        (payload: InboxRealtimeMessage) => {
+            appendMessage(inboxMessageFromRealtime(payload));
+        },
+        [appendMessage],
+    );
+
+    useInboxRealtime({
+        activeConversationId: selected?.id ?? null,
+        onMessage: handleRealtimeMessage,
+    });
+
+    const displayMessages = useMemo(() => {
+        const byId = new Map<number, Msg>();
+        for (const m of selected?.messages ?? []) byId.set(m.id, m);
+        for (const m of realtimeMessages) byId.set(m.id, m);
+        for (const m of optimisticMessages) byId.set(m.id, m);
+        return [...byId.values()].sort(
+            (a, b) =>
+                new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
+        );
+    }, [selected?.messages, realtimeMessages, optimisticMessages]);
 
     useEffect(() => {
         if (!selected?.messages || transcribingIds.size === 0) return;
@@ -733,9 +842,10 @@ export default function InboxIndex({
         }
     };
 
-    // Limpa mensagens otimistas ao trocar de conversa.
+    // Limpa buffers locais ao trocar de conversa.
     useEffect(() => {
         setOptimisticMessages([]);
+        setRealtimeMessages([]);
         if (selected) {
             setIxcContact({
                 ixc_customer_id: selected.contact.ixc_customer_id ?? null,
@@ -748,40 +858,48 @@ export default function InboxIndex({
         }
     }, [selected?.id]);
 
+    // Remove mensagens realtime já refletidas no servidor.
+    useEffect(() => {
+        if (!selected?.messages || realtimeMessages.length === 0) return;
+
+        const serverIds = new Set(selected.messages.map((m) => m.id));
+        setRealtimeMessages((prev) => prev.filter((m) => !serverIds.has(m.id)));
+    }, [selected?.messages, realtimeMessages.length]);
+
     // Remove otimistas que o servidor já confirmou (evita duplicatas ao enviar várias mensagens seguidas).
     useEffect(() => {
-        if (!selected?.messages || optimisticMessages.length === 0) return;
+        if (optimisticMessages.length === 0) return;
 
-        const oldestOptimisticTime = Math.min(...optimisticMessages.map((m) => new Date(m.created_at ?? 0).getTime()));
+        const confirmed = [...(selected?.messages ?? []), ...realtimeMessages];
+        const realCounts = new Map<string, number>();
 
-        const realCounts = new Map<string | null, number>();
-        for (const m of selected.messages) {
+        for (const m of confirmed) {
             if (m.direction !== 'out') continue;
-            if (new Date(m.created_at ?? 0).getTime() < oldestOptimisticTime - 5000) continue;
-            realCounts.set(m.body, (realCounts.get(m.body) ?? 0) + 1);
+            const key = messageDedupKey(m);
+            realCounts.set(key, (realCounts.get(key) ?? 0) + 1);
         }
 
         setOptimisticMessages((prev) => {
             const counts = new Map(realCounts);
             return prev.filter((m) => {
-                const available = counts.get(m.body) ?? 0;
+                const key = messageDedupKey(m);
+                const available = counts.get(key) ?? 0;
                 if (available > 0) {
-                    counts.set(m.body, available - 1);
+                    counts.set(key, available - 1);
                     return false;
                 }
                 return true;
             });
         });
-    }, [selected?.id, selected?.messages?.length]);
+    }, [selected?.messages, realtimeMessages, optimisticMessages.length]);
 
     // Calcula quando o timer expira direto dos props (sem armazenar em estado).
     const inactivityExpiresAt = useMemo(() => {
         if (!auto_close_enabled || !selected || selected.status !== 'open' || !selected.last_message_at) return null;
-        const allMessages = [...selected.messages, ...optimisticMessages];
-        const lastMsg = allMessages.at(-1);
+        const lastMsg = displayMessages.at(-1);
         if (!lastMsg || lastMsg.direction !== 'out' || lastMsg.status === 'failed') return null;
         return new Date(selected.last_message_at).getTime() + auto_close_minutes * 60 * 1000;
-    }, [auto_close_enabled, auto_close_minutes, selected?.id, selected?.status, selected?.last_message_at, selected?.messages.length, optimisticMessages.length]);
+    }, [auto_close_enabled, auto_close_minutes, selected?.id, selected?.status, selected?.last_message_at, displayMessages]);
 
     // Tick a cada segundo enquanto há timer ativo (conversa selecionada ou lista com conversas abertas).
     const hasOpenInList = auto_close_enabled && conversations.some(c => c.status === 'open');
@@ -938,6 +1056,13 @@ export default function InboxIndex({
         attachment: null,
         audio: null,
     });
+    const internalComposer = useForm<{ body: string }>({ body: '' });
+    const [composerMode, setComposerMode] = useState<'client' | 'internal'>('client');
+
+    useEffect(() => {
+        setComposerMode('client');
+        internalComposer.reset();
+    }, [selected?.id]);
 
     const stopRecorderTracks = () => {
         mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -1204,7 +1329,19 @@ export default function InboxIndex({
         }
     }, [composer.data.body]);
 
-    const submitMessage = () => {
+    const extractAxiosError = (error: unknown, fallback: string): string => {
+        if (!axios.isAxiosError(error)) return fallback;
+        const data = error.response?.data as Record<string, unknown> | undefined;
+        if (typeof data?.message === 'string') return data.message;
+        const errors = data?.errors as Record<string, string[]> | undefined;
+        if (errors) {
+            const first = Object.values(errors).flat().find((v) => typeof v === 'string' && v.length > 0);
+            if (first) return first;
+        }
+        return fallback;
+    };
+
+    const submitMessage = async () => {
         if (
             !selected ||
             (!composer.data.body.trim() &&
@@ -1219,7 +1356,6 @@ export default function InboxIndex({
             return;
         }
 
-        // Mensagem otimista — aparece imediatamente para textos simples.
         const optimisticId = -Date.now();
         const originalBody = composer.data.body;
         const isTextOnly = Boolean(originalBody.trim() && !composer.data.attachment && !composer.data.audio);
@@ -1240,56 +1376,95 @@ export default function InboxIndex({
                     optimistic: true,
                 },
             ]);
+            composer.setData('body', '');
         }
 
-        composer.post(route('inbox.messages.store', selected.id), {
-            preserveScroll: true,
-            preserveState: true,
-            only: ['conversations', 'selected', 'counts'],
-            forceFormData: true,
-            showProgress: false,
-            onProgress: (progress) => {
-                if (progress?.percentage !== undefined) {
-                    setUploadProgress(Math.round(progress.percentage));
-                }
-            },
-            onError: (errors) => {
-                setUploadProgress(null);
-                setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-                if (isTextOnly) composer.setData('body', originalBody);
-                const permissionMessage = 'Conversa atribuída a outro atendente.';
-                const normalizedErrors = Object.values(errors).filter(
-                    (value): value is string => typeof value === 'string' && value.length > 0,
-                );
-                const firstError = normalizedErrors[0];
+        const formData = new FormData();
+        if (composer.data.body.trim()) formData.append('body', composer.data.body);
+        if (composer.data.attachment) formData.append('attachment', composer.data.attachment);
+        if (composer.data.audio) formData.append('audio', composer.data.audio);
 
-                if (!firstError) {
-                    return;
-                }
-
-                if (firstError === permissionMessage) {
-                    toast.error(permissionMessage);
-                    return;
-                }
-
-                toast.error(firstError);
-            },
-            onSuccess: () => {
-                setUploadProgress(null);
-                setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-                composer.reset('body', 'attachment', 'audio');
-                resetComposerMedia();
-            },
-        });
-
-        // Limpa o campo imediatamente após o post() capturar os dados, para não
-        // aparecer ao mesmo tempo na barra e na thread.
-        if (isTextOnly) composer.setData('body', '');
+        setSendingMessage(true);
+        try {
+            const { data } = await axios.post<Msg>(route('inbox.messages.store', selected.id), formData, {
+                headers: { Accept: 'application/json' },
+                onUploadProgress: (progress) => {
+                    if (progress.total) {
+                        setUploadProgress(Math.round((progress.loaded / progress.total) * 100));
+                    }
+                },
+            });
+            appendMessage(data);
+            composer.reset('body', 'attachment', 'audio');
+            resetComposerMedia();
+            router.reload({ only: ['conversations', 'counts'] });
+        } catch (error) {
+            setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+            if (isTextOnly) composer.setData('body', originalBody);
+            const permissionMessage = 'Conversa atribuída a outro atendente.';
+            const message = extractAxiosError(error, 'Falha ao enviar mensagem.');
+            if (message === permissionMessage) {
+                toast.error(permissionMessage);
+            } else {
+                toast.error(message);
+            }
+        } finally {
+            setUploadProgress(null);
+            setSendingMessage(false);
+        }
     };
 
     const send = (e: SyntheticEvent) => {
         e.preventDefault();
-        submitMessage();
+        if (composerMode === 'internal') {
+            void submitInternalMessage();
+            return;
+        }
+        void submitMessage();
+    };
+
+    const submitInternalMessage = async () => {
+        if (!selected || !internalComposer.data.body.trim()) {
+            return;
+        }
+
+        const optimisticId = -Date.now();
+        const originalBody = internalComposer.data.body;
+
+        setOptimisticMessages((prev) => [
+            ...prev,
+            {
+                id: optimisticId,
+                direction: 'out',
+                type: 'text',
+                body: originalBody,
+                media_url: null,
+                status: 'accepted',
+                is_internal: true,
+                sender: { id: currentUser.id, name: currentUser.name },
+                created_at: new Date().toISOString(),
+                optimistic: true,
+            },
+        ]);
+        internalComposer.setData('body', '');
+
+        setSendingMessage(true);
+        try {
+            const { data } = await axios.post<Msg>(
+                route('inbox.internal-messages.store', selected.id),
+                { body: originalBody },
+                { headers: { Accept: 'application/json' } },
+            );
+            appendMessage(data);
+            internalComposer.reset('body');
+            router.reload({ only: ['conversations', 'counts'] });
+        } catch (error) {
+            setOptimisticMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+            internalComposer.setData('body', originalBody);
+            toast.error(extractAxiosError(error, 'Falha ao enviar mensagem interna.'));
+        } finally {
+            setSendingMessage(false);
+        }
     };
 
     const action = (name: string) => {
@@ -1420,12 +1595,18 @@ export default function InboxIndex({
     const canSubmit = hasTypedBody || hasPendingMedia;
     const canAssignSelected = Boolean(selected?.can_assign);
     const canActSelected = Boolean(selected?.can_act);
+    const canSendInternalSelected = Boolean(selected?.can_send_internal);
     const canTransferSelected = Boolean(selected?.can_transfer);
     const canForceCloseSelected = Boolean(selected?.can_force_close);
     const canSnoozeSelected = Boolean(selected?.can_snooze);
     const canWakeSelected = Boolean(selected?.can_wake);
     const isAssignedToCurrentUser = selected?.assigned_user_id === currentUser.id;
     const composerErrors = composer.errors as Record<string, string | undefined>;
+    const internalComposerErrors = internalComposer.errors as Record<string, string | undefined>;
+    const showComposerToggle = canActSelected && canSendInternalSelected;
+    const isInternalComposerMode =
+        canSendInternalSelected && (!canActSelected || composerMode === 'internal');
+    const isClientComposerMode = canActSelected && !isInternalComposerMode;
 
     const isManager = currentUser.role === 'admin' || currentUser.role === 'gestor';
     const filters = [
@@ -2195,7 +2376,7 @@ export default function InboxIndex({
                                     )}
 
                                     <ChatThread contentClassName="gap-2">
-                                        {[...selected.messages, ...optimisticMessages].map(
+                                        {displayMessages.map(
                                             (m, index, messages) => (
                                                 <MessageScrollerItem
                                                     key={m.id}
@@ -2214,11 +2395,98 @@ export default function InboxIndex({
                                         )}
                                     </ChatThread>
 
-                                    {selected.status !== 'closed' && canActSelected ? (
+                                    {selected.status === 'closed' ? (
+                                        <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
+                                            Atendimento encerrado.{' '}
+                                            {canAssignSelected && (
+                                                <button
+                                                    className="underline"
+                                                    onClick={() => action('inbox.assign')}
+                                                >
+                                                    Reabrir
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {selected.status === 'snoozed' && (
+                                                <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
+                                                    Conversa adiada até {formatSnoozeUntil(selected.snoozed_until)}.{' '}
+                                                    {canWakeSelected && (
+                                                        <button
+                                                            className="underline"
+                                                            onClick={wakeConversation}
+                                                            disabled={waking}
+                                                        >
+                                                            Retomar agora
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {(isClientComposerMode || isInternalComposerMode) ? (
                                         <form
                                             onSubmit={send}
-                                            className="space-y-2 border-t border-accent/10 bg-base/20 p-3"
+                                            className="space-y-2.5 border-t border-accent/10 bg-base/20 p-3"
                                         >
+                                            {showComposerToggle && (
+                                                <ComposerModeToggle
+                                                    mode={composerMode}
+                                                    onChange={setComposerMode}
+                                                />
+                                            )}
+
+                                            {!showComposerToggle && isInternalComposerMode && (
+                                                <InternalComposerHeader />
+                                            )}
+
+                                            {isInternalComposerMode ? (
+                                                <>
+                                                    {internalComposerErrors.body && (
+                                                        <div className="rounded-lg border border-red-400/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-200">
+                                                            {internalComposerErrors.body}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                        <Textarea
+                                                            value={internalComposer.data.body}
+                                                            onChange={(e) =>
+                                                                internalComposer.setData('body', e.target.value)
+                                                            }
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                                    e.preventDefault();
+                                                                    submitInternalMessage();
+                                                                }
+                                                            }}
+                                                            placeholder={
+                                                                canActSelected
+                                                                    ? 'Mensagem interna — só a equipe vê…'
+                                                                    : 'Orientação interna para o atendente…'
+                                                            }
+                                                            title="Visível apenas para a equipe — o cliente não recebe."
+                                                            className="min-h-9 max-h-48 resize-none overflow-y-auto border-red-500/15 bg-red-500/[0.03] py-1.5 scrollbar-thin focus-visible:ring-red-500/25 dark:border-red-500/20 dark:bg-red-500/[0.06]"
+                                                            rows={1}
+                                                        />
+                                                        <Button
+                                                            type="submit"
+                                                            size="icon"
+                                                            disabled={
+                                                                sendingMessage ||
+                                                                !internalComposer.data.body.trim()
+                                                            }
+                                                            className="shrink-0 bg-red-600 text-white shadow-sm hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600"
+                                                        >
+                                                            {sendingMessage ? (
+                                                                <Loader2 className="animate-spin" />
+                                                            ) : (
+                                                                <Shield />
+                                                            )}
+                                                        </Button>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
                                             {/* Attachment preview dialog */}
                                             <Dialog open={attachmentDialogOpen} onOpenChange={(open) => { if (!open) clearAttachment(); }}>
                                                 <DialogContent className="max-w-sm">
@@ -2283,7 +2551,7 @@ export default function InboxIndex({
                                                                 type="button"
                                                                 size="sm"
                                                                 onClick={submitMessage}
-                                                                disabled={composer.processing}
+                                                                disabled={sendingMessage}
                                                             >
                                                                 <Send className="h-4 w-4" />
                                                                 Enviar
@@ -2320,7 +2588,7 @@ export default function InboxIndex({
                                                             onClick={() =>
                                                                 attachmentInputRef.current?.click()
                                                             }
-                                                            disabled={composer.processing}
+                                                            disabled={sendingMessage}
                                                         >
                                                             <Paperclip />
                                                         </Button>
@@ -2331,7 +2599,7 @@ export default function InboxIndex({
                                                                 variant="outline"
                                                                 size="icon"
                                                                 onClick={() => setShowEmojiPicker((v) => !v)}
-                                                                disabled={composer.processing}
+                                                                disabled={sendingMessage}
                                                             >
                                                                 <Smile />
                                                             </Button>
@@ -2534,7 +2802,7 @@ export default function InboxIndex({
                                                         variant="destructive"
                                                         size="icon"
                                                         onClick={stopRecording}
-                                                        disabled={composer.processing}
+                                                        disabled={sendingMessage}
                                                     >
                                                         <Square />
                                                     </Button>
@@ -2542,10 +2810,10 @@ export default function InboxIndex({
                                                     <Button
                                                         type="submit"
                                                         size="icon"
-                                                        disabled={composer.processing}
+                                                        disabled={sendingMessage}
                                                         className="transition-all duration-200 disabled:scale-95"
                                                     >
-                                                        {composer.processing ? (
+                                                        {sendingMessage ? (
                                                             <Loader2 className="animate-spin" />
                                                         ) : (
                                                             <Send />
@@ -2557,44 +2825,23 @@ export default function InboxIndex({
                                                         variant="outline"
                                                         size="icon"
                                                         onClick={startRecording}
-                                                        disabled={composer.processing}
+                                                        disabled={sendingMessage}
                                                     >
                                                         <Mic />
                                                     </Button>
                                                 )}
                                             </div>
+                                                </>
+                                            )}
                                         </form>
-                                    ) : selected.status === 'closed' ? (
-                                        <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
-                                            Atendimento encerrado.{' '}
-                                            {canAssignSelected && (
-                                                <button
-                                                    className="underline"
-                                                    onClick={() => action('inbox.assign')}
-                                                >
-                                                    Reabrir
-                                                </button>
-                                            )}
-                                        </div>
-                                    ) : selected.status === 'snoozed' ? (
-                                        <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
-                                            Conversa adiada até {formatSnoozeUntil(selected.snoozed_until)}.{' '}
-                                            {canWakeSelected && (
-                                                <button
-                                                    className="underline"
-                                                    onClick={wakeConversation}
-                                                    disabled={waking}
-                                                >
-                                                    Retomar agora
-                                                </button>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
-                                            {canAssignSelected || isAssignedToCurrentUser
-                                                ? 'Assuma a conversa para enviar mensagens.'
-                                                : 'Conversa atribuída a outro atendente.'}
-                                        </div>
+                                            ) : selected.status !== 'snoozed' ? (
+                                                <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
+                                                    {canAssignSelected || isAssignedToCurrentUser
+                                                        ? 'Assuma a conversa para enviar mensagens.'
+                                                        : 'Conversa atribuída a outro atendente.'}
+                                                </div>
+                                            ) : null}
+                                        </>
                                     )}
                                 </div>
                             )}

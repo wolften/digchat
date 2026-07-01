@@ -34,6 +34,7 @@ import {
     MessageCircle,
     Mic,
     Search,
+    Shield,
     Star,
     Video,
     X,
@@ -93,6 +94,7 @@ interface Msg {
     type: string;
     body: string | null;
     media_url?: string | null;
+    is_internal?: boolean;
     sender: { id: number; name: string } | null;
     created_at: string | null;
 }
@@ -242,7 +244,7 @@ function buildTimeline(detail: Detail): TlEvent[] {
     let batch: Msg[] = [];
 
     for (const msg of detail.messages) {
-        const isHuman = msg.direction === 'out' && msg.sender !== null;
+        const isHuman = msg.direction === 'out' && msg.sender !== null && !msg.is_internal;
 
         if (isHuman && !handoffDone) {
             if (batch.length) {
@@ -274,7 +276,8 @@ function buildTimeline(detail: Detail): TlEvent[] {
 
 function MessageBubble({ msg }: { msg: Msg }) {
     const isIn = msg.direction === 'in';
-    const isHuman = msg.direction === 'out' && msg.sender !== null;
+    const isInternal = Boolean(msg.is_internal);
+    const isHuman = msg.direction === 'out' && msg.sender !== null && !isInternal;
 
     const mediaLabel =
         msg.type === 'image' ? 'Imagem' :
@@ -292,11 +295,13 @@ function MessageBubble({ msg }: { msg: Msg }) {
 
     const variant = isIn
         ? 'incoming'
-        : isHuman
-          ? 'outgoing-accent'
-          : 'outgoing-automation';
+        : isInternal
+          ? 'outgoing-internal'
+          : isHuman
+            ? 'outgoing-accent'
+            : 'outgoing-automation';
 
-    const isAutomation = !isIn && !isHuman;
+    const isAutomation = !isIn && !isHuman && !isInternal;
 
     return (
         <ChatMessage
@@ -304,11 +309,21 @@ function MessageBubble({ msg }: { msg: Msg }) {
             align={isIn ? 'start' : 'end'}
             variant={variant}
             contentClassName="max-w-[78%]"
-            header={isHuman ? msg.sender?.name : undefined}
-            headerInside={isHuman}
-            footerInside={isAutomation}
+            header={isHuman || isInternal ? msg.sender?.name : undefined}
+            headerInside={isHuman || isInternal}
+            footerInside={isAutomation || isInternal}
             footer={
-                isAutomation ? (
+                isInternal ? (
+                    <div className="flex w-full items-center justify-between gap-2 text-[10px] text-red-800/55 dark:text-red-200/60">
+                        <span className="flex items-center gap-1 opacity-80">
+                            <Shield className="h-3 w-3 shrink-0" />
+                            <span className="text-[9px] font-medium leading-none">
+                                mensagem interna
+                            </span>
+                        </span>
+                        <span>{formatTime(msg.created_at)}</span>
+                    </div>
+                ) : isAutomation ? (
                     <div className="flex w-full items-center justify-between gap-2 text-[10px] text-sky-800/55 dark:text-sky-200/60">
                         <span className="flex items-center gap-1 opacity-80">
                             <Bot className="h-3 w-3 shrink-0" />
