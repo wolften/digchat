@@ -143,6 +143,7 @@ export default function Index({ conversations: initialConversations, selected, u
     const [seenByTarget, setSeenByTarget] = useState<InternalChatMessage | null>(null);
     const [seenByData, setSeenByData] = useState<SeenByResponse | null>(null);
     const [seenByLoading, setSeenByLoading] = useState(false);
+    const [contextMenuGeneration, setContextMenuGeneration] = useState(0);
 
 
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -165,7 +166,7 @@ export default function Index({ conversations: initialConversations, selected, u
 
     useEffect(() => {
         if (active) {
-            setTimeout(() => inputRef.current?.focus(), 60);
+            setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 60);
         }
     }, [active?.id]);
 
@@ -344,26 +345,25 @@ export default function Index({ conversations: initialConversations, selected, u
                 {/* Lista de conversas */}
                 <aside
                     className={cn(
-                        'relative flex min-h-0 flex-col border-r border-accent/10 bg-canvas/50',
+                        'relative flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-accent/10 bg-canvas/50',
                         mobileShowThread && active ? 'hidden md:flex' : 'flex',
                     )}
                 >
-                    <div className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-accent/10 px-4">
-                        <span className="text-sm font-semibold text-ink/70">Conversas</span>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-8 shrink-0 gap-1.5 text-xs"
-                            onClick={() => setNewChatOpen(true)}
-                        >
-                            <MessageSquarePlus className="h-3.5 w-3.5" />
-                            Nova
-                        </Button>
-                    </div>
-
-                    <div className="scrollbar-thin flex-1 overflow-y-auto">
-                        <div className="sticky top-0 z-10 border-b border-accent/10 bg-canvas/50 px-3 py-2">
+                    <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+                        <div className="sticky top-0 z-10 space-y-2 border-b border-accent/10 bg-canvas/50 px-3 py-2">
+                            <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-semibold text-ink/70">Conversas</span>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 shrink-0 gap-1.5 text-xs"
+                                    onClick={() => setNewChatOpen(true)}
+                                >
+                                    <MessageSquarePlus className="h-3.5 w-3.5" />
+                                    Nova
+                                </Button>
+                            </div>
                             <div className="relative">
                                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/35" />
                                 <Input
@@ -478,7 +478,7 @@ export default function Index({ conversations: initialConversations, selected, u
                 {/* Thread */}
                 <section
                     className={cn(
-                        'flex min-w-0 flex-1 flex-col',
+                        'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
                         !mobileShowThread || !active ? 'hidden md:flex' : 'flex',
                     )}
                 >
@@ -572,13 +572,18 @@ export default function Index({ conversations: initialConversations, selected, u
                                     const content = !canViewReceipts ? (
                                         bubble
                                     ) : (
-                                        <ContextMenu>
+                                        <ContextMenu key={`${msg.id}-${contextMenuGeneration}`}>
                                             <ContextMenuTrigger asChild>
-                                                <div>{bubble}</div>
+                                                <div className="min-w-0">{bubble}</div>
                                             </ContextMenuTrigger>
                                             <ContextMenuContent>
                                                 <ContextMenuItem
-                                                    onClick={() => openSeenBy(active.id, msg)}
+                                                    onSelect={() => {
+                                                        window.setTimeout(
+                                                            () => openSeenBy(active.id, msg),
+                                                            0,
+                                                        );
+                                                    }}
                                                 >
                                                     <Eye className="h-3.5 w-3.5" />
                                                     Ver quem visualizou
@@ -720,6 +725,7 @@ export default function Index({ conversations: initialConversations, selected, u
                     if (!open) {
                         setSeenByTarget(null);
                         setSeenByData(null);
+                        setContextMenuGeneration((n) => n + 1);
                     }
                 }}
             >
