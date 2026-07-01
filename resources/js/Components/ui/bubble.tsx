@@ -32,7 +32,7 @@ const bubbleContentVariants = cva(
                 'outgoing-accent':
                     'border-transparent bg-accent text-canvas dark:text-black',
                 'incoming-muted':
-                    'border-transparent bg-ink/[0.06] text-ink',
+                    'border-black/[0.08] bg-white text-gray-800 dark:border-white/[0.10] dark:bg-zinc-700 dark:text-zinc-100',
             },
             align: {
                 start: 'rounded-tl-sm',

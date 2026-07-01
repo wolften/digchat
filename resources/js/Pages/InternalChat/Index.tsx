@@ -527,10 +527,10 @@ export default function Index({ conversations: initialConversations, selected, u
                                     const bubble = (
                                         <ChatMessage
                                             align={isMe ? 'end' : 'start'}
-                                            variant={isMe ? 'outgoing-accent' : 'incoming-muted'}
+                                            variant={isMe ? 'outgoing-accent' : 'incoming'}
                                             avatar={
                                                 !isMe ? (
-                                                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-[10px] font-bold text-accent">
+                                                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-black/[0.08] bg-white text-[10px] font-bold text-accent shadow-sm dark:border-white/10 dark:bg-zinc-700">
                                                         {abbr(msg.user_name)}
                                                     </div>
                                                 ) : undefined
