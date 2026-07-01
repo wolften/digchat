@@ -1,4 +1,5 @@
 import { ChatMessage } from '@/Components/ChatMessage';
+import { UserAvatar } from '@/Components/UserAvatar';
 import { ChatThread } from '@/Components/ChatThread';
 import { Badge } from '@/Components/ui/badge';
 import { Button } from '@/Components/ui/button';
@@ -34,7 +35,6 @@ import {
     Mic,
     Search,
     Star,
-    UserRound,
     Video,
     X,
 } from 'lucide-react';
@@ -73,7 +73,7 @@ interface ConvItem {
     id: number;
     protocol_number: string | null;
     contact: { id: number; name: string; wa_id: string };
-    assigned_user: { id: number; name: string } | null;
+    assigned_user: { id: number; name: string; profile_photo_url?: string | null } | null;
     sector: { id: number; name: string } | null;
     bot_only: boolean;
     duration_minutes: number | null;
@@ -100,7 +100,7 @@ interface Detail {
     id: number;
     protocol_number: string | null;
     contact: { id: number; name: string; wa_id: string };
-    assigned_user: { id: number; name: string } | null;
+    assigned_user: { id: number; name: string; profile_photo_url?: string | null } | null;
     sector: { id: number; name: string } | null;
     channel_type: 'whatsapp' | 'telegram' | 'web' | null;
     channel_name: string | null;
@@ -488,7 +488,12 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                             className="inline-flex h-5 max-w-[9rem] min-w-0 items-center gap-1 text-ink/50"
                             title={conv.assigned_user.name}
                         >
-                            <UserRound className="h-3 w-3 shrink-0 opacity-60" />
+                            <UserAvatar
+                                name={conv.assigned_user.name}
+                                photoUrl={conv.assigned_user.profile_photo_url}
+                                size="xs"
+                                className="h-4 w-4 text-[8px]"
+                            />
                             <span className="min-w-0 truncate">
                                 {conv.assigned_user.name.split(' ')[0]}
                             </span>
@@ -571,7 +576,12 @@ function DetailPanel({ detail }: { detail: Detail }) {
 
                             {detail.assigned_user ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
-                                    <UserRound className="h-2.5 w-2.5" />
+                                    <UserAvatar
+                                        name={detail.assigned_user.name}
+                                        photoUrl={detail.assigned_user.profile_photo_url}
+                                        size="xs"
+                                        className="h-4 w-4 text-[8px]"
+                                    />
                                     {detail.assigned_user.name}
                                 </span>
                             ) : (

@@ -35,7 +35,7 @@ function MessageAvatar({ className, ...props }: React.ComponentProps<'div'>) {
         <div
             data-slot="message-avatar"
             className={cn(
-                'flex w-fit min-w-7 shrink-0 items-center justify-center self-end overflow-hidden rounded-full group-has-data-[slot=message-footer]/message:-translate-y-8',
+                'flex w-fit min-w-7 shrink-0 items-center justify-center overflow-hidden rounded-full',
                 className,
             )}
             {...props}

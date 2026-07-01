@@ -59,8 +59,8 @@ class InternalChatService
         $participantRows = InternalConversationParticipant::query()
             ->where('user_id', $user->id)
             ->with([
-                'conversation.messages' => fn ($q) => $q->latest()->limit(1)->with('user:id,name'),
-                'conversation.participants.user:id,name',
+                'conversation.messages' => fn ($q) => $q->latest()->limit(1)->with('user:id,name,profile_photo_path'),
+                'conversation.participants.user:id,name,profile_photo_path',
             ])
             ->get()
             ->sortByDesc(fn (InternalConversationParticipant $p) => $p->conversation?->last_message_at ?? $p->created_at)
@@ -86,8 +86,8 @@ class InternalChatService
             ->where('is_active', true)
             ->whereKeyNot($user->id)
             ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn (User $u) => $u->only(['id', 'name']))
+            ->get(['id', 'name', 'profile_photo_path'])
+            ->map(fn (User $u) => $u->publicSummary())
             ->values()
             ->all();
     }
@@ -158,7 +158,7 @@ class InternalChatService
         ]);
 
         $conversation->update(['last_message_at' => $message->created_at]);
-        $message->load('user:id,name');
+        $message->load('user:id,name,profile_photo_path');
 
         InternalMessageCreated::dispatch($message);
         InternalConversationUpdated::dispatch($conversation->fresh(['participants.user', 'messages.user']), $user);
@@ -213,7 +213,7 @@ class InternalChatService
         $participant = $this->markAsRead($conversation, $user);
 
         $messages = $conversation->messages()
-            ->with('user:id,name')
+            ->with('user:id,name,profile_photo_path')
             ->latest()
             ->limit(80)
             ->get()
@@ -222,14 +222,14 @@ class InternalChatService
             ->map(fn (InternalMessage $m) => $this->formatMessage($m));
 
         $otherParticipant = $conversation->isDirect()
-            ? $conversation->participants()->with('user:id,name')->where('user_id', '!=', $user->id)->first()
+            ? $conversation->participants()->with('user:id,name,profile_photo_path')->where('user_id', '!=', $user->id)->first()
             : null;
 
         return [
             'id' => $conversation->id,
             'type' => $conversation->type,
             'title' => $this->conversationTitle($conversation, $user),
-            'other_user' => $otherParticipant?->user?->only(['id', 'name']),
+            'other_user' => $otherParticipant?->user?->publicSummary(),
             'other_last_read_at' => $otherParticipant?->last_read_at?->toIso8601String(),
             'unread_count' => 0,
             'messages' => $messages,
@@ -247,6 +247,7 @@ class InternalChatService
             'body' => $message->body,
             'user_id' => $message->user_id,
             'user_name' => $message->user?->name,
+            'user_profile_photo_url' => $message->user?->profile_photo_url,
             'created_at' => $message->created_at->toIso8601String(),
         ];
     }
@@ -272,16 +273,16 @@ class InternalChatService
             return null;
         }
 
-        $lastMessage = $conversation->messages()->latest()->with('user:id,name')->first();
+        $lastMessage = $conversation->messages()->latest()->with('user:id,name,profile_photo_path')->first();
         $otherParticipant = $conversation->isDirect()
-            ? $conversation->participants()->with('user:id,name')->where('user_id', '!=', $user->id)->first()
+            ? $conversation->participants()->with('user:id,name,profile_photo_path')->where('user_id', '!=', $user->id)->first()
             : null;
 
         return [
             'id' => $conversation->id,
             'type' => $conversation->type,
             'title' => $this->conversationTitle($conversation, $user),
-            'other_user' => $otherParticipant?->user?->only(['id', 'name']),
+            'other_user' => $otherParticipant?->user?->publicSummary(),
             'last_message' => $lastMessage?->body,
             'last_message_user_name' => $lastMessage?->user?->name,
             'last_message_at' => $conversation->last_message_at?->toIso8601String(),
@@ -297,7 +298,7 @@ class InternalChatService
         }
 
         $other = $conversation->participants()
-            ->with('user:id,name')
+            ->with('user:id,name,profile_photo_path')
             ->where('user_id', '!=', $user->id)
             ->first();
 
@@ -314,6 +315,31 @@ class InternalChatService
                 fn ($q) => $q->where('created_at', '>', $participant->last_read_at),
             )
             ->count();
+    }
+
+    /**
+     * @return array{viewers: array<int, array<string, mixed>>, pending: array<int, array<string, mixed>>}
+     */
+    public function seenBy(InternalMessage $message): array
+    {
+        $format = fn (InternalConversationParticipant $p) => [
+            'user_id' => $p->user_id,
+            'name' => $p->user?->name,
+            'profile_photo_url' => $p->user?->profile_photo_url,
+            'seen_at' => $p->last_read_at?->toIso8601String(),
+        ];
+
+        [$viewers, $pending] = InternalConversationParticipant::query()
+            ->where('internal_conversation_id', $message->internal_conversation_id)
+            ->where('user_id', '!=', $message->user_id)
+            ->with('user:id,name,profile_photo_path')
+            ->get()
+            ->partition(fn (InternalConversationParticipant $p) => $p->last_read_at?->gte($message->created_at) ?? false);
+
+        return [
+            'viewers' => $viewers->sortByDesc('last_read_at')->map($format)->values()->all(),
+            'pending' => $pending->sortBy(fn (InternalConversationParticipant $p) => $p->user?->name)->map($format)->values()->all(),
+        ];
     }
 
     /**

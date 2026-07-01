@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 
 class User extends Authenticatable
 {
@@ -72,8 +73,16 @@ class User extends Authenticatable
         'password',
         'role',
         'color_theme',
+        'profile_photo_path',
         'is_active',
         'last_seen_at',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    protected $appends = [
+        'profile_photo_url',
     ];
 
     /**
@@ -84,7 +93,15 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'profile_photo_path',
     ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (User $user) {
+            $user->deleteProfilePhotoFile();
+        });
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -133,5 +150,43 @@ class User extends Authenticatable
     public function sectors(): BelongsToMany
     {
         return $this->belongsToMany(Sector::class);
+    }
+
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        if (! $this->profile_photo_path) {
+            return null;
+        }
+
+        // Caminho relativo evita quebra quando APP_URL não inclui a porta (ex.: :8000).
+        return '/storage/' . ltrim($this->profile_photo_path, '/');
+    }
+
+    /**
+     * @return array{id: int, name: string, profile_photo_url: string|null}
+     */
+    public function publicSummary(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'profile_photo_url' => $this->profile_photo_url,
+        ];
+    }
+
+    public function deleteProfilePhotoFile(): void
+    {
+        if (
+            $this->profile_photo_path
+            && Storage::disk('public')->exists($this->profile_photo_path)
+        ) {
+            Storage::disk('public')->delete($this->profile_photo_path);
+        }
+    }
+
+    public function removeProfilePhoto(): void
+    {
+        $this->deleteProfilePhotoFile();
+        $this->forceFill(['profile_photo_path' => null])->save();
     }
 }

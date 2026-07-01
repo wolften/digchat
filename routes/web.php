@@ -46,6 +46,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/chat-interno/{conversation}', [InternalChatController::class, 'show'])->name('chat-interno.show');
     Route::post('/chat-interno/direct', [InternalChatController::class, 'storeDirect'])->name('chat-interno.direct');
     Route::post('/chat-interno/{conversation}/messages', [InternalChatController::class, 'storeMessage'])->name('chat-interno.messages.store');
+    Route::get('/chat-interno/{conversation}/messages/{message}/seen-by', [InternalChatController::class, 'seenBy'])->name('chat-interno.messages.seen-by');
     Route::post('/chat-interno/{conversation}/read', [InternalChatController::class, 'markRead'])->name('chat-interno.read');
     Route::post('/chat-interno/{conversation}/typing', [InternalChatController::class, 'typing'])->name('chat-interno.typing');
 
@@ -146,6 +147,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile/photo', [ProfileController::class, 'destroyPhoto'])->name('profile.photo.destroy');
     Route::patch('/profile/color-theme', [ProfileController::class, 'updateColorTheme'])->name('profile.color-theme');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });

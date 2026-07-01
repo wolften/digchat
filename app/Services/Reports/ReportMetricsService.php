@@ -257,6 +257,7 @@ class ReportMetricsService
             return [
                 'user_id'        => (int) $userId,
                 'name'           => $users->get($userId)?->name ?? 'Desconhecido',
+                'profile_photo_url' => $users->get($userId)?->profile_photo_url,
                 'closed'         => (int) ($closed?->closed ?? 0),
                 'open'           => (int) ($openStats->get($userId)?->open ?? 0),
                 'messages_sent'  => (int) ($messageStats->get($userId)?->total ?? 0),

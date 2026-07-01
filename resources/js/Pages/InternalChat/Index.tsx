@@ -1,5 +1,6 @@
 import { ChatMessage } from '@/Components/ChatMessage';
 import { ChatThread, MessageScrollerItem } from '@/Components/ChatThread';
+import { UserAvatar } from '@/Components/UserAvatar';
 import { Button } from '@/Components/ui/button';
 import {
     ContextMenu,
@@ -23,7 +24,7 @@ import {
 } from '@/hooks/useInternalChatRealtime';
 import { useInternalChatTyping } from '@/hooks/useInternalChatTyping';
 import { cn } from '@/lib/utils';
-import { PageProps } from '@/types';
+import { PageProps, UserSummary } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
     ArrowDownUp,
@@ -39,44 +40,20 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-type ChatUser = { id: number; name: string };
+type ChatUser = UserSummary;
 
-type SeenByViewer = { user_id: number; name: string; seen_at: string | null };
+type SeenByViewer = {
+    user_id: number;
+    name: string;
+    profile_photo_url?: string | null;
+    seen_at: string | null;
+};
 type SeenByResponse = { viewers: SeenByViewer[]; pending: SeenByViewer[] };
 
 interface Props {
     conversations: InternalConversationSummary[];
     selected: InternalConversationDetail | null;
     users: ChatUser[];
-}
-
-function abbr(name: string): string {
-    return name
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((p) => p[0])
-        .join('')
-        .toUpperCase();
-}
-
-function ChatUserAvatar({
-    name,
-    size = 'sm',
-}: {
-    name: string;
-    size?: 'sm' | 'md';
-}) {
-    return (
-        <div
-            className={cn(
-                'flex shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/15 font-manrope font-bold text-accent',
-                size === 'md' ? 'h-10 w-10 text-xs' : 'h-7 w-7 text-[10px]',
-            )}
-        >
-            {abbr(name)}
-        </div>
-    );
 }
 
 function fmtTime(iso: string): string {
@@ -441,13 +418,17 @@ export default function Index({ conversations: initialConversations, selected, u
                                         isActive && 'bg-accent/10',
                                     )}
                                 >
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
-                                        {conv.type === 'general' ? (
+                                    {conv.type === 'general' ? (
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/15 text-accent">
                                             <Users className="h-4 w-4" />
-                                        ) : (
-                                            abbr(conv.title)
-                                        )}
-                                    </div>
+                                        </div>
+                                    ) : (
+                                        <UserAvatar
+                                            name={conv.title}
+                                            photoUrl={conv.other_user?.profile_photo_url}
+                                            size="lg"
+                                        />
+                                    )}
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center justify-between gap-2">
                                             <span className="truncate text-sm font-medium text-ink/85">
@@ -511,13 +492,17 @@ export default function Index({ conversations: initialConversations, selected, u
                                 >
                                     <ArrowLeft className="h-4 w-4" />
                                 </button>
-                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
-                                    {active.type === 'general' ? (
+                                {active.type === 'general' ? (
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/15 text-accent">
                                         <Users className="h-4 w-4" />
-                                    ) : (
-                                        abbr(active.title)
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <UserAvatar
+                                        name={active.title}
+                                        photoUrl={active.other_user?.profile_photo_url}
+                                        size="lg"
+                                    />
+                                )}
                                 <div className="min-w-0 flex-1 leading-tight">
                                     <p className="truncate text-sm font-semibold text-ink/85">
                                         {active.title}
@@ -549,7 +534,11 @@ export default function Index({ conversations: initialConversations, selected, u
                                             variant={isMe ? 'outgoing-accent' : 'incoming'}
                                             avatar={
                                                 !isMe && active.type === 'general' ? (
-                                                    <ChatUserAvatar name={msg.user_name} />
+                                                    <UserAvatar
+                                                        name={msg.user_name}
+                                                        photoUrl={msg.user_profile_photo_url}
+                                                        size="xs"
+                                                    />
                                                 ) : undefined
                                             }
                                             header={
@@ -726,9 +715,11 @@ export default function Index({ conversations: initialConversations, selected, u
                                 onClick={() => startDirectChat(user.id)}
                                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-ink/[0.05] disabled:opacity-50"
                             >
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
-                                    {abbr(user.name)}
-                                </div>
+                                <UserAvatar
+                                    name={user.name}
+                                    photoUrl={user.profile_photo_url}
+                                    size="md"
+                                />
                                 <span className="text-sm font-medium text-ink/80">{user.name}</span>
                             </button>
                         ))}
@@ -771,7 +762,11 @@ export default function Index({ conversations: initialConversations, selected, u
                                                 className="flex items-center justify-between gap-2"
                                             >
                                                 <span className="flex items-center gap-2 text-sm text-ink/80">
-                                                    <ChatUserAvatar name={viewer.name} />
+                                                    <UserAvatar
+                                                        name={viewer.name}
+                                                        photoUrl={viewer.profile_photo_url}
+                                                        size="xs"
+                                                    />
                                                     {viewer.name}
                                                 </span>
                                                 <span className="shrink-0 text-[11px] text-ink/40">
@@ -795,9 +790,12 @@ export default function Index({ conversations: initialConversations, selected, u
                                                 key={viewer.user_id}
                                                 className="flex items-center gap-2 text-sm text-ink/45"
                                             >
-                                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink/[0.08] text-[10px] font-bold text-ink/40">
-                                                    {abbr(viewer.name)}
-                                                </span>
+                                                <UserAvatar
+                                                    name={viewer.name}
+                                                    photoUrl={viewer.profile_photo_url}
+                                                    size="xs"
+                                                    className="border-ink/10 bg-ink/[0.08] text-ink/40"
+                                                />
                                                 {viewer.name}
                                             </li>
                                         ))}

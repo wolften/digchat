@@ -21,6 +21,7 @@ import {
     TableRow,
 } from '@/Components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/Components/ui/tabs';
+import { UserAvatar } from '@/Components/UserAvatar';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { formatDuration } from '@/lib/formatDuration';
 import { tagDotClass } from '@/lib/tagColors';
@@ -87,6 +88,7 @@ interface AtendimentosData {
 interface AttendantRow {
     user_id: number;
     name: string;
+    profile_photo_url?: string | null;
     closed: number;
     open: number;
     messages_sent: number;
@@ -137,16 +139,6 @@ interface Props extends PageProps {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getInitials(name: string): string {
-    return name
-        .split(' ')
-        .filter(Boolean)
-        .map((p) => p[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase();
-}
 
 function formatDate(iso: string | null): string {
     if (!iso) return '—';
@@ -666,16 +658,16 @@ export default function RelatoriosIndex({
                                                             </TableCell>
                                                             <TableCell>
                                                                 <div className="flex items-center gap-2.5">
-                                                                    <div
-                                                                        className={cn(
-                                                                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                                                                    <UserAvatar
+                                                                        name={attendant.name}
+                                                                        photoUrl={attendant.profile_photo_url}
+                                                                        size="sm"
+                                                                        className={
                                                                             rank === 1
-                                                                                ? 'bg-accent/15 text-accent'
-                                                                                : 'bg-ink/[0.08] text-ink/70',
-                                                                        )}
-                                                                    >
-                                                                        {getInitials(attendant.name)}
-                                                                    </div>
+                                                                                ? 'border-accent/35 bg-accent/15 text-accent'
+                                                                                : undefined
+                                                                        }
+                                                                    />
                                                                     <div className="min-w-0 flex-1">
                                                                         <div className="truncate text-sm font-medium">
                                                                             {attendant.name}

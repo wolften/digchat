@@ -1,4 +1,5 @@
 import { Head, router } from '@inertiajs/react';
+import { UserAvatar } from '@/Components/UserAvatar';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { CHANNEL_BAR_COLORS, ChannelIcon, type ChannelType } from '@/Components/charts/ChannelIcons';
 import { HorizontalBarChart } from '@/Components/charts/HorizontalBarChart';
@@ -69,6 +70,7 @@ interface ChannelStat {
 interface TopAttendant {
     user_id: number;
     name: string;
+    profile_photo_url?: string | null;
     closed: number;
     open: number;
     avg_mins: number;
@@ -89,16 +91,6 @@ const PERIOD_LABELS: Record<string, string> = {
     month: 'Este mês',
     all: 'Todo período',
 };
-
-function getInitials(name: string): string {
-    return name
-        .split(' ')
-        .filter(Boolean)
-        .map((p) => p[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase();
-}
 
 // ── Ranking de atendentes ────────────────────────────────────────────
 
@@ -157,16 +149,16 @@ function AttendantRanking({
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-2.5">
-                                    <div
-                                        className={cn(
-                                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                                    <UserAvatar
+                                        name={attendant.name}
+                                        photoUrl={attendant.profile_photo_url}
+                                        size="sm"
+                                        className={
                                             rank === 1
-                                                ? 'bg-accent/15 text-accent'
-                                                : 'bg-ink/[0.08] text-ink/70',
-                                        )}
-                                    >
-                                        {getInitials(attendant.name)}
-                                    </div>
+                                                ? 'border-accent/35 bg-accent/15 text-accent'
+                                                : undefined
+                                        }
+                                    />
                                     <div className="min-w-0 flex-1">
                                         <div className="truncate text-sm font-medium">{attendant.name}</div>
                                         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ink/[0.08]">

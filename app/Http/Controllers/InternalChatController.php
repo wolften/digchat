@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\InternalConversationTyping;
 use App\Models\InternalConversation;
+use App\Models\InternalMessage;
 use App\Services\InternalChat\InternalChatService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -67,6 +68,16 @@ class InternalChatController extends Controller
         return response()->json([
             'last_read_at' => $participant?->last_read_at?->toIso8601String(),
         ]);
+    }
+
+    public function seenBy(Request $request, InternalConversation $conversation, InternalMessage $message): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user->isManager(), 403);
+        abort_unless($conversation->isParticipant($user), 403);
+        abort_if($message->internal_conversation_id !== $conversation->id, 404);
+
+        return response()->json($this->chat->seenBy($message));
     }
 
     public function typing(Request $request, InternalConversation $conversation): JsonResponse

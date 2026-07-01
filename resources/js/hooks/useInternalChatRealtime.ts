@@ -5,6 +5,7 @@ export type InternalChatMessage = {
     body: string;
     user_id: number;
     user_name: string;
+    user_profile_photo_url?: string | null;
     created_at: string;
 };
 
@@ -12,7 +13,7 @@ export type InternalConversationSummary = {
     id: number;
     type: 'general' | 'direct';
     title: string;
-    other_user?: { id: number; name: string } | null;
+    other_user?: { id: number; name: string; profile_photo_url?: string | null } | null;
     last_message?: string | null;
     last_message_user_name?: string | null;
     last_message_at?: string | null;

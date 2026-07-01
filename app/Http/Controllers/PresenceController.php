@@ -48,6 +48,7 @@ class PresenceController extends Controller
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
+                    'profile_photo_url' => $user->profile_photo_url,
                     'email' => $user->email,
                     'role' => $user->role,
                     'is_active' => $user->is_active,

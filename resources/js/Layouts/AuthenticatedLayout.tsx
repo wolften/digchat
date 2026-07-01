@@ -1,4 +1,5 @@
 import { AppearanceSync } from '@/Components/AppearanceSync';
+import { UserAvatar } from '@/Components/UserAvatar';
 import { AppIcon, preloadAppIcon } from '@/Components/AppIcon';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import { HeaderClock } from '@/Components/HeaderClock';
@@ -228,14 +229,6 @@ export default function Authenticated({
             }
         });
 
-    const initials = user.name
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join('')
-        .toUpperCase();
-
     const activeNavItem = navItems.find((item) => item.active);
     const HeaderIcon = route().current('profile.*')
         ? User
@@ -306,7 +299,7 @@ export default function Authenticated({
                                     )}
                                 />
                                 {collapsed && !!item.badge && (
-                                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-green-500 px-0.5 text-[9px] font-bold leading-none text-white dark:bg-green-600 dark:text-black">
+                                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-0.5 text-[9px] font-bold leading-none text-canvas dark:text-black">
                                         {item.badge > 99 ? '99+' : item.badge}
                                     </span>
                                 )}
@@ -315,7 +308,7 @@ export default function Authenticated({
                                 <>
                                     <span className="flex-1 truncate">{item.label}</span>
                                     {!!item.badge && (
-                                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-green-500 px-1.5 text-[10px] font-bold text-white dark:bg-green-600 dark:text-black">
+                                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-bold text-canvas dark:text-black">
                                             {item.badge > 99 ? '99+' : item.badge}
                                         </span>
                                     )}
@@ -339,9 +332,11 @@ export default function Authenticated({
                         )}
                     >
                         <div className="relative shrink-0">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-accent/35 bg-accent/20 font-manrope text-xs font-bold text-accent">
-                                {initials || 'DC'}
-                            </div>
+                            <UserAvatar
+                                name={user.name}
+                                photoUrl={user.profile_photo_url}
+                                size="md"
+                            />
                             <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-canvas bg-accent" />
                         </div>
                         {!collapsed && (

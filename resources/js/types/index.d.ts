@@ -23,11 +23,18 @@ export interface User {
     email: string;
     role: UserRole;
     color_theme: ColorThemeId;
+    profile_photo_url?: string | null;
     is_active: boolean;
     presence?: 'online' | 'away' | 'offline' | 'inactive';
     last_seen_at?: string | null;
     email_verified_at?: string;
     created_at?: string;
+}
+
+export interface UserSummary {
+    id: number;
+    name: string;
+    profile_photo_url?: string | null;
 }
 
 export interface PaginationLink {

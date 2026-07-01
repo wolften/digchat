@@ -49,7 +49,7 @@ class HistoricoController extends Controller
             ->count();
 
         $conversations = $base()
-            ->with(['contact.tags:id,name,color', 'assignedUser:id,name', 'sector:id,name', 'surveyResponse.answers', 'channel:id,type,name'])
+            ->with(['contact.tags:id,name,color', 'assignedUser:id,name,profile_photo_path', 'sector:id,name', 'surveyResponse.answers', 'channel:id,type,name'])
             ->orderByDesc('last_message_at')
             ->paginate(40)
             ->through(fn (Conversation $c) => $this->summarize($c));
@@ -96,7 +96,7 @@ class HistoricoController extends Controller
             ->whereDate('created_at', '<=', $dateTo)
             ->when($sectorId, fn ($q) => $q->where('sector_id', $sectorId))
             ->when($userId, fn ($q) => $q->where('assigned_user_id', $userId))
-            ->with(['contact', 'assignedUser:id,name', 'sector:id,name', 'surveyResponse.answers'])
+            ->with(['contact', 'assignedUser:id,name,profile_photo_path', 'sector:id,name', 'surveyResponse.answers'])
             ->orderByDesc('last_message_at')
             ->limit(2000)
             ->get();
@@ -149,7 +149,7 @@ class HistoricoController extends Controller
                 'name'  => $conversation->contact->displayName(),
                 'wa_id' => $conversation->contact->wa_id,
             ],
-            'assigned_user'    => $conversation->assignedUser?->only(['id', 'name']),
+            'assigned_user'    => $conversation->assignedUser?->publicSummary(),
             'sector'           => $conversation->sector?->only(['id', 'name']),
             'tags'             => $conversation->contact->tags->map->only(['id', 'name', 'color'])->values()->all(),
             'bot_only'         => $conversation->assigned_user_id === null,
@@ -168,14 +168,14 @@ class HistoricoController extends Controller
     {
         $c = Conversation::with([
             'contact',
-            'assignedUser:id,name',
+            'assignedUser:id,name,profile_photo_path',
             'sector:id,name',
             'channel:id,type,name',
             'surveyResponse.answers',
         ])->findOrFail($id);
 
         $messages = $c->messages()
-            ->with('sender:id,name')
+            ->with('sender:id,name,profile_photo_path')
             ->orderBy('created_at')
             ->limit(300)
             ->get()
@@ -186,7 +186,7 @@ class HistoricoController extends Controller
                 'body'       => $m->body,
                 'media_url'  => in_array($m->type, ['image', 'audio', 'video', 'document'], true)
                     ? route('inbox.messages.media', $m) : null,
-                'sender'     => $m->sender?->only(['id', 'name']),
+                'sender'     => $m->sender?->publicSummary(),
                 'created_at' => $m->created_at?->toIso8601String(),
             ]);
 
@@ -214,7 +214,7 @@ class HistoricoController extends Controller
                 'name'  => $c->contact->displayName(),
                 'wa_id' => $c->contact->wa_id,
             ],
-            'assigned_user'    => $c->assignedUser?->only(['id', 'name']),
+            'assigned_user'    => $c->assignedUser?->publicSummary(),
             'sector'           => $c->sector?->only(['id', 'name']),
             'channel_type'     => $c->channel?->type,
             'channel_name'     => $c->channel?->name,

@@ -17,16 +17,15 @@ import { Card } from '@/Components/ui/card';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
 import { Switch } from '@/Components/ui/switch';
+import { UserAvatar } from '@/Components/UserAvatar';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { UserSummary } from '@/types';
 import { cn } from '@/lib/utils';
 import { Head, router, useForm } from '@inertiajs/react';
 import { GripVertical, MoreVertical, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { DragEvent, FormEvent, useEffect, useState } from 'react';
 
-interface Attendant {
-    id: number;
-    name: string;
-}
+interface Attendant extends UserSummary {}
 
 interface Sector {
     id: number;
@@ -41,15 +40,7 @@ interface Props {
     attendants: Attendant[];
 }
 
-function initials(name: string): string {
-    return name
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((p) => p[0])
-        .join('')
-        .toUpperCase();
-}
+
 
 export default function SetoresIndex({ sectors: initialSectors, attendants }: Props) {
     const [sectors, setSectors] = useState<Sector[]>(initialSectors);
@@ -268,9 +259,11 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                                                             key={user.id}
                                                             className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-ink/[0.04]"
                                                         >
-                                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/15 font-manrope text-[10px] font-bold text-accent">
-                                                                {initials(user.name)}
-                                                            </div>
+                                                            <UserAvatar
+                                                                name={user.name}
+                                                                photoUrl={user.profile_photo_url}
+                                                                size="xs"
+                                                            />
                                                             <span className="flex-1 truncate text-sm text-ink/80">
                                                                 {user.name}
                                                             </span>
@@ -323,9 +316,11 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                                         onDragStart={(e) => onDragStart(e, att.id)}
                                         className="flex cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-ink/[0.04] active:cursor-grabbing"
                                     >
-                                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/15 font-manrope text-[10px] font-bold text-accent">
-                                            {initials(att.name)}
-                                        </div>
+                                        <UserAvatar
+                                            name={att.name}
+                                            photoUrl={att.profile_photo_url}
+                                            size="xs"
+                                        />
                                         <span className="flex-1 truncate text-sm text-ink/80">
                                             {att.name}
                                         </span>

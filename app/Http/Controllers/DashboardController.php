@@ -138,9 +138,10 @@ class DashboardController extends Controller
             ->get()
             ->keyBy('assigned_user_id');
 
-        $topAttendants = $topQuery->with('assignedUser')->get()->map(fn ($row) => [
+        $topAttendants = $topQuery->with('assignedUser:id,name,profile_photo_path')->get()->map(fn ($row) => [
             'user_id'  => $row->assigned_user_id,
             'name'     => $row->assignedUser?->name ?? 'Desconhecido',
+            'profile_photo_url' => $row->assignedUser?->profile_photo_url,
             'closed'   => (int) $row->total,
             'open'     => (int) ($openPerAttendant->get($row->assigned_user_id)?->total ?? 0),
             'avg_mins' => (int) $row->avg_mins,

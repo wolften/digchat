@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
+
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,13 +31,26 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $user->fill($request->safe()->only(['name', 'email']));
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        if ($request->hasFile('profile_photo')) {
+            $user->deleteProfilePhotoFile();
+            $user->profile_photo_path = $request->file('profile_photo')->store('user-avatars', 'public');
         }
 
-        $request->user()->save();
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
+        }
+
+        $user->save();
+
+        return Redirect::route('profile.edit');
+    }
+
+    public function destroyPhoto(Request $request): RedirectResponse
+    {
+        $request->user()->removeProfilePhoto();
 
         return Redirect::route('profile.edit');
     }
@@ -63,6 +77,7 @@ class ProfileController extends Controller
 
         Auth::logout();
 
+        $user->deleteProfilePhotoFile();
         $user->delete();
 
         $request->session()->invalidate();

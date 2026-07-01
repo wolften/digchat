@@ -17,6 +17,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/Components/ui/table';
+import { UserAvatar } from '@/Components/UserAvatar';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { cn } from '@/lib/utils';
 import { UserRole } from '@/types';
@@ -42,6 +43,7 @@ type PresenceState = 'online' | 'away' | 'offline' | 'inactive';
 interface PresenceUser {
     id: number;
     name: string;
+    profile_photo_url?: string | null;
     email: string;
     role: UserRole;
     is_active: boolean;
@@ -122,16 +124,6 @@ const PRESENCE_ORDER: Record<PresenceState, number> = {
     offline: 2,
     inactive: 3,
 };
-
-function initials(name: string): string {
-    return name
-        .trim()
-        .split(/\s+/)
-        .slice(0, 2)
-        .map((part) => part[0])
-        .join('')
-        .toUpperCase();
-}
 
 function timeAgo(value: string | null): string {
     if (!value) return 'Nunca entrou';
@@ -458,14 +450,12 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                                     <TableCell className="pl-5">
                                                         <div className="flex items-center gap-3">
                                                             <div className="relative shrink-0">
-                                                                <div
-                                                                    className={cn(
-                                                                        'flex h-10 w-10 items-center justify-center rounded-full border text-xs font-bold',
-                                                                        presence.avatar,
-                                                                    )}
-                                                                >
-                                                                    {initials(user.name) || 'DC'}
-                                                                </div>
+                                                                <UserAvatar
+                                                                    name={user.name}
+                                                                    photoUrl={user.profile_photo_url}
+                                                                    size="lg"
+                                                                    className={presence.avatar}
+                                                                />
                                                                 <span
                                                                     className={cn(
                                                                         'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-canvas',

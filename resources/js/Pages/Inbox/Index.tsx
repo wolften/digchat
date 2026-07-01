@@ -1,4 +1,5 @@
 import { ChatMessage } from '@/Components/ChatMessage';
+import { UserAvatar } from '@/Components/UserAvatar';
 import { ChatThread, MessageScrollerItem } from '@/Components/ChatThread';
 import type { ChatBubbleVariant } from '@/Components/ui/bubble';
 import IxcPanel from '@/Components/IxcPanel';
@@ -111,7 +112,7 @@ interface ConversationSummary {
     channel_type: 'whatsapp' | 'telegram' | 'web' | null;
     channel_name: string | null;
     assigned_user_id: number | null;
-    assigned_user: { id: number; name: string } | null;
+    assigned_user: { id: number; name: string; profile_photo_url?: string | null } | null;
     sector: Sector | null;
     can_transfer: boolean;
     contact: {
@@ -157,7 +158,7 @@ interface Selected {
     channel_type: 'whatsapp' | 'telegram' | 'web' | null;
     channel_name: string | null;
     assigned_user_id: number | null;
-    assigned_user: { id: number; name: string } | null;
+    assigned_user: { id: number; name: string; profile_photo_url?: string | null } | null;
     sector: Sector | null;
     can_act: boolean;
     can_assign: boolean;
@@ -1680,7 +1681,12 @@ export default function InboxIndex({
                                                             className="inline-flex h-5 max-w-[9rem] min-w-0 items-center gap-1 text-ink/50"
                                                             title={c.assigned_user.name}
                                                         >
-                                                            <UserRound className="h-3 w-3 shrink-0 opacity-60" />
+                                                            <UserAvatar
+                                                                name={c.assigned_user.name}
+                                                                photoUrl={c.assigned_user.profile_photo_url}
+                                                                size="xs"
+                                                                className="h-4 w-4 text-[8px]"
+                                                            />
                                                             <span className="min-w-0 truncate">
                                                                 {c.assigned_user.name.split(' ')[0]}
                                                             </span>

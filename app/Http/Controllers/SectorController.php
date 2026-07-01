@@ -13,19 +13,23 @@ class SectorController extends Controller
 {
     public function index(): Response
     {
-        $sectors = Sector::with('users:id,name,role')->orderBy('name')->get()
+        $sectors = Sector::with('users:id,name,role,profile_photo_path')->orderBy('name')->get()
             ->map(fn (Sector $s) => [
                 'id' => $s->id,
                 'name' => $s->name,
                 'description' => $s->description,
                 'is_active' => $s->is_active,
-                'users' => $s->users->map->only(['id', 'name', 'role'])->values(),
+                'users' => $s->users->map(fn (User $u) => [
+                    ...$u->publicSummary(),
+                    'role' => $u->role,
+                ])->values(),
             ]);
 
         $attendants = User::where('role', User::ROLE_ATENDENTE)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'profile_photo_path'])
+            ->map(fn (User $u) => $u->publicSummary());
 
         return Inertia::render('Setores/Index', [
             'sectors' => $sectors,
