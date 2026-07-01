@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ProfileColorThemeUpdateRequest;
 use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
@@ -38,6 +39,15 @@ class ProfileController extends Controller
         $request->user()->save();
 
         return Redirect::route('profile.edit');
+    }
+
+    public function updateColorTheme(ProfileColorThemeUpdateRequest $request): RedirectResponse
+    {
+        $request->user()->update([
+            'color_theme' => $request->validated('color_theme'),
+        ]);
+
+        return Redirect::back();
     }
 
     /**

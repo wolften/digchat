@@ -1,0 +1,1 @@
+export { useAppearance } from '@/contexts/AppearanceContext';

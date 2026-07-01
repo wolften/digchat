@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\AppSetting;
 use App\Models\Conversation;
+use App\Services\InternalChat\InternalChatService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,10 +42,11 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
                 'warning' => fn () => $request->session()->get('warning'),
             ],
-            'appName'    => fn () => AppSetting::get('app_name', config('app.name')) ?: config('app.name'),
-            'appIconUrl'  => fn () => AppSetting::get('app_icon_url'),
-            'appSubtitle' => fn () => AppSetting::get('app_subtitle', 'Atendimento inteligente') ?: 'Atendimento inteligente',
+            'appName'     => AppSetting::get('app_name', config('app.name')) ?: config('app.name'),
+            'appIconUrl'  => AppSetting::get('app_icon_url'),
+            'appSubtitle' => AppSetting::get('app_subtitle', 'Atendimento inteligente') ?: 'Atendimento inteligente',
             'appTimezone' => (string) config('app.timezone', 'America/Sao_Paulo'),
+            'autoTranscribeAudio' => AppSetting::bool('auto_transcribe_audio', true),
             'inboxBadgeCount' => function () use ($request) {
                 $user = $request->user();
                 if (! $user) {
@@ -72,6 +74,14 @@ class HandleInertiaRequests extends Middleware
                 });
 
                 return $query->count();
+            },
+            'internalChatBadgeCount' => function () use ($request) {
+                $user = $request->user();
+                if (! $user) {
+                    return 0;
+                }
+
+                return app(InternalChatService::class)->totalUnreadCount($user);
             },
         ];
     }

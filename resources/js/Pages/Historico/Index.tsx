@@ -31,7 +31,6 @@ import {
     MessageCircle,
     Mic,
     Search,
-    SlidersHorizontal,
     Star,
     UserRound,
     Video,
@@ -161,6 +160,15 @@ function formatDuration(mins: number | null): string {
     if (mins === null || mins < 0) return '—';
     return fmtDuration(mins);
 }
+
+function historicoFilterTriggerClass(active: boolean): string {
+    return cn(
+        'h-8 w-full min-w-0 rounded-lg border-transparent bg-ink/[0.03] px-2 text-[10px] font-medium text-ink/55 shadow-none transition-colors hover:bg-ink/[0.06] hover:text-ink/75 focus:ring-1 focus:ring-accent/25',
+        active && 'bg-accent/10 text-accent ring-1 ring-accent/20',
+    );
+}
+
+
 
 function formatTime(iso: string | null): string {
     if (!iso) return '';
@@ -745,20 +753,6 @@ export default function HistoricoIndex({
         return route('historico.export') + '?' + p.toString();
     })();
 
-    const setPreset = (preset: 'today' | 'week' | 'month') => {
-        const now = new Date();
-        const to = now.toISOString().slice(0, 10);
-        let from = to;
-        if (preset === 'week') {
-            const d = new Date(now);
-            d.setDate(d.getDate() - d.getDay());
-            from = d.toISOString().slice(0, 10);
-        } else if (preset === 'month') {
-            from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-        }
-        go({ date_from: from, date_to: to, conversation: undefined });
-    };
-
     const activeFilterCount = [
         filters.sector_id,
         filters.user_id,
@@ -820,142 +814,137 @@ export default function HistoricoIndex({
                     </div>
 
                     {/* Filters */}
-                    <Card>
-                        <CardContent className="space-y-3 p-3.5 lg:p-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/40" />
-                                    <Input
-                                        className="h-9 pl-9 text-xs"
-                                        placeholder="Buscar contato ou protocolo..."
-                                        value={localSearch}
-                                        onChange={(e) => handleSearch(e.target.value)}
-                                    />
-                                </div>
+                    <div className="space-y-2.5 rounded-xl border border-accent/10 bg-canvas/50 p-3 dark:bg-ink/[0.02]">
+                        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+                            <div className="relative min-w-0 flex-1">
+                                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/35" />
+                                <Input
+                                    className="h-8 rounded-lg border-transparent bg-ink/[0.04] pl-8 pr-8 text-xs shadow-none placeholder:text-ink/40 focus-visible:border-accent/30 focus-visible:bg-canvas focus-visible:ring-1 focus-visible:ring-accent/25"
+                                    placeholder="Buscar contato ou protocolo..."
+                                    aria-label="Buscar atendimentos"
+                                    value={localSearch}
+                                    onChange={(e) => handleSearch(e.target.value)}
+                                />
+                                {localSearch !== '' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSearch('')}
+                                        aria-label="Limpar busca"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-ink/35 transition-colors hover:bg-ink/[0.06] hover:text-ink/70"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
 
-                                <div className="grid grid-cols-[7.25rem_auto_7.25rem] items-center gap-x-3 rounded-xl border border-accent/15 bg-ink/[0.03] px-3 py-1">
-                                    <label className="sr-only" htmlFor="date-from">Data inicial</label>
-                                    <Input
-                                        id="date-from"
-                                        type="date"
-                                        title="Data inicial"
-                                        className="date-range-input h-8 w-full cursor-pointer border-0 bg-transparent px-0 text-center text-xs font-medium text-ink/80 shadow-none focus-visible:ring-0"
-                                        value={filters.date_from}
-                                        onChange={(e) => go({ date_from: e.target.value, conversation: undefined })}
-                                    />
-                                    <span className="flex h-8 items-center justify-center text-xs leading-none text-ink/30 select-none">até</span>
-                                    <label className="sr-only" htmlFor="date-to">Data final</label>
-                                    <Input
-                                        id="date-to"
-                                        type="date"
-                                        title="Data final"
-                                        className="date-range-input h-8 w-full cursor-pointer border-0 bg-transparent px-0 text-center text-xs font-medium text-ink/80 shadow-none focus-visible:ring-0"
-                                        value={filters.date_to}
-                                        onChange={(e) => go({ date_to: e.target.value, conversation: undefined })}
-                                    />
-                                </div>
+                            <div className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-ink/[0.04] px-2">
+                                <Calendar className="h-3.5 w-3.5 shrink-0 text-ink/35" />
+                                <label className="sr-only" htmlFor="date-from">Data inicial</label>
+                                <Input
+                                    id="date-from"
+                                    type="date"
+                                    title="Data inicial"
+                                    className="date-range-input h-7 w-[6.75rem] cursor-pointer border-0 bg-transparent p-0 text-center text-[10px] font-medium text-ink/75 shadow-none focus-visible:ring-0"
+                                    value={filters.date_from}
+                                    onChange={(e) => go({ date_from: e.target.value, conversation: undefined })}
+                                />
+                                <span className="text-[10px] leading-none text-ink/30 select-none">até</span>
+                                <label className="sr-only" htmlFor="date-to">Data final</label>
+                                <Input
+                                    id="date-to"
+                                    type="date"
+                                    title="Data final"
+                                    className="date-range-input h-7 w-[6.75rem] cursor-pointer border-0 bg-transparent p-0 text-center text-[10px] font-medium text-ink/75 shadow-none focus-visible:ring-0"
+                                    value={filters.date_to}
+                                    onChange={(e) => go({ date_to: e.target.value, conversation: undefined })}
+                                />
+                            </div>
 
-                                <Select
-                                    value={filters.sector_id ? String(filters.sector_id) : 'all'}
-                                    onValueChange={(v) => go({ sector_id: v === 'all' ? null : Number(v), conversation: undefined })}
+                            {activeFilterCount > 0 && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 shrink-0 gap-1 rounded-lg px-2.5 text-[10px] text-ink/50 hover:bg-ink/[0.04] hover:text-ink/80"
+                                    onClick={clearFilters}
                                 >
-                                    <SelectTrigger className="h-9 w-[9.5rem] text-xs">
-                                        <SelectValue placeholder="Setor" />
+                                    <X className="h-3 w-3" />
+                                    Limpar ({activeFilterCount})
+                                </Button>
+                            )}
+                        </div>
+
+                        <div
+                            className={cn(
+                                'grid gap-1',
+                                tags.length > 0
+                                    ? 'grid-cols-2 sm:grid-cols-4'
+                                    : 'grid-cols-2 sm:grid-cols-3',
+                            )}
+                        >
+                            <Select
+                                value={filters.sector_id ? String(filters.sector_id) : 'all'}
+                                onValueChange={(v) => go({ sector_id: v === 'all' ? null : Number(v), conversation: undefined })}
+                            >
+                                <SelectTrigger className={historicoFilterTriggerClass(!!filters.sector_id)}>
+                                    <SelectValue placeholder="Setor" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos os setores</SelectItem>
+                                    {sectors.map((s) => (
+                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Select
+                                value={filters.user_id ? String(filters.user_id) : 'all'}
+                                onValueChange={(v) => go({ user_id: v === 'all' ? null : Number(v), conversation: undefined })}
+                            >
+                                <SelectTrigger className={historicoFilterTriggerClass(!!filters.user_id)}>
+                                    <SelectValue placeholder="Atendente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos os atendentes</SelectItem>
+                                    {users.map((u) => (
+                                        <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Select
+                                value={filters.channel ?? 'all'}
+                                onValueChange={(v) => go({ channel: v === 'all' ? null : v, conversation: undefined })}
+                            >
+                                <SelectTrigger className={historicoFilterTriggerClass(!!filters.channel)}>
+                                    <SelectValue placeholder="Canal" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos os canais</SelectItem>
+                                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                                    <SelectItem value="telegram">Telegram</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            {tags.length > 0 && (
+                                <Select
+                                    value={filters.tag_id ? String(filters.tag_id) : 'all'}
+                                    onValueChange={(v) => go({ tag_id: v === 'all' ? null : Number(v), conversation: undefined })}
+                                >
+                                    <SelectTrigger className={historicoFilterTriggerClass(!!filters.tag_id)}>
+                                        <SelectValue placeholder="Etiqueta" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">Todos os setores</SelectItem>
-                                        {sectors.map((s) => (
-                                            <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                        <SelectItem value="all">Todas as etiquetas</SelectItem>
+                                        {tags.map((t) => (
+                                            <SelectItem key={t.id} value={String(t.id)}>
+                                                {t.name}
+                                            </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-
-                                <Select
-                                    value={filters.user_id ? String(filters.user_id) : 'all'}
-                                    onValueChange={(v) => go({ user_id: v === 'all' ? null : Number(v), conversation: undefined })}
-                                >
-                                    <SelectTrigger className="h-9 w-[9.5rem] text-xs">
-                                        <SelectValue placeholder="Atendente" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Todos os atendentes</SelectItem>
-                                        {users.map((u) => (
-                                            <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-
-                                <Select
-                                    value={filters.channel ?? 'all'}
-                                    onValueChange={(v) => go({ channel: v === 'all' ? null : v, conversation: undefined })}
-                                >
-                                    <SelectTrigger className="h-9 w-[9rem] text-xs">
-                                        <SelectValue placeholder="Canal" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Todos os canais</SelectItem>
-                                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                                        <SelectItem value="telegram">Telegram</SelectItem>
-                                    </SelectContent>
-                                </Select>
-
-                                {tags.length > 0 && (
-                                    <Select
-                                        value={filters.tag_id ? String(filters.tag_id) : 'all'}
-                                        onValueChange={(v) => go({ tag_id: v === 'all' ? null : Number(v), conversation: undefined })}
-                                    >
-                                        <SelectTrigger className="h-9 w-[9rem] text-xs">
-                                            <SelectValue placeholder="Etiqueta" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Todas as etiquetas</SelectItem>
-                                            {tags.map((t) => (
-                                                <SelectItem key={t.id} value={String(t.id)}>
-                                                    {t.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-
-                                <a href={exportUrl} download className="shrink-0">
-                                    <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs">
-                                        <Download className="h-3.5 w-3.5" />
-                                        Exportar
-                                    </Button>
-                                </a>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2 border-t border-accent/8 pt-3">
-                                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-ink/40">
-                                    <SlidersHorizontal className="h-3 w-3" />
-                                    Período
-                                </span>
-                                {(['today', 'week', 'month'] as const).map((preset) => (
-                                    <Button
-                                        key={preset}
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 rounded-full px-3 text-xs hover:bg-accent/10 hover:text-accent"
-                                        onClick={() => setPreset(preset)}
-                                    >
-                                        {preset === 'today' ? 'Hoje' : preset === 'week' ? 'Esta semana' : 'Este mês'}
-                                    </Button>
-                                ))}
-                                {activeFilterCount > 0 && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="ml-auto h-7 gap-1 text-xs text-ink/50 hover:text-ink/80"
-                                        onClick={clearFilters}
-                                    >
-                                        <X className="h-3 w-3" />
-                                        Limpar filtros ({activeFilterCount})
-                                    </Button>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* ── Content ── */}
@@ -964,12 +953,24 @@ export default function HistoricoIndex({
                     {/* Left: Conversation list */}
                     <Card className="flex w-[min(100%,340px)] shrink-0 flex-col overflow-hidden md:w-[340px]">
 
-                        <div className="flex shrink-0 items-center justify-between border-b border-ink/[0.08] px-4 py-2.5">
-                            <span className="flex items-center gap-1.5 text-xs font-semibold text-ink/60">
-                                <Filter className="h-3.5 w-3.5" />
-                                {conversations.total.toLocaleString('pt-BR')}{' '}
-                                {conversations.total === 1 ? 'atendimento' : 'atendimentos'}
+                        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-accent/10 px-4 py-2.5">
+                            <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-ink/60">
+                                <Filter className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">
+                                    {conversations.total.toLocaleString('pt-BR')}{' '}
+                                    {conversations.total === 1 ? 'atendimento' : 'atendimentos'}
+                                </span>
                             </span>
+                            <a href={exportUrl} download className="shrink-0">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 gap-1.5 rounded-lg border-accent/15 bg-canvas/50 px-2.5 text-[10px] font-medium text-ink/60 shadow-none hover:bg-accent/10 hover:text-accent"
+                                >
+                                    <Download className="h-3 w-3" />
+                                    Exportar
+                                </Button>
+                            </a>
                         </div>
 
                         {conversations.data.length === 0 ? (

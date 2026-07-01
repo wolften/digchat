@@ -1,7 +1,11 @@
+import { AppearanceSync } from '@/Components/AppearanceSync';
+import { AppIcon, preloadAppIcon } from '@/Components/AppIcon';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import { HeaderClock } from '@/Components/HeaderClock';
-import { InternalChat } from '@/Components/InternalChat';
+import { PageTransition } from '@/Components/PageTransition';
 import { Toaster } from '@/Components/ui/sonner';
+import { useInternalChatBadge } from '@/hooks/useInternalChatBadge';
+import { useInternalChatNotifications } from '@/hooks/useInternalChatNotifications';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
@@ -20,6 +24,7 @@ import {
     LogOut,
     Menu,
     MessageCircle,
+    MessagesSquare,
     MessageSquare,
     Moon,
     Radio,
@@ -61,6 +66,7 @@ export default function Authenticated({
     const appIconUrl = page.props.appIconUrl;
     const appSubtitle = page.props.appSubtitle;
     const inboxBadgeCount = page.props.inboxBadgeCount ?? 0;
+    const { count: internalChatBadgeCount } = useInternalChatBadge();
     const isManager = user.role === 'admin' || user.role === 'gestor';
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -73,12 +79,17 @@ export default function Authenticated({
     });
     const { theme, toggle: toggleTheme } = useTheme();
     useNotifications(user.id);
+    useInternalChatNotifications(user.id);
 
     useEffect(() => {
         if (flash?.success) toast.success(flash.success);
         if (flash?.error) toast.error(flash.error);
         if (flash?.warning) toast.warning(flash.warning);
     }, [flash]);
+
+    useEffect(() => {
+        preloadAppIcon(appIconUrl);
+    }, [appIconUrl]);
 
     const toggleCollapsed = () => {
         setSidebarCollapsed((prev) => {
@@ -103,6 +114,13 @@ export default function Authenticated({
             activePattern: 'inbox.*',
             icon: MessageCircle,
             badge: inboxBadgeCount || undefined,
+        },
+        {
+            label: 'Chat Interno',
+            routeName: 'chat-interno.index',
+            activePattern: 'chat-interno.*',
+            icon: MessagesSquare,
+            badge: internalChatBadgeCount || undefined,
         },
         {
             label: 'Histórico',
@@ -241,7 +259,7 @@ export default function Authenticated({
                     className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl text-accent"
                 >
                     {appIconUrl ? (
-                        <img src={appIconUrl} alt={appName} className="h-full w-full object-cover" />
+                        <AppIcon src={appIconUrl} alt={appName ?? 'App'} className="h-full w-full rounded-xl" />
                     ) : (
                         <span className="font-manrope text-sm font-bold uppercase text-accent">
                             {appName?.charAt(0) ?? 'D'}
@@ -344,7 +362,7 @@ export default function Authenticated({
                     {userMenuOpen && (
                         <div
                             className={cn(
-                                'absolute z-50 rounded-xl border border-accent/20 bg-white p-1 shadow-xl dark:bg-[#142a1b]',
+                                'absolute z-50 rounded-xl border border-accent/20 bg-base p-1 shadow-xl shadow-black/15 dark:shadow-black/40',
                                 collapsed
                                     ? 'bottom-0 left-full ml-2 w-40'
                                     : 'bottom-full left-0 right-0 mb-2',
@@ -375,8 +393,10 @@ export default function Authenticated({
 
     return (
         <div className="app-shell flex h-screen min-h-screen overflow-hidden p-0 text-ink md:p-2">
+            <AppearanceSync />
             {appIconUrl && (
                 <Head>
+                    <link rel="preload" as="image" href={appIconUrl} />
                     <link rel="icon" href={appIconUrl} />
                 </Head>
             )}
@@ -439,7 +459,6 @@ export default function Authenticated({
                         </div>
                         <div className="flex items-center gap-2">
                             <HeaderClock />
-                            <InternalChat />
                             <button
                                 type="button"
                                 onClick={toggleTheme}
@@ -463,7 +482,9 @@ export default function Authenticated({
                     </header>
 
                     <main className="min-h-0 flex-1 flex flex-col overflow-hidden">
-                        {children}
+                        <PageTransition className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                            {children}
+                        </PageTransition>
                     </main>
                 </div>
             </div>

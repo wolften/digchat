@@ -24,12 +24,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/Components/ui/select';
+import { Input } from '@/Components/ui/input';
 import { Textarea } from '@/Components/ui/textarea';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { isMediaMessageType, mediaCaption, mediaTypeFromPlaceholder } from '@/lib/messageMedia';
-import { cn, formatClientDisplayName, formatClientPhone } from '@/lib/utils';
+import { cn, formatClientDisplayName, formatClientPhone, onlyDigits } from '@/lib/utils';
 import { PageProps } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
+import axios from 'axios';
 import {
     AlertTriangle,
     ArrowDownUp,
@@ -52,6 +54,7 @@ import {
     Pause,
     PanelRight,
     Play,
+    Search,
     Send,
     Smile,
     Square,
@@ -62,6 +65,7 @@ import {
     UserCheck,
     UserRound,
     Video,
+    X,
 } from 'lucide-react';
 import EmojiPicker, { Categories, EmojiClickData, Theme } from 'emoji-picker-react';
 import { ChangeEvent, SyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
@@ -242,6 +246,55 @@ function formatTime(iso: string | null): string {
     });
 }
 
+function conversationDisplayName(conversation: ConversationSummary): string {
+    return conversation.channel_type === 'web'
+        ? conversation.contact.name && !conversation.contact.name.startsWith('web_')
+            ? conversation.contact.name
+            : 'Visitante'
+        : formatClientDisplayName(conversation.contact.name, conversation.contact.wa_id);
+}
+
+function inboxFilterTriggerClass(active: boolean): string {
+    return cn(
+        'flex h-8 w-full min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 text-[10px] font-medium transition-colors',
+        active
+            ? 'bg-accent/10 text-accent ring-1 ring-accent/20'
+            : 'bg-ink/[0.03] text-ink/55 hover:bg-ink/[0.06] hover:text-ink/75',
+    );
+}
+
+function matchesListSearch(conversation: ConversationSummary, query: string): boolean {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+
+    const digits = onlyDigits(q);
+    const haystack = [
+        conversationDisplayName(conversation),
+        conversation.contact.name,
+        conversation.contact.wa_id,
+        formatClientPhone(conversation.contact.wa_id),
+        conversation.last_message,
+        conversation.assigned_user?.name,
+        conversation.sector?.name,
+        conversation.channel_name,
+        ...conversation.tags.map((tag) => tag.name),
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    if (haystack.includes(q)) return true;
+
+    if (digits.length >= 3) {
+        const phoneHaystack = onlyDigits(
+            [conversation.contact.wa_id, formatClientPhone(conversation.contact.wa_id)].join(''),
+        );
+        return phoneHaystack.includes(digits);
+    }
+
+    return false;
+}
+
 function mediaPreview(message: ConversationSummary): {
     icon: typeof ImageIcon;
     label: string;
@@ -366,7 +419,7 @@ export default function InboxIndex({
     quick_replies,
     has_ixc,
 }: Props) {
-    const currentUser = usePage<PageProps>().props.auth.user;
+    const { auth: { user: currentUser }, autoTranscribeAudio } = usePage<PageProps>().props;
     const threadRef = useRef<HTMLDivElement>(null);
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -387,6 +440,7 @@ export default function InboxIndex({
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
     const [isRecording, setIsRecording] = useState(false);
+    const [transcribingIds, setTranscribingIds] = useState<Set<number>>(new Set());
     const [recordingWaveLevels, setRecordingWaveLevels] = useState<number[]>(
         RECORDING_WAVE_LEVELS_BASE,
     );
@@ -412,7 +466,13 @@ export default function InboxIndex({
     const [slashMatches, setSlashMatches] = useState<QuickReply[]>([]);
     const [slashIndex, setSlashIndex] = useState(0);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [listSearch, setListSearch] = useState('');
     const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+    const filteredConversations = useMemo(
+        () => conversations.filter((conversation) => matchesListSearch(conversation, listSearch)),
+        [conversations, listSearch],
+    );
 
     useEffect(() => {
         if (!showEmojiPicker) return;
@@ -442,6 +502,37 @@ export default function InboxIndex({
             channel.stopListening('.conversation.updated', reload);
         };
     }, []);
+
+    useEffect(() => {
+        if (!selected?.messages || transcribingIds.size === 0) return;
+
+        const transcribedIds = new Set(
+            selected.messages.filter((m) => m.transcription).map((m) => m.id),
+        );
+
+        setTranscribingIds((prev) => {
+            const next = new Set([...prev].filter((id) => !transcribedIds.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [selected?.messages, transcribingIds.size]);
+
+    const transcribeMessage = async (messageId: number) => {
+        setTranscribingIds((prev) => new Set(prev).add(messageId));
+
+        try {
+            await axios.post(route('inbox.messages.transcribe', messageId));
+        } catch (error) {
+            setTranscribingIds((prev) => {
+                const next = new Set(prev);
+                next.delete(messageId);
+                return next;
+            });
+            const message = axios.isAxiosError(error)
+                ? (error.response?.data?.message ?? 'Não foi possível transcrever o áudio.')
+                : 'Não foi possível transcrever o áudio.';
+            toast.error(message);
+        }
+    };
 
     // Limpa mensagens otimistas ao trocar de conversa.
     useEffect(() => {
@@ -1091,6 +1182,13 @@ export default function InboxIndex({
         { key: 'bot', label: 'Auto', title: 'Conversas em automação', count: counts.bot, Icon: Bot },
         { key: 'queued', label: 'Fila', title: 'Conversas na fila', count: counts.queued, Icon: Clock },
     ];
+    const hasDropdownFilters =
+        sectors.length > 0 || users.length > 0 || tags.length > 0;
+    const dropdownFilterCount = [
+        sectors.length > 0,
+        users.length > 0,
+        tags.length > 0,
+    ].filter(Boolean).length;
 
     return (
         <AuthenticatedLayout
@@ -1105,62 +1203,86 @@ export default function InboxIndex({
             <div className="flex-1 min-h-0 grid grid-cols-1 overflow-hidden md:grid-cols-[340px_1fr]">
                         {/* Lista de conversas */}
                         <div className={cn(
-                            "relative flex min-h-0 flex-col border-r border-ink/[0.08]",
+                            "relative flex min-h-0 flex-col border-r border-accent/10",
                             selected && "hidden md:flex",
                         )}>
-                            <div className="flex h-16 items-center border-b border-ink/[0.08] px-2">
-                                <div className="grid w-full grid-cols-4 gap-1 rounded-2xl border border-ink/[0.08] bg-white p-1 shadow-sm dark:bg-ink/[0.03]">
-                                    {filters.map((f) => {
-                                        const active = filter === f.key;
+                            <div className="scrollbar-thin flex-1 overflow-y-auto">
+                                <div className="sticky top-0 z-10 border-b border-accent/10 bg-canvas px-2 py-2">
+                                    <div className="space-y-2 rounded-xl border border-accent/10 bg-canvas/50 p-2 dark:bg-ink/[0.02]">
+                                        <div
+                                            className="grid grid-cols-4 gap-0.5 rounded-lg bg-ink/[0.04] p-0.5"
+                                            role="tablist"
+                                            aria-label="Visualização das conversas"
+                                        >
+                                            {filters.map((f) => {
+                                                const active = filter === f.key;
 
-                                        return (
-                                            <button
-                                                key={f.key}
-                                                type="button"
-                                                title={f.title}
-                                                aria-pressed={active}
-                                                onClick={() => changeFilter(f.key)}
-                                                className={cn(
-                                                    'relative flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-semibold leading-none text-ink/50 transition-all hover:bg-ink/[0.04] hover:text-ink/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
-                                                    active &&
-                                                        'bg-accent text-white shadow-[0_6px_16px_rgb(var(--accent-rgb)/0.22)] hover:bg-accent hover:text-white dark:text-black dark:hover:text-black',
-                                                )}
-                                            >
-                                                <f.Icon className="h-4 w-4" />
-                                                <span className="max-w-full truncate px-0.5">{f.label}</span>
-                                                {Boolean(f.count) && (
-                                                    <span
+                                                return (
+                                                    <button
+                                                        key={f.key}
+                                                        type="button"
+                                                        role="tab"
+                                                        aria-selected={active}
+                                                        title={f.title}
+                                                        onClick={() => changeFilter(f.key)}
                                                         className={cn(
-                                                            'absolute right-1 top-1 min-w-4 rounded-full bg-accent/10 px-1 text-[9px] font-bold leading-4 text-accent',
-                                                            active && 'bg-white/20 text-white dark:bg-black/10 dark:text-black',
+                                                            'relative flex h-8 min-w-0 items-center justify-center gap-1 rounded-md text-[10px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
+                                                            active
+                                                                ? 'bg-canvas text-accent shadow-sm dark:bg-ink/[0.10]'
+                                                                : 'text-ink/45 hover:text-ink/70',
                                                         )}
                                                     >
-                                                        {f.count}
-                                                    </span>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                            <div className="scrollbar-thin flex-1 overflow-y-auto">
-                                {(sectors.length > 0 || users.length > 0 || tags.length > 0) && (
-                                <div className="sticky top-0 z-10 flex items-center gap-1.5 border-b border-ink/[0.08] bg-canvas px-2 py-2">
-                                    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                                                        <f.Icon className="h-3.5 w-3.5 shrink-0" />
+                                                        <span className="truncate">{f.label}</span>
+                                                        {Boolean(f.count) && (
+                                                            <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 text-[8px] font-bold leading-none text-canvas dark:text-black">
+                                                                {f.count}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <div className="relative">
+                                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/35" />
+                                            <Input
+                                                value={listSearch}
+                                                onChange={(e) => setListSearch(e.target.value)}
+                                                placeholder="Buscar conversas..."
+                                                aria-label="Buscar conversas"
+                                                className="h-8 rounded-lg border-transparent bg-ink/[0.04] pl-8 pr-8 text-xs shadow-none placeholder:text-ink/40 focus-visible:border-accent/30 focus-visible:bg-canvas focus-visible:ring-1 focus-visible:ring-accent/25"
+                                            />
+                                            {listSearch !== '' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setListSearch('')}
+                                                    aria-label="Limpar busca"
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-ink/35 transition-colors hover:bg-ink/[0.06] hover:text-ink/70"
+                                                >
+                                                    <X className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {hasDropdownFilters && (
+                                        <div
+                                            className={cn(
+                                                'grid gap-1',
+                                                dropdownFilterCount === 3 && 'grid-cols-3',
+                                                dropdownFilterCount === 2 && 'grid-cols-2',
+                                                dropdownFilterCount === 1 && 'grid-cols-1',
+                                            )}
+                                        >
                                     {sectors.length > 0 && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <button className={cn(
-                                                    'flex h-7 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-colors',
-                                                    sector_id
-                                                        ? 'border-accent/30 bg-accent/10 text-accent'
-                                                        : 'border-ink/[0.12] bg-white text-ink/60 shadow-sm hover:bg-ink/[0.05] dark:bg-ink/[0.04] dark:hover:bg-ink/[0.08]',
-                                                )}>
-                                                    <Building2 className="h-3 w-3 shrink-0" />
-                                                    <span className="max-w-[72px] truncate">
+                                                <button className={inboxFilterTriggerClass(!!sector_id)}>
+                                                    <Building2 className="h-3 w-3 shrink-0 opacity-70" />
+                                                    <span className="min-w-0 truncate">
                                                         {sector_id ? (sectors.find(s => s.id === sector_id)?.name ?? 'Setor') : 'Setor'}
                                                     </span>
-                                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-40" />
                                                 </button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="start" className="min-w-[160px]">
@@ -1179,17 +1301,12 @@ export default function InboxIndex({
                                     {users.length > 0 && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <button className={cn(
-                                                    'flex h-7 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-colors',
-                                                    user_id
-                                                        ? 'border-accent/30 bg-accent/10 text-accent'
-                                                        : 'border-ink/[0.12] bg-white text-ink/60 shadow-sm hover:bg-ink/[0.05] dark:bg-ink/[0.04] dark:hover:bg-ink/[0.08]',
-                                                )}>
-                                                    <UserRound className="h-3 w-3 shrink-0" />
-                                                    <span className="max-w-[72px] truncate">
+                                                <button className={inboxFilterTriggerClass(!!user_id)}>
+                                                    <UserRound className="h-3 w-3 shrink-0 opacity-70" />
+                                                    <span className="min-w-0 truncate">
                                                         {user_id ? (users.find(u => u.id === user_id)?.name ?? 'Atendente') : 'Atendente'}
                                                     </span>
-                                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-40" />
                                                 </button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="start" className="min-w-[160px]">
@@ -1208,17 +1325,12 @@ export default function InboxIndex({
                                     {tags.length > 0 && (
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <button className={cn(
-                                                    'flex h-7 shrink-0 items-center gap-1 rounded-full border px-2 text-xs font-medium transition-colors',
-                                                    tag_id
-                                                        ? 'border-accent/30 bg-accent/10 text-accent'
-                                                        : 'border-ink/[0.12] bg-white text-ink/60 shadow-sm hover:bg-ink/[0.05] dark:bg-ink/[0.04] dark:hover:bg-ink/[0.08]',
-                                                )}>
-                                                    <TagIcon className="h-3 w-3 shrink-0" />
-                                                    <span className="max-w-[72px] truncate">
+                                                <button className={inboxFilterTriggerClass(!!tag_id)}>
+                                                    <TagIcon className="h-3 w-3 shrink-0 opacity-70" />
+                                                    <span className="min-w-0 truncate">
                                                         {tag_id ? (tags.find(t => t.id === tag_id)?.name ?? 'Etiqueta') : 'Etiqueta'}
                                                     </span>
-                                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-50" />
+                                                    <ChevronDown className="h-3 w-3 shrink-0 opacity-40" />
                                                 </button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="start" className="min-w-[160px]">
@@ -1234,9 +1346,10 @@ export default function InboxIndex({
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     )}
+                                        </div>
+                                        )}
                                     </div>
                                 </div>
-                                )}
                                 {conversations.length === 0 && (
                                     <div className="flex min-h-[280px] flex-col items-center justify-center px-6 py-10 text-center">
                                         <div className="relative mb-5 h-20 w-20">
@@ -1247,7 +1360,7 @@ export default function InboxIndex({
                                             <div className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full border border-accent/20 bg-canvas text-accent shadow-sm">
                                                 <Bot className="h-4 w-4" />
                                             </div>
-                                            <div className="absolute -bottom-1 -left-2 flex h-7 w-7 items-center justify-center rounded-full border border-ink/[0.08] bg-canvas text-ink/50 shadow-sm">
+                                            <div className="absolute -bottom-1 -left-2 flex h-7 w-7 items-center justify-center rounded-full border border-accent/10 bg-canvas text-ink/50 shadow-sm">
                                                 <UserRound className="h-3.5 w-3.5" />
                                             </div>
                                         </div>
@@ -1261,18 +1374,29 @@ export default function InboxIndex({
                                             </p>
                                         </div>
 
-                                        <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-ink/[0.08] bg-ink/[0.03] px-3 py-1.5 text-[11px] font-medium text-ink/45">
+                                        <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-accent/10 bg-ink/[0.03] px-3 py-1.5 text-[11px] font-medium text-ink/45">
                                             <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                                             Aguardando mensagens
                                         </div>
                                     </div>
                                 )}
-                                {conversations.map((c) => {
+                                {conversations.length > 0 && filteredConversations.length === 0 && (
+                                    <div className="flex min-h-[200px] flex-col items-center justify-center px-6 py-10 text-center">
+                                        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-accent/15 bg-accent/10 text-accent">
+                                            <Search className="h-4 w-4" />
+                                        </div>
+                                        <p className="text-sm font-medium text-ink/70">
+                                            Nenhuma conversa encontrada
+                                        </p>
+                                        <p className="mt-1 max-w-[220px] text-xs leading-5 text-ink/45">
+                                            Tente outro nome, telefone ou trecho da última mensagem.
+                                        </p>
+                                    </div>
+                                )}
+                                {filteredConversations.map((c) => {
                                     const preview = mediaPreview(c);
                                     const PreviewIcon = preview?.icon;
-                                    const contactName = c.channel_type === 'web'
-                                        ? (c.contact.name && !c.contact.name.startsWith('web_') ? c.contact.name : 'Visitante')
-                                        : formatClientDisplayName(c.contact.name, c.contact.wa_id);
+                                    const contactName = conversationDisplayName(c);
                                     const convExpiresAt =
                                         auto_close_enabled && c.status === 'open' && c.last_message_at && c.last_message_direction === 'out'
                                             ? new Date(c.last_message_at).getTime() + auto_close_minutes * 60 * 1000
@@ -1290,8 +1414,8 @@ export default function InboxIndex({
                                             key={c.id}
                                             onClick={() => selectConversation(c.id)}
                                             className={cn(
-                                                'group relative w-full border-b border-ink/[0.07] px-4 py-3 text-left text-ink transition hover:bg-ink/[0.05]',
-                                                isSelected ? 'bg-accent/[0.08]' : 'hover:bg-ink/[0.05]',
+                                                'group relative w-full border-b border-accent/5 px-4 py-3 text-left text-ink transition hover:bg-ink/[0.04]',
+                                                isSelected ? 'bg-accent/10' : 'hover:bg-ink/[0.04]',
                                             )}
                                         >
                                             {isSelected && (
@@ -1449,13 +1573,11 @@ export default function InboxIndex({
                                 aria-label={sort === 'newest' ? 'Mais recentes primeiro. Clique para inverter.' : 'Mais antigas primeiro. Clique para inverter.'}
                                 title={sort === 'newest' ? 'Mais recentes primeiro — clique para inverter' : 'Mais antigas primeiro — clique para inverter'}
                                 className={cn(
-                                    'absolute bottom-4 right-4 flex h-9 w-9 items-center justify-center rounded-full border shadow-md transition-colors',
-                                    sort === 'oldest'
-                                        ? 'border-accent/30 bg-accent text-white'
-                                        : 'border-ink/[0.12] bg-white text-ink/50 hover:text-ink/80 dark:bg-zinc-800 dark:border-white/10',
+                                    'absolute bottom-4 right-4 flex h-9 w-9 items-center justify-center rounded-full border border-accent/30 bg-canvas text-accent shadow-md transition-colors hover:border-accent/50',
+                                    sort === 'oldest' && 'border-accent/60 bg-accent/10',
                                 )}
                             >
-                                <ArrowDownUp className="h-3.5 w-3.5" />
+                                <ArrowDownUp className="h-3.5 w-3.5 text-accent" />
                             </button>
                         </div>
 
@@ -1473,7 +1595,7 @@ export default function InboxIndex({
 
                             {selected && (
                                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                                    <div className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-ink/[0.08] px-3 py-2 md:flex-nowrap">
+                                    <div className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-accent/10 px-3 py-2 md:flex-nowrap">
                                         <button
                                             type="button"
                                             onClick={deselectConversation}
@@ -1782,10 +1904,22 @@ export default function InboxIndex({
                                                                     <p className="max-w-[260px] whitespace-pre-wrap break-words text-xs leading-relaxed opacity-80">
                                                                         {m.transcription}
                                                                     </p>
-                                                                ) : new Date(m.created_at ?? 0).getTime() > Date.now() - 120_000 ? (
+                                                                ) : transcribingIds.has(m.id) || (
+                                                                    autoTranscribeAudio &&
+                                                                    new Date(m.created_at ?? 0).getTime() > Date.now() - 120_000
+                                                                ) ? (
                                                                     <p className="text-[10px] opacity-40 italic">
                                                                         Transcrevendo…
                                                                     </p>
+                                                                ) : !autoTranscribeAudio ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => transcribeMessage(m.id)}
+                                                                        className="inline-flex items-center gap-1 rounded-md border border-black/[0.12] bg-black/[0.05] px-2 py-1 text-[10px] font-medium opacity-70 transition hover:bg-black/[0.1] hover:opacity-100 dark:border-white/[0.12] dark:bg-white/[0.05] dark:hover:bg-white/[0.1]"
+                                                                    >
+                                                                        <Mic className="h-3 w-3" />
+                                                                        Transcrever
+                                                                    </button>
                                                                 ) : null}
                                                                 {caption && (
                                                                     <p className="whitespace-pre-wrap break-words">
@@ -1864,7 +1998,7 @@ export default function InboxIndex({
                                     {selected.status !== 'closed' && canActSelected ? (
                                         <form
                                             onSubmit={send}
-                                            className="space-y-2 border-t border-ink/[0.08] bg-base/20 p-3"
+                                            className="space-y-2 border-t border-accent/10 bg-base/20 p-3"
                                         >
                                             {/* Attachment preview dialog */}
                                             <Dialog open={attachmentDialogOpen} onOpenChange={(open) => { if (!open) clearAttachment(); }}>
@@ -2212,7 +2346,7 @@ export default function InboxIndex({
                                             </div>
                                         </form>
                                     ) : selected.status === 'closed' ? (
-                                        <div className="border-t border-ink/[0.08] p-3 text-center text-sm text-ink/45">
+                                        <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
                                             Atendimento encerrado.{' '}
                                             {canAssignSelected && (
                                                 <button
@@ -2224,7 +2358,7 @@ export default function InboxIndex({
                                             )}
                                         </div>
                                     ) : (
-                                        <div className="border-t border-ink/[0.08] p-3 text-center text-sm text-ink/45">
+                                        <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
                                             {canAssignSelected || isAssignedToCurrentUser
                                                 ? 'Assuma a conversa para enviar mensagens.'
                                                 : 'Conversa atribuída a outro atendente.'}

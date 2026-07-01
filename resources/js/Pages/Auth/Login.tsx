@@ -4,6 +4,7 @@ import InputError from '@/Components/InputError';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
+import { getLoginShellPalette } from '@/lib/colorThemes';
 import { PageProps } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import {
@@ -12,7 +13,7 @@ import {
     LockKeyhole,
     Mail,
 } from 'lucide-react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useMemo } from 'react';
 
 export default function Login({
     status,
@@ -36,6 +37,20 @@ export default function Login({
         });
     };
 
+    const shell = useMemo(() => getLoginShellPalette(), []);
+    const shellStyle = useMemo(
+        () => ({
+            backgroundColor: shell['--body-bg'],
+            backgroundImage: [
+                `linear-gradient(120deg, rgb(${shell['--accent-rgb']} / 0.22), transparent 32%)`,
+                `linear-gradient(330deg, rgb(${shell['--accent-rgb']} / 0.12), transparent 36%)`,
+                `radial-gradient(circle at 50% 12%, rgb(${shell['--accent-rgb']} / 0.14), transparent 34%)`,
+                `radial-gradient(ellipse at 80% 90%, rgb(${shell['--tint-mid']} / 0.35), transparent 48%)`,
+            ].join(', '),
+        }),
+        [shell],
+    );
+
     return (
         <>
             <Head title="Entrar">
@@ -44,18 +59,23 @@ export default function Login({
                 )}
             </Head>
 
-            <main className="relative h-[100svh] overflow-hidden bg-[#08110c] text-white">
-                <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(34,197,94,0.18),transparent_30%),linear-gradient(330deg,rgba(255,184,77,0.12),transparent_34%),radial-gradient(circle_at_50%_15%,rgba(255,255,255,0.09),transparent_32%)]" />
+            <main className="relative h-[100svh] overflow-hidden" style={shellStyle}>
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:54px_54px] opacity-45" />
 
                 <div className="relative flex h-full w-full items-center justify-center px-4 py-4 sm:px-6">
                     <section className="flex h-full items-center justify-center py-3">
                         <div className="w-full max-w-[460px]">
-                            <div className="rounded-[2rem] border border-white/12 bg-[#f7fbf8] p-2 text-[#102016] shadow-[0_30px_80px_rgba(0,0,0,0.32)]">
+                            <div className="login-card rounded-[2rem] border border-white/12 bg-[#f7fbf8] p-2 shadow-[0_30px_80px_rgba(0,0,0,0.32)]">
                                 <div className="rounded-[1.55rem] border border-[#dfe8e2] bg-white p-6 shadow-inner shadow-white sm:p-7">
                                     <div className="mb-7">
                                         <div className="mb-5 flex items-center gap-3">
-                                            <span className="flex size-12 items-center justify-center rounded-2xl bg-[#102016] text-accent shadow-[0_12px_30px_rgba(16,32,22,0.22)]">
+                                            <span
+                                                className="flex size-12 items-center justify-center rounded-2xl text-accent shadow-[0_12px_30px_rgb(var(--accent-rgb)/0.28)]"
+                                                style={{
+                                                    backgroundColor: `rgb(${shell['--tint-dark']})`,
+                                                    color: `rgb(${shell['--accent-rgb']})`,
+                                                }}
+                                            >
                                                 {appIconUrl ? (
                                                     <img
                                                         src={appIconUrl}
@@ -173,7 +193,8 @@ export default function Login({
                                             type="submit"
                                             size="lg"
                                             disabled={processing}
-                                            className="h-12 w-full rounded-xl bg-[#102016] text-base font-semibold text-white shadow-[0_18px_36px_rgba(16,32,22,0.24)] hover:bg-[#183827]"
+                                            className="h-12 w-full rounded-xl text-base font-semibold text-white shadow-[0_18px_36px_rgb(var(--accent-rgb)/0.22)] hover:opacity-90"
+                                            style={{ backgroundColor: `rgb(${shell['--tint-deep']})` }}
                                         >
                                             {processing ? 'Entrando...' : 'Entrar no painel'}
                                             <ArrowRight data-icon="inline-end" />
@@ -183,7 +204,7 @@ export default function Login({
                                 </div>
                             </div>
 
-                            <p className="mt-4 text-center text-xs text-white/45">
+                            <p className="mt-4 text-center text-xs text-white/60">
                                 Ambiente protegido para equipes de atendimento.
                             </p>
                         </div>

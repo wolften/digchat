@@ -1,7 +1,9 @@
 import '../css/app.css';
+import './appearance-init';
 import './bootstrap';
 
-import { PageTransition } from '@/Components/PageTransition';
+import { preloadAppIcon } from '@/Components/AppIcon';
+import { AppearanceProvider } from '@/contexts/AppearanceContext';
 import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
@@ -17,15 +19,18 @@ createInertiaApp({
         ),
     setup({ el, App, props }) {
         const root = createRoot(el);
+        const initialIconUrl = (props.initialPage?.props as { appIconUrl?: string | null } | undefined)
+            ?.appIconUrl;
+        preloadAppIcon(initialIconUrl);
+
+        const initialColorTheme = (
+            props.initialPage?.props as { auth?: { user?: { color_theme?: string } } } | undefined
+        )?.auth?.user?.color_theme;
 
         root.render(
-            <App {...props}>
-                {({ Component, props: pageProps, key }) => (
-                    <PageTransition transitionKey={key} className="min-h-full">
-                        <Component {...pageProps} />
-                    </PageTransition>
-                )}
-            </App>,
+            <AppearanceProvider initialColorTheme={initialColorTheme}>
+                <App {...props} />
+            </AppearanceProvider>,
         );
     },
     progress: {

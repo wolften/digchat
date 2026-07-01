@@ -7,10 +7,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InternalMessage extends Model
 {
-    protected $fillable = ['user_id', 'body'];
+    protected $fillable = [
+        'internal_conversation_id',
+        'user_id',
+        'body',
+    ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function conversation(): BelongsTo
+    {
+        return $this->belongsTo(InternalConversation::class, 'internal_conversation_id');
     }
 }

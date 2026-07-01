@@ -25,6 +25,42 @@ class User extends Authenticatable
         self::ROLE_ATENDENTE,
     ];
 
+    public const COLOR_THEME_GREEN = 'green';
+    public const COLOR_THEME_BLUE = 'blue';
+    public const COLOR_THEME_RED = 'red';
+    public const COLOR_THEME_YELLOW = 'yellow';
+    public const COLOR_THEME_ORANGE = 'orange';
+    public const COLOR_THEME_PURPLE = 'purple';
+    public const COLOR_THEME_TURQUOISE = 'turquoise';
+    public const COLOR_THEME_GRAPHITE = 'graphite';
+    public const COLOR_THEME_PINK = 'pink';
+    public const COLOR_THEME_INDIGO = 'indigo';
+    public const COLOR_THEME_CORAL = 'coral';
+    public const COLOR_THEME_AMBER = 'amber';
+    public const COLOR_THEME_LIME = 'lime';
+    public const COLOR_THEME_CYAN = 'cyan';
+    public const COLOR_THEME_WINE = 'wine';
+
+    public const COLOR_THEMES = [
+        self::COLOR_THEME_GREEN,
+        self::COLOR_THEME_BLUE,
+        self::COLOR_THEME_RED,
+        self::COLOR_THEME_YELLOW,
+        self::COLOR_THEME_ORANGE,
+        self::COLOR_THEME_PURPLE,
+        self::COLOR_THEME_TURQUOISE,
+        self::COLOR_THEME_GRAPHITE,
+        self::COLOR_THEME_PINK,
+        self::COLOR_THEME_INDIGO,
+        self::COLOR_THEME_CORAL,
+        self::COLOR_THEME_AMBER,
+        self::COLOR_THEME_LIME,
+        self::COLOR_THEME_CYAN,
+        self::COLOR_THEME_WINE,
+    ];
+
+    public const COLOR_THEME_DEFAULT = self::COLOR_THEME_GREEN;
+
     /**
      * The attributes that are mass assignable.
      *
@@ -35,6 +71,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'color_theme',
         'is_active',
         'last_seen_at',
     ];

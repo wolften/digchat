@@ -42,8 +42,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Chat interno da equipe — todos os usuários autenticados.
-    Route::get('/chat-interno/messages', [InternalChatController::class, 'index'])->name('chat-interno.index');
-    Route::post('/chat-interno/messages', [InternalChatController::class, 'store'])->name('chat-interno.store');
+    Route::get('/chat-interno', [InternalChatController::class, 'index'])->name('chat-interno.index');
+    Route::get('/chat-interno/{conversation}', [InternalChatController::class, 'show'])->name('chat-interno.show');
+    Route::post('/chat-interno/direct', [InternalChatController::class, 'storeDirect'])->name('chat-interno.direct');
+    Route::post('/chat-interno/{conversation}/messages', [InternalChatController::class, 'storeMessage'])->name('chat-interno.messages.store');
+    Route::post('/chat-interno/{conversation}/read', [InternalChatController::class, 'markRead'])->name('chat-interno.read');
+    Route::post('/chat-interno/{conversation}/typing', [InternalChatController::class, 'typing'])->name('chat-interno.typing');
 
     // Anotações de contato — todos os usuários autenticados.
     Route::patch('/contacts/{contact}/notes', [ContactController::class, 'updateNotes'])->name('contacts.notes.update');
@@ -55,6 +59,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/inbox/{conversation}/assign', [InboxController::class, 'assign'])->name('inbox.assign');
     Route::post('/inbox/{conversation}/messages', [InboxController::class, 'sendMessage'])->name('inbox.messages.store');
     Route::get('/inbox/messages/{message}/media', [InboxController::class, 'media'])->name('inbox.messages.media');
+    Route::post('/inbox/messages/{message}/transcribe', [InboxController::class, 'transcribe'])->name('inbox.messages.transcribe');
     Route::post('/inbox/{conversation}/close', [InboxController::class, 'close'])->name('inbox.close');
     Route::post('/inbox/{conversation}/force-close', [InboxController::class, 'forceClose'])->name('inbox.force-close')->middleware('role:admin,gestor');
     Route::post('/inbox/{conversation}/transfer', [InboxController::class, 'transfer'])->name('inbox.transfer');
@@ -141,6 +146,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::patch('/profile/color-theme', [ProfileController::class, 'updateColorTheme'])->name('profile.color-theme');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 

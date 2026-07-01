@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Conversation;
+use App\Models\InternalConversation;
 use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -14,9 +15,25 @@ Broadcast::channel('conversations', function (User $user) {
     return $user->is_active;
 });
 
-// Canal geral de chat interno entre atendentes.
-Broadcast::channel('internal-chat', function (User $user) {
+// Lista de conversas do chat interno.
+Broadcast::channel('internal-conversations', function (User $user) {
     return $user->is_active;
+});
+
+// Thread de uma conversa interna específica.
+Broadcast::channel('internal-conversation.{conversationId}', function (User $user, int $conversationId) {
+    if (! $user->is_active) {
+        return false;
+    }
+
+    $conversation = InternalConversation::query()->find($conversationId);
+
+    return $conversation?->isParticipant($user) ?? false;
+});
+
+// Canal pessoal (notificações do chat interno).
+Broadcast::channel('user.{userId}', function (User $user, int $userId) {
+    return $user->is_active && (int) $user->id === $userId;
 });
 
 // Thread de uma conversa específica.

@@ -12,6 +12,35 @@ class SettingsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_can_save_auto_transcribe_setting(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->post('/configuracoes', [
+                'auto_transcribe_audio' => '0',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('0', AppSetting::get('auto_transcribe_audio'));
+    }
+
+    public function test_admin_can_disable_auto_transcribe_via_json_false(): void
+    {
+        AppSetting::set('auto_transcribe_audio', '1');
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->postJson('/configuracoes', [
+                'groq_api_key' => '',
+                'auto_transcribe_audio' => false,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('0', AppSetting::get('auto_transcribe_audio'));
+    }
+
     public function test_admin_can_save_auto_close_settings(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

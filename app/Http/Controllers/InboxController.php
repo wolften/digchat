@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\TranscribeAudioMessage;
 use App\Models\AppSetting;
 use App\Models\Channel;
 use App\Models\Conversation;
@@ -16,8 +17,10 @@ use App\Models\User;
 use App\Services\Survey\SurveyQuestionSender;
 use App\Services\Telegram\TelegramService;
 use App\Services\WebChat\WebChatService;
+use App\Services\Transcription\GroqTranscriptionService;
 use App\Services\WhatsApp\MessageSender;
 use App\Services\WhatsApp\WhatsAppService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -228,6 +231,26 @@ class InboxController extends Controller
         }
 
         return back();
+    }
+
+    public function transcribe(Message $message, GroqTranscriptionService $groq): JsonResponse
+    {
+        $conversation = $message->conversation()->firstOrFail();
+        abort_unless($conversation->canBeViewedBy(request()->user()), 403);
+        abort_unless($message->type === 'audio', 422, 'Apenas mensagens de áudio podem ser transcritas.');
+
+        if ($message->transcription) {
+            return response()->json([
+                'status' => 'done',
+                'transcription' => $message->transcription,
+            ]);
+        }
+
+        abort_unless($groq->isConfigured(), 422, 'Transcrição não configurada. Informe a chave Groq em Configurações.');
+
+        TranscribeAudioMessage::dispatch($message->id, $conversation->channel_id);
+
+        return response()->json(['status' => 'queued']);
     }
 
     public function media(Message $message): HttpResponse

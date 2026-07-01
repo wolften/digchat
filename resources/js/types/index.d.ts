@@ -1,10 +1,28 @@
 export type UserRole = 'admin' | 'gestor' | 'atendente';
 
+export type ColorThemeId =
+    | 'green'
+    | 'blue'
+    | 'red'
+    | 'yellow'
+    | 'orange'
+    | 'purple'
+    | 'turquoise'
+    | 'graphite'
+    | 'pink'
+    | 'indigo'
+    | 'coral'
+    | 'amber'
+    | 'lime'
+    | 'cyan'
+    | 'wine';
+
 export interface User {
     id: number;
     name: string;
     email: string;
     role: UserRole;
+    color_theme: ColorThemeId;
     is_active: boolean;
     presence?: 'online' | 'away' | 'offline' | 'inactive';
     last_seen_at?: string | null;
@@ -44,5 +62,7 @@ export type PageProps<
     appIconUrl: string | null;
     appSubtitle: string;
     appTimezone: string;
+    autoTranscribeAudio: boolean;
     inboxBadgeCount: number;
+    internalChatBadgeCount: number;
 };

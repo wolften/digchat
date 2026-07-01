@@ -1,4 +1,5 @@
 import ApplicationLogo from '@/Components/ApplicationLogo';
+import { PageTransition } from '@/Components/PageTransition';
 import { Link } from '@inertiajs/react';
 import { PropsWithChildren } from 'react';
 
@@ -23,7 +24,9 @@ export default function Guest({ children }: PropsWithChildren) {
             </div>
 
             <div className="glass-card glass-card-static mt-6 w-full overflow-hidden rounded-2xl px-6 py-5 shadow-2xl sm:max-w-md">
-                {children}
+                <PageTransition className="w-full">
+                    {children}
+                </PageTransition>
             </div>
         </div>
     );

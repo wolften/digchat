@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { PageProps } from '@/types';
 import { Head } from '@inertiajs/react';
+import UpdateAppearanceForm from './Partials/UpdateAppearanceForm';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
 
@@ -21,11 +22,15 @@ export default function Edit({
             <div className="scrollbar-thin flex-1 overflow-y-auto p-6">
                 <div className="flex flex-col gap-5">
                     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.82fr)]">
-                        <UpdateProfileInformationForm
-                            mustVerifyEmail={mustVerifyEmail}
-                            status={status}
-                            className="min-w-0"
-                        />
+                        <div className="flex min-w-0 flex-col gap-5">
+                            <UpdateProfileInformationForm
+                                mustVerifyEmail={mustVerifyEmail}
+                                status={status}
+                                className="min-w-0"
+                            />
+
+                            <UpdateAppearanceForm className="min-w-0" />
+                        </div>
 
                         <UpdatePasswordForm className="min-w-0" />
                     </div>

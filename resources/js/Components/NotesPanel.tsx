@@ -63,7 +63,7 @@ export default function NotesPanel({ contactId, initialNotes, onClose }: Props) 
                     type="button"
                     onClick={save}
                     disabled={saving}
-                    className="flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-black transition-opacity disabled:opacity-60 hover:opacity-90"
+                    className="flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-60 hover:opacity-90 dark:text-black"
                 >
                     {saving ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />

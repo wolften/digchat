@@ -4,6 +4,9 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="app-timezone" content="{{ config('app.timezone', 'America/Sao_Paulo') }}">
+        @auth
+            <meta name="user-color-theme" content="{{ auth()->user()->color_theme ?? 'green' }}">
+        @endauth
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
@@ -16,33 +19,6 @@
         @viteReactRefresh
         @vite(['resources/js/app.tsx', "resources/js/Pages/{$page['component']}.tsx"])
         @inertiaHead
-        <script>
-            (function () {
-                var stored = localStorage.getItem('digchat-theme');
-                var theme = stored === 'light' || stored === 'dark'
-                    ? stored
-                    : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-                if (theme === 'light') {
-                    var vars = {
-                        '--tint-deep': '200 240 218',
-                        '--tint-dark': '226 249 237',
-                        '--tint-mid': '140 210 174',
-                        '--c-bg': '226 249 237',
-                        '--c-ink': '3 10 6',
-                        '--c-panel': '140 210 174',
-                        '--shell-surface': 'rgba(255, 255, 255, 0.58)',
-                        '--sidebar-surface': 'rgba(255, 255, 255, 0.44)',
-                    };
-                    Object.keys(vars).forEach(function(k) {
-                        document.documentElement.style.setProperty(k, vars[k]);
-                    });
-                    document.documentElement.style.colorScheme = 'light';
-                    document.documentElement.classList.add('light');
-                } else {
-                    document.documentElement.classList.add('dark');
-                }
-            })();
-        </script>
     </head>
     <body class="font-sans antialiased">
         @inertia

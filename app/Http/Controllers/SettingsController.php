@@ -44,10 +44,19 @@ class SettingsController extends Controller
             'whatsapp_app_secret'     => ['nullable', 'string', 'max:255'],
             'whatsapp_waba_id'        => ['nullable', 'string', 'max:100'],
             'groq_api_key'            => ['nullable', 'string', 'max:255'],
+            'auto_transcribe_audio'   => ['nullable', 'boolean'],
         ]);
+
+        if ($request->exists('auto_transcribe_audio')) {
+            AppSetting::set(
+                'auto_transcribe_audio',
+                $request->boolean('auto_transcribe_audio') ? '1' : '0',
+            );
+        }
 
         // Preserve existing values for fields sent empty (don't overwrite with null unless explicitly cleared)
         $toSave = array_filter($validated, fn ($v) => $v !== null && $v !== '');
+        unset($toSave['auto_transcribe_audio']);
 
         AppSetting::setMany($toSave);
 

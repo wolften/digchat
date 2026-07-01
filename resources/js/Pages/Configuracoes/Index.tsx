@@ -197,13 +197,22 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
     const [iconPreview, setIconPreview] = useState<string | null>(appIconUrl ?? null);
     const fileRef = useRef<HTMLInputElement>(null);
 
+    const autoTranscribeAudioEnabled = !['0', 'false', 'off'].includes(
+        String(settings.auto_transcribe_audio ?? '1').toLowerCase(),
+    );
+
     /* ── Groq form ── */
     const groqForm = useForm({
         groq_api_key: settings.groq_api_key ?? '',
+        auto_transcribe_audio: autoTranscribeAudioEnabled,
     });
 
     const submitGroq = (e: FormEvent) => {
         e.preventDefault();
+        groqForm.transform((data) => ({
+            ...data,
+            auto_transcribe_audio: data.auto_transcribe_audio ? '1' : '0',
+        }));
         groqForm.post(route('configuracoes.update'), { preserveScroll: true });
     };
 
@@ -592,10 +601,29 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                         <div className="max-w-lg space-y-6">
 
                             <p className="text-xs text-ink/45">
-                                Áudios recebidos são transcritos automaticamente via Groq Whisper e exibidos abaixo do player para o atendente.
+                                Transcreva áudios recebidos via Groq Whisper. Com a transcrição automática desativada, o atendente escolhe quando transcrever cada mensagem no inbox.
                             </p>
 
                             <form onSubmit={submitGroq} className="space-y-4">
+                                <div className="flex items-center gap-3 rounded-lg border border-accent/10 bg-ink/[0.025] p-4">
+                                    <Switch
+                                        id="auto_transcribe_audio"
+                                        className="shrink-0"
+                                        checked={groqForm.data.auto_transcribe_audio}
+                                        onCheckedChange={(checked) =>
+                                            groqForm.setData('auto_transcribe_audio', checked)
+                                        }
+                                    />
+                                    <div className="space-y-1">
+                                        <Label htmlFor="auto_transcribe_audio">
+                                            Transcrever mensagens automaticamente
+                                        </Label>
+                                        <p className="text-xs text-ink/45">
+                                            Quando desativado, cada áudio exibe um botão &quot;Transcrever&quot; no inbox — economiza tokens da API Groq.
+                                        </p>
+                                    </div>
+                                </div>
+
                                 <div className="space-y-1.5">
                                     <Label htmlFor="groq_api_key">Groq API Key</Label>
                                     <SecretInput
@@ -618,7 +646,7 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                                     ) : (
                                         <Save className="h-4 w-4" />
                                     )}
-                                    Salvar chave
+                                    Salvar configurações
                                 </Button>
                             </form>
 
