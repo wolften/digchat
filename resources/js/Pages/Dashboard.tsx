@@ -4,10 +4,20 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { CHANNEL_BAR_COLORS, ChannelIcon, type ChannelType } from '@/Components/charts/ChannelIcons';
 import { HorizontalBarChart } from '@/Components/charts/HorizontalBarChart';
 import { VolumeChart } from '@/Components/charts/VolumeChart';
+import { Button } from '@/Components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Badge } from '@/Components/ui/badge';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/Components/ui/dialog';
 import { formatDuration } from '@/lib/formatDuration';
 import { cn } from '@/lib/utils';
+import { UserSummary } from '@/types';
+import { useState } from 'react';
 import {
     Select,
     SelectContent,
@@ -25,12 +35,14 @@ import {
 } from '@/Components/ui/table';
 import {
     Activity,
+    AlertTriangle,
     Award,
     BarChart2,
     Bot,
     CheckCircle2,
     Clock,
     ClipboardList,
+    ExternalLink,
     Hourglass,
     MessageSquare,
     Star,
@@ -41,11 +53,14 @@ import {
 
 // ── Types ───────────────────────────────────────────────────────────
 
-interface Stats {
+interface LiveStats {
     queued: number;
     open: number;
     bot: number;
     surveying: number;
+}
+
+interface AnalyticsStats extends LiveStats {
     closed: number;
     avg_wait_mins: number;
     avg_handling_mins: number;
@@ -76,13 +91,35 @@ interface TopAttendant {
     avg_mins: number;
 }
 
+interface LongOpenConversation {
+    id: number;
+    protocol_number: string | null;
+    contact_name: string;
+    assigned_user: UserSummary | null;
+    sector: { id: number; name: string } | null;
+    channel_type: ChannelType | null;
+    channel_name: string | null;
+    open_minutes: number;
+    opened_at: string | null;
+    last_message_at: string | null;
+}
+
+interface LongOpenAlert {
+    enabled: boolean;
+    hours: number;
+    count: number;
+    conversations: LongOpenConversation[];
+}
+
 interface Props {
-    stats: Stats;
+    canViewAnalytics: boolean;
+    stats: LiveStats & Partial<Omit<AnalyticsStats, keyof LiveStats>>;
     volumeData: { label: string; count: number }[];
     sectorStats: SectorStat[];
     channelStats: ChannelStat[];
     topAttendants: TopAttendant[];
     period: string;
+    longOpenAlert: LongOpenAlert | null;
 }
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -201,11 +238,13 @@ interface StatCardProps {
     icon: React.ReactNode;
     iconBg: string;
     borderColor?: string;
+    onClick?: () => void;
+    className?: string;
 }
 
-function StatCard({ label, value, sub, icon, iconBg, borderColor }: StatCardProps) {
-    return (
-        <Card className={borderColor}>
+function StatCard({ label, value, sub, icon, iconBg, borderColor, onClick, className }: StatCardProps) {
+    const content = (
+        <>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {label}
@@ -218,21 +257,51 @@ function StatCard({ label, value, sub, icon, iconBg, borderColor }: StatCardProp
                 <div className="text-3xl font-bold tracking-tight">{value}</div>
                 <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
             </CardContent>
-        </Card>
+        </>
     );
+
+    if (onClick) {
+        return (
+            <button
+                type="button"
+                onClick={onClick}
+                className={cn('w-full text-left transition hover:opacity-90', className)}
+            >
+                <Card className={cn(borderColor, 'cursor-pointer')}>{content}</Card>
+            </button>
+        );
+    }
+
+    return <Card className={borderColor}>{content}</Card>;
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────
 
-export default function Dashboard({ stats, volumeData, sectorStats, channelStats, topAttendants, period }: Props) {
+export default function Dashboard({
+    canViewAnalytics,
+    stats,
+    volumeData,
+    sectorStats,
+    channelStats,
+    topAttendants,
+    period,
+    longOpenAlert,
+}: Props) {
     const periodLabel = PERIOD_LABELS[period] ?? 'Hoje';
     const totalClosed = topAttendants.reduce((t, a) => t + a.closed, 0);
     const totalOpen   = topAttendants.reduce((t, a) => t + a.open, 0);
     const maxClosed   = Math.max(...topAttendants.map((a) => a.closed), 1);
     const liveTotal   = stats.queued + stats.open + stats.bot + stats.surveying;
+    const [longOpenDialogOpen, setLongOpenDialogOpen] = useState(false);
+    const showLongOpenAlert = canViewAnalytics && longOpenAlert?.enabled && longOpenAlert.count > 0;
 
     function onPeriodChange(value: string) {
         router.get('/dashboard', { period: value }, { preserveState: false });
+    }
+
+    function openLongOpenDialog() {
+        if (!longOpenAlert?.enabled) return;
+        setLongOpenDialogOpen(true);
     }
 
     return (
@@ -241,52 +310,79 @@ export default function Dashboard({ stats, volumeData, sectorStats, channelStats
 
             <div className="scrollbar-thin flex-1 overflow-y-auto p-6 space-y-6">
 
-                {/* Header: sumário ao vivo + seletor de período */}
+                {/* Header: sumário ao vivo + seletor de período (gestores/admins) */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
                         Ao vivo ·{' '}
                         <span className="font-semibold text-foreground">
                             {liveTotal} {liveTotal === 1 ? 'conversa ativa' : 'conversas ativas'}
                         </span>
-                        {stats.avg_wait_mins > 0 && (
+                        {canViewAnalytics && (stats.avg_wait_mins ?? 0) > 0 && (
                             <>
                                 {' '}· Espera média:{' '}
                                 <span
                                     className={`font-semibold ${
-                                        stats.avg_wait_mins > 30
+                                        (stats.avg_wait_mins ?? 0) > 30
                                             ? 'text-destructive'
-                                            : stats.avg_wait_mins > 10
+                                            : (stats.avg_wait_mins ?? 0) > 10
                                             ? 'text-yellow-600 dark:text-yellow-400'
                                             : 'text-foreground'
                                     }`}
                                 >
-                                    {formatDuration(stats.avg_wait_mins)}
+                                    {formatDuration(stats.avg_wait_mins ?? 0)}
                                 </span>
                             </>
                         )}
                     </p>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Período:</span>
-                        <Select value={period} onValueChange={onPeriodChange}>
-                            <SelectTrigger className="h-8 w-40 text-xs">
-                                <SelectValue placeholder="Período" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="today">Hoje</SelectItem>
-                                <SelectItem value="week">Esta semana</SelectItem>
-                                <SelectItem value="month">Este mês</SelectItem>
-                                <SelectItem value="all">Todo período</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {canViewAnalytics && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Período:</span>
+                            <Select value={period} onValueChange={onPeriodChange}>
+                                <SelectTrigger className="h-8 w-40 text-xs">
+                                    <SelectValue placeholder="Período" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="today">Hoje</SelectItem>
+                                    <SelectItem value="week">Esta semana</SelectItem>
+                                    <SelectItem value="month">Este mês</SelectItem>
+                                    <SelectItem value="all">Todo período</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                 </div>
+
+                {showLongOpenAlert && (
+                    <button
+                        type="button"
+                        onClick={openLongOpenDialog}
+                        className="flex w-full items-start gap-3 rounded-xl border border-amber-300/60 bg-amber-50/80 px-4 py-3 text-left transition hover:bg-amber-50 dark:border-amber-800/50 dark:bg-amber-950/25 dark:hover:bg-amber-950/35"
+                    >
+                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                            <AlertTriangle className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                {longOpenAlert.count}{' '}
+                                {longOpenAlert.count === 1 ? 'conversa aberta há' : 'conversas abertas há'} mais de{' '}
+                                {longOpenAlert.hours}h
+                            </p>
+                            <p className="mt-0.5 text-xs text-amber-800/75 dark:text-amber-300/75">
+                                Clique para revisar e tomar medidas nos atendimentos prolongados.
+                            </p>
+                        </div>
+                    </button>
+                )}
 
                 {/* Status ao vivo (4 cards) */}
                 <div>
                     <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">
                         Status ao vivo
                     </p>
-                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div className={cn(
+                        'grid grid-cols-2 gap-3',
+                        canViewAnalytics && longOpenAlert?.enabled ? 'lg:grid-cols-5' : 'lg:grid-cols-4',
+                    )}>
                         <StatCard
                             label="Na fila"
                             value={stats.queued}
@@ -319,9 +415,31 @@ export default function Dashboard({ stats, volumeData, sectorStats, channelStats
                             iconBg="bg-teal-50 dark:bg-teal-900/20"
                             borderColor="border-teal-200/60 dark:border-teal-900/40"
                         />
+                        {canViewAnalytics && longOpenAlert?.enabled && (
+                            <StatCard
+                                label="Abertas há muito"
+                                value={longOpenAlert.count}
+                                sub={`mais de ${longOpenAlert.hours}h em atendimento`}
+                                icon={<AlertTriangle className={cn(
+                                    'h-4 w-4',
+                                    longOpenAlert.count > 0
+                                        ? 'text-amber-600 dark:text-amber-400'
+                                        : 'text-muted-foreground',
+                                )} />}
+                                iconBg={longOpenAlert.count > 0
+                                    ? 'bg-amber-50 dark:bg-amber-900/20'
+                                    : 'bg-muted/40'}
+                                borderColor={longOpenAlert.count > 0
+                                    ? 'border-amber-200/60 dark:border-amber-900/40'
+                                    : undefined}
+                                onClick={openLongOpenDialog}
+                            />
+                        )}
                     </div>
                 </div>
 
+                {canViewAnalytics && (
+                <>
                 {/* Métricas do período (4 cards) */}
                 <div>
                     <div className="mb-3 flex items-center gap-3">
@@ -333,43 +451,43 @@ export default function Dashboard({ stats, volumeData, sectorStats, channelStats
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                         <StatCard
                             label="Encerradas"
-                            value={stats.closed}
+                            value={stats.closed ?? 0}
                             sub="atendimentos finalizados"
                             icon={<CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />}
                             iconBg="bg-green-50 dark:bg-green-900/20"
                         />
                         <StatCard
                             label="Contatos únicos"
-                            value={stats.unique_contacts}
+                            value={stats.unique_contacts ?? 0}
                             sub="clientes atendidos"
                             icon={<Users className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />}
                             iconBg="bg-indigo-50 dark:bg-indigo-900/20"
                         />
                         <StatCard
                             label="Taxa de resolução"
-                            value={stats.resolution_rate > 0 ? `${stats.resolution_rate}%` : '—'}
+                            value={(stats.resolution_rate ?? 0) > 0 ? `${stats.resolution_rate}%` : '—'}
                             sub="conversas encerradas"
                             icon={<Activity className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
                             iconBg="bg-rose-50 dark:bg-rose-900/20"
                         />
                         <StatCard
                             label="TMA"
-                            value={stats.avg_handling_mins > 0 ? formatDuration(stats.avg_handling_mins) : '—'}
+                            value={(stats.avg_handling_mins ?? 0) > 0 ? formatDuration(stats.avg_handling_mins ?? 0) : '—'}
                             sub="tempo médio de atendimento"
                             icon={<Timer className="h-4 w-4 text-orange-600 dark:text-orange-400" />}
                             iconBg="bg-orange-50 dark:bg-orange-900/20"
                         />
                         <StatCard
                             label="TME"
-                            value={stats.avg_tme_mins > 0 ? formatDuration(stats.avg_tme_mins) : '—'}
+                            value={(stats.avg_tme_mins ?? 0) > 0 ? formatDuration(stats.avg_tme_mins ?? 0) : '—'}
                             sub="tempo médio de espera na fila"
                             icon={<Hourglass className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />}
                             iconBg="bg-cyan-50 dark:bg-cyan-900/20"
                         />
                         <StatCard
                             label="CSAT médio"
-                            value={stats.avg_csat !== null ? `${stats.avg_csat}/5` : '—'}
-                            sub={stats.csat_count > 0 ? `${stats.csat_count} avaliações` : 'sem avaliações de nota'}
+                            value={stats.avg_csat != null ? `${stats.avg_csat}/5` : '—'}
+                            sub={(stats.csat_count ?? 0) > 0 ? `${stats.csat_count} avaliações` : 'sem avaliações de nota'}
                             icon={<Star className="h-4 w-4 text-amber-500 dark:text-amber-400" />}
                             iconBg="bg-amber-50 dark:bg-amber-900/20"
                         />
@@ -469,7 +587,89 @@ export default function Dashboard({ stats, volumeData, sectorStats, channelStats
                         <VolumeChart data={volumeData} />
                     </CardContent>
                 </Card>
+                </>
+                )}
             </div>
+
+            {canViewAnalytics && (
+            <Dialog open={longOpenDialogOpen} onOpenChange={setLongOpenDialogOpen}>
+                <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden p-0">
+                    <DialogHeader className="border-b px-6 py-4">
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-600" />
+                            Conversas abertas há mais de {longOpenAlert?.hours ?? 0}h
+                        </DialogTitle>
+                        <DialogDescription>
+                            Atendimentos em aberto que ultrapassaram o limite configurado. Abra cada conversa na inbox para revisar ou encerrar.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="scrollbar-thin max-h-[60vh] overflow-y-auto">
+                        {longOpenAlert && longOpenAlert.conversations.length > 0 ? (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableHead className="pl-6">Contato</TableHead>
+                                        <TableHead>Atendente</TableHead>
+                                        <TableHead>Setor</TableHead>
+                                        <TableHead>Aberta há</TableHead>
+                                        <TableHead className="pr-6 text-right">Ação</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {longOpenAlert.conversations.map((conversation) => (
+                                        <TableRow key={conversation.id}>
+                                            <TableCell className="pl-6">
+                                                <div className="font-medium">{conversation.contact_name}</div>
+                                                {conversation.protocol_number && (
+                                                    <div className="text-xs text-muted-foreground">
+                                                        #{conversation.protocol_number}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {conversation.assigned_user ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <UserAvatar
+                                                            name={conversation.assigned_user.name}
+                                                            photoUrl={conversation.assigned_user.profile_photo_url}
+                                                            size="xs"
+                                                        />
+                                                        <span className="text-sm">{conversation.assigned_user.name}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-sm text-muted-foreground">—</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-sm">
+                                                {conversation.sector?.name ?? '—'}
+                                            </TableCell>
+                                            <TableCell className="text-sm font-medium tabular-nums">
+                                                {formatDuration(conversation.open_minutes)}
+                                            </TableCell>
+                                            <TableCell className="pr-6 text-right">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => router.visit(route('inbox.show', conversation.id))}
+                                                >
+                                                    Abrir
+                                                    <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        ) : (
+                            <div className="px-6 py-10 text-center text-sm text-muted-foreground">
+                                Nenhuma conversa acima do limite no momento.
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+            )}
         </AuthenticatedLayout>
     );
 }

@@ -12,6 +12,7 @@ class Sector extends Model
         'name',
         'description',
         'is_active',
+        'sla_first_response_minutes',
         'out_of_hours_enabled',
         'out_of_hours_message',
     ];

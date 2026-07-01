@@ -19,6 +19,7 @@ class SectorController extends Controller
                 'name' => $s->name,
                 'description' => $s->description,
                 'is_active' => $s->is_active,
+                'sla_first_response_minutes' => $s->sla_first_response_minutes,
                 'users' => $s->users->map(fn (User $u) => [
                     ...$u->publicSummary(),
                     'role' => $u->role,
@@ -43,7 +44,12 @@ class SectorController extends Controller
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:255'],
             'is_active' => ['boolean'],
+            'sla_first_response_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
         ]);
+
+        if (array_key_exists('sla_first_response_minutes', $validated) && $validated['sla_first_response_minutes'] === null) {
+            unset($validated['sla_first_response_minutes']);
+        }
 
         Sector::create($validated);
 
@@ -56,7 +62,12 @@ class SectorController extends Controller
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:255'],
             'is_active' => ['boolean'],
+            'sla_first_response_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
         ]);
+
+        if (array_key_exists('sla_first_response_minutes', $validated) && $validated['sla_first_response_minutes'] === null) {
+            $validated['sla_first_response_minutes'] = null;
+        }
 
         $sector->update($validated);
 

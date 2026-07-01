@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/Components/ui/tabs';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { AlertTriangle, Building2, CheckCircle2, Clock, Eye, EyeOff, ImageIcon, Loader2, MessageCircle, MessageSquare, Mic, Pencil, PlugZap, Plus, Save, Settings2, Trash2, Upload, Wifi } from 'lucide-react';
+import { AlertTriangle, Building2, CheckCircle2, Clock, Eye, EyeOff, ImageIcon, Loader2, MessageCircle, MessageSquare, Mic, Pencil, PlugZap, Plus, Save, Settings2, Trash2, Upload, UserCheck, Wifi } from 'lucide-react';
 import { ChangeEvent, FormEvent, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -170,6 +170,29 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
         10,
     ) || 4;
 
+    const autoAssignEnabled = !['0', 'false', 'off'].includes(
+        String(settings.auto_assign_conversations_enabled ?? '0').toLowerCase(),
+    );
+    const autoAssignOnlineOnly = !['0', 'false', 'off'].includes(
+        String(settings.auto_assign_online_only ?? '1').toLowerCase(),
+    );
+    const autoAssignStrategy = settings.auto_assign_strategy === 'round_robin' ? 'round_robin' : 'least_busy';
+    const autoAssignMaxOpen = Number.parseInt(
+        String(settings.auto_assign_max_open_per_agent ?? '0'),
+        10,
+    ) || 0;
+    const slaFirstResponseMinutes = Number.parseInt(
+        String(settings.sla_first_response_minutes ?? '5'),
+        10,
+    ) || 5;
+    const openConversationAlertEnabled = !['0', 'false', 'off'].includes(
+        String(settings.open_conversation_alert_enabled ?? '1').toLowerCase(),
+    );
+    const openConversationAlertHours = Number.parseInt(
+        String(settings.open_conversation_alert_hours ?? '4'),
+        10,
+    ) || 4;
+
     const sysForm = useForm<{
         app_name: string;
         app_subtitle: string;
@@ -181,6 +204,13 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
         survey_on_close_enabled: boolean;
         survey_on_close_survey_id: string;
         ooh_notify_interval_hours: number;
+        auto_assign_conversations_enabled: boolean;
+        auto_assign_strategy: 'round_robin' | 'least_busy';
+        auto_assign_online_only: boolean;
+        auto_assign_max_open_per_agent: number;
+        sla_first_response_minutes: number;
+        open_conversation_alert_enabled: boolean;
+        open_conversation_alert_hours: number;
     }>({
         app_name: settings.app_name ?? '',
         app_subtitle: settings.app_subtitle ?? '',
@@ -192,6 +222,13 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
         survey_on_close_enabled: surveyOnCloseEnabled,
         survey_on_close_survey_id: surveyOnCloseSurveyId,
         ooh_notify_interval_hours: oohNotifyIntervalHours,
+        auto_assign_conversations_enabled: autoAssignEnabled,
+        auto_assign_strategy: autoAssignStrategy,
+        auto_assign_online_only: autoAssignOnlineOnly,
+        auto_assign_max_open_per_agent: autoAssignMaxOpen,
+        sla_first_response_minutes: slaFirstResponseMinutes,
+        open_conversation_alert_enabled: openConversationAlertEnabled,
+        open_conversation_alert_hours: openConversationAlertHours,
     });
 
     const [iconPreview, setIconPreview] = useState<string | null>(appIconUrl ?? null);
@@ -420,6 +457,184 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
                                         <p className="text-xs text-ink/45">
                                             Envia uma mensagem no WhatsApp quando o atendimento é transferido para outro setor.
                                         </p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 rounded-lg border border-accent/10 bg-ink/[0.025] p-4">
+                                    <div className="flex items-start gap-3">
+                                        <Switch
+                                            id="auto_assign_conversations_enabled"
+                                            checked={sysForm.data.auto_assign_conversations_enabled}
+                                            onCheckedChange={(checked) =>
+                                                sysForm.setData('auto_assign_conversations_enabled', checked)
+                                            }
+                                        />
+                                        <div className="space-y-1">
+                                            <Label htmlFor="auto_assign_conversations_enabled" className="flex items-center gap-2">
+                                                <UserCheck className="h-3.5 w-3.5 text-accent" />
+                                                Distribuição automática de conversas
+                                            </Label>
+                                            <p className="text-xs text-ink/45">
+                                                Atribui automaticamente conversas na fila a um atendente disponível do setor, sem precisar clicar em &quot;Assumir&quot;.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-2 sm:max-w-sm">
+                                        <Label htmlFor="auto_assign_strategy" className="text-xs">
+                                            Estratégia de distribuição
+                                        </Label>
+                                        <Select
+                                            value={sysForm.data.auto_assign_strategy}
+                                            disabled={!sysForm.data.auto_assign_conversations_enabled}
+                                            onValueChange={(v: 'round_robin' | 'least_busy') =>
+                                                sysForm.setData('auto_assign_strategy', v)
+                                            }
+                                        >
+                                            <SelectTrigger id="auto_assign_strategy" className="text-sm">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="least_busy">
+                                                    Menor carga (quem tem menos conversas abertas)
+                                                </SelectItem>
+                                                <SelectItem value="round_robin">
+                                                    Rodízio (alterna entre os atendentes)
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="flex items-start gap-3 border-t border-accent/10 pt-3">
+                                        <Switch
+                                            id="auto_assign_online_only"
+                                            checked={sysForm.data.auto_assign_online_only}
+                                            disabled={!sysForm.data.auto_assign_conversations_enabled}
+                                            onCheckedChange={(checked) =>
+                                                sysForm.setData('auto_assign_online_only', checked)
+                                            }
+                                        />
+                                        <div className="space-y-1">
+                                            <Label htmlFor="auto_assign_online_only">
+                                                Somente atendentes online
+                                            </Label>
+                                            <p className="text-xs text-ink/45">
+                                                Considera online quem teve atividade nos últimos 5 minutos (sessão ativa ou presença).
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-2 sm:max-w-xs">
+                                        <Label htmlFor="auto_assign_max_open_per_agent" className="text-xs">
+                                            Limite de conversas abertas por atendente
+                                        </Label>
+                                        <Input
+                                            id="auto_assign_max_open_per_agent"
+                                            type="number"
+                                            min={0}
+                                            max={500}
+                                            step={1}
+                                            disabled={!sysForm.data.auto_assign_conversations_enabled}
+                                            value={sysForm.data.auto_assign_max_open_per_agent}
+                                            onChange={(e) => {
+                                                const value = e.target.valueAsNumber;
+                                                sysForm.setData(
+                                                    'auto_assign_max_open_per_agent',
+                                                    Number.isFinite(value) ? Math.max(0, value) : 0,
+                                                );
+                                            }}
+                                        />
+                                        <p className="text-xs text-ink/45">
+                                            Use 0 para sem limite. Atendentes que já atingiram o limite ficam de fora da distribuição.
+                                        </p>
+                                        {sysForm.errors.auto_assign_max_open_per_agent && (
+                                            <p className="text-sm text-red-300">
+                                                {sysForm.errors.auto_assign_max_open_per_agent}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 rounded-lg border border-accent/10 bg-ink/[0.025] p-4">
+                                    <div className="flex items-center gap-2">
+                                        <Clock className="h-3.5 w-3.5 text-accent" />
+                                        <Label className="text-sm font-semibold">SLA de primeira resposta</Label>
+                                    </div>
+                                    <div className="grid gap-2 sm:max-w-xs">
+                                        <Label htmlFor="sla_first_response_minutes" className="text-xs text-ink/70">
+                                            Meta padrão (minutos)
+                                        </Label>
+                                        <Input
+                                            id="sla_first_response_minutes"
+                                            type="number"
+                                            min={1}
+                                            max={1440}
+                                            step={1}
+                                            value={sysForm.data.sla_first_response_minutes}
+                                            onChange={(e) => {
+                                                const value = e.target.valueAsNumber;
+                                                sysForm.setData(
+                                                    'sla_first_response_minutes',
+                                                    Number.isFinite(value) ? Math.max(1, Math.min(1440, value)) : 5,
+                                                );
+                                            }}
+                                        />
+                                        <p className="text-xs text-ink/45">
+                                            Conversas na fila exibem alertas visuais na inbox quando se aproximam ou ultrapassam este tempo. Setores podem ter metas próprias.
+                                        </p>
+                                        {sysForm.errors.sla_first_response_minutes && (
+                                            <p className="text-sm text-red-300">
+                                                {sysForm.errors.sla_first_response_minutes}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 rounded-lg border border-accent/10 bg-ink/[0.025] p-4">
+                                    <div className="flex items-start gap-3">
+                                        <Switch
+                                            id="open_conversation_alert_enabled"
+                                            checked={sysForm.data.open_conversation_alert_enabled}
+                                            onCheckedChange={(checked) =>
+                                                sysForm.setData('open_conversation_alert_enabled', checked)
+                                            }
+                                        />
+                                        <div className="space-y-1">
+                                            <Label htmlFor="open_conversation_alert_enabled" className="flex items-center gap-2">
+                                                <AlertTriangle className="h-3.5 w-3.5 text-accent" />
+                                                Alertar conversas abertas há muito tempo
+                                            </Label>
+                                            <p className="text-xs text-ink/45">
+                                                Admins e gestores veem no dashboard conversas em atendimento que ultrapassaram o limite configurado.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-2 sm:max-w-xs">
+                                        <Label htmlFor="open_conversation_alert_hours" className="text-xs text-ink/70">
+                                            Limite (horas)
+                                        </Label>
+                                        <Input
+                                            id="open_conversation_alert_hours"
+                                            type="number"
+                                            min={1}
+                                            max={720}
+                                            step={1}
+                                            disabled={!sysForm.data.open_conversation_alert_enabled}
+                                            value={sysForm.data.open_conversation_alert_hours}
+                                            onChange={(e) => {
+                                                const value = e.target.valueAsNumber;
+                                                sysForm.setData(
+                                                    'open_conversation_alert_hours',
+                                                    Number.isFinite(value) ? Math.max(1, Math.min(720, value)) : 4,
+                                                );
+                                            }}
+                                        />
+                                        {sysForm.errors.open_conversation_alert_hours && (
+                                            <p className="text-sm text-red-300">
+                                                {sysForm.errors.open_conversation_alert_hours}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 

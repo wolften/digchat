@@ -15,6 +15,7 @@ class HistoricoController extends Controller
 {
     public function index(Request $request): Response
     {
+        $user = $request->user();
         $dateFrom = $request->string('date_from')->toString() ?: now()->startOfMonth()->toDateString();
         $dateTo   = $request->string('date_to')->toString() ?: now()->toDateString();
         $sectorId = $request->integer('sector_id') ?: null;
@@ -22,11 +23,22 @@ class HistoricoController extends Controller
         $tagId    = $request->integer('tag_id') ?: null;
         $search   = $request->string('search')->trim()->toString() ?: null;
         $channel  = $request->string('channel')->trim()->toString() ?: null;
+        $contactId = $request->integer('contact_id') ?: null;
+        $anchorId = $request->integer('anchor') ?: null;
+
+        if (! $user->isManager()) {
+            $userId = null;
+        }
 
         $base = fn () => Conversation::query()
-            ->whereIn('status', [Conversation::STATUS_CLOSED, Conversation::STATUS_SURVEYING])
-            ->whereDate('created_at', '>=', $dateFrom)
-            ->whereDate('created_at', '<=', $dateTo)
+            ->historicoVisibleTo($user)
+            ->when($contactId, function ($q) use ($contactId) {
+                $q->where('contact_id', $contactId);
+            }, function ($q) use ($dateFrom, $dateTo) {
+                $q->whereIn('status', [Conversation::STATUS_CLOSED, Conversation::STATUS_SURVEYING])
+                    ->whereDate('created_at', '>=', $dateFrom)
+                    ->whereDate('created_at', '<=', $dateTo);
+            })
             ->when($sectorId, fn ($q) => $q->where('sector_id', $sectorId))
             ->when($userId, fn ($q) => $q->where('assigned_user_id', $userId))
             ->when($tagId, fn ($q) => $q->whereHas('contact.tags', fn ($q2) => $q2->where('tags.id', $tagId)))
@@ -41,9 +53,7 @@ class HistoricoController extends Controller
 
         $total      = $base()->count();
         $botOnly    = $base()->whereNull('assigned_user_id')->count();
-        $avgMins    = $base()->whereNotNull('last_message_at')
-            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, created_at, last_message_at)) as v')
-            ->value('v');
+        $avgMins    = $this->averageDurationMinutes($base);
         $surveyDone = $base()
             ->whereHas('surveyResponse', fn ($q) => $q->where('status', 'completed'))
             ->count();
@@ -56,14 +66,20 @@ class HistoricoController extends Controller
 
         $selected = null;
         if ($request->filled('conversation')) {
-            $selected = $this->detail((int) $request->integer('conversation'));
+            $selected = $this->detail(
+                (int) $request->integer('conversation'),
+                $user,
+                $anchorId > 0 ? $anchorId : null,
+            );
         }
 
         return Inertia::render('Historico/Index', [
             'conversations' => $conversations,
             'selected'      => $selected,
             'sectors'       => Sector::orderBy('name')->get(['id', 'name']),
-            'users'         => User::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'users'         => $user->isManager()
+                ? User::where('is_active', true)->orderBy('name')->get(['id', 'name'])
+                : collect(),
             'tags'          => Tag::where('is_active', true)->orderBy('name')->get(['id', 'name', 'color']),
             'stats'         => [
                 'total'                => $total,
@@ -72,19 +88,25 @@ class HistoricoController extends Controller
                 'survey_completed'     => $surveyDone,
             ],
             'filters' => [
-                'date_from' => $dateFrom,
-                'date_to'   => $dateTo,
-                'sector_id' => $sectorId,
-                'user_id'   => $userId,
-                'tag_id'    => $tagId,
-                'search'    => $search,
-                'channel'   => $channel,
+                'date_from'  => $dateFrom,
+                'date_to'    => $dateTo,
+                'sector_id'  => $sectorId,
+                'user_id'    => $userId,
+                'tag_id'     => $tagId,
+                'search'     => $search,
+                'channel'    => $channel,
+                'contact_id' => $contactId,
+                'anchor'     => $anchorId ?: null,
             ],
+            'can_export' => $user->isManager(),
+            'contact_view' => $contactId !== null,
         ]);
     }
 
     public function export(Request $request): HttpResponse
     {
+        abort_unless($request->user()->isManager(), 403);
+
         $dateFrom = $request->string('date_from')->toString() ?: now()->startOfMonth()->toDateString();
         $dateTo   = $request->string('date_to')->toString() ?: now()->toDateString();
         $sectorId = $request->integer('sector_id') ?: null;
@@ -144,6 +166,7 @@ class HistoricoController extends Controller
         return [
             'id'               => $conversation->id,
             'protocol_number'  => $conversation->protocol_number,
+            'status'           => $conversation->status,
             'contact'          => [
                 'id'    => $conversation->contact->id,
                 'name'  => $conversation->contact->displayName(),
@@ -163,18 +186,25 @@ class HistoricoController extends Controller
         ];
     }
 
-    /** @return array<string, mixed> */
-    private function detail(int $id): array
+    /** @return array<string, mixed>|null */
+    private function detail(int $id, User $user, ?int $anchorId = null): ?array
     {
-        $c = Conversation::with([
+        $conversation = Conversation::with([
             'contact',
             'assignedUser:id,name,profile_photo_path',
             'sector:id,name',
             'channel:id,type,name',
             'surveyResponse.answers',
-        ])->findOrFail($id);
+        ])->find($id);
 
-        $messages = $c->messages()
+        if (! $conversation) {
+            return null;
+        }
+
+        $anchor = $anchorId ? Conversation::find($anchorId) : null;
+        abort_unless($conversation->canBeViewedInHistoricoBy($user, $anchor), 403);
+
+        $messages = $conversation->messages()
             ->with('sender:id,name,profile_photo_path')
             ->orderBy('created_at')
             ->limit(300)
@@ -191,8 +221,8 @@ class HistoricoController extends Controller
             ]);
 
         $survey = null;
-        if ($c->surveyResponse) {
-            $sr = $c->surveyResponse;
+        if ($conversation->surveyResponse) {
+            $sr = $conversation->surveyResponse;
             $survey = [
                 'status'       => $sr->status,
                 'completed_at' => $sr->completed_at?->toIso8601String(),
@@ -202,27 +232,43 @@ class HistoricoController extends Controller
             ];
         }
 
-        $dur = $c->created_at && $c->last_message_at
-            ? (int) $c->created_at->diffInMinutes($c->last_message_at)
+        $dur = $conversation->created_at && $conversation->last_message_at
+            ? (int) $conversation->created_at->diffInMinutes($conversation->last_message_at)
             : null;
 
         return [
-            'id'               => $c->id,
-            'protocol_number'  => $c->protocol_number,
+            'id'               => $conversation->id,
+            'protocol_number'  => $conversation->protocol_number,
+            'status'           => $conversation->status,
             'contact'          => [
-                'id'    => $c->contact->id,
-                'name'  => $c->contact->displayName(),
-                'wa_id' => $c->contact->wa_id,
+                'id'    => $conversation->contact->id,
+                'name'  => $conversation->contact->displayName(),
+                'wa_id' => $conversation->contact->wa_id,
             ],
-            'assigned_user'    => $c->assignedUser?->publicSummary(),
-            'sector'           => $c->sector?->only(['id', 'name']),
-            'channel_type'     => $c->channel?->type,
-            'channel_name'     => $c->channel?->name,
+            'assigned_user'    => $conversation->assignedUser?->publicSummary(),
+            'sector'           => $conversation->sector?->only(['id', 'name']),
+            'channel_type'     => $conversation->channel?->type,
+            'channel_name'     => $conversation->channel?->name,
             'duration_minutes' => $dur,
-            'created_at'       => $c->created_at?->toIso8601String(),
-            'last_message_at'  => $c->last_message_at?->toIso8601String(),
+            'created_at'       => $conversation->created_at?->toIso8601String(),
+            'last_message_at'  => $conversation->last_message_at?->toIso8601String(),
             'messages'         => $messages,
             'survey'           => $survey,
         ];
+    }
+
+    private function averageDurationMinutes(\Closure $baseQuery): ?float
+    {
+        $conversations = $baseQuery()
+            ->whereNotNull('last_message_at')
+            ->get(['created_at', 'last_message_at']);
+
+        if ($conversations->isEmpty()) {
+            return null;
+        }
+
+        return $conversations->avg(
+            fn (Conversation $conversation) => $conversation->created_at->diffInMinutes($conversation->last_message_at),
+        );
     }
 }

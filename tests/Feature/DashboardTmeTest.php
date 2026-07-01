@@ -87,6 +87,7 @@ class DashboardTmeTest extends TestCase
 
         $response->assertInertia(fn ($page) => $page
             ->component('Dashboard')
+            ->where('canViewAnalytics', true)
             ->where('stats.avg_tme_mins', 15)
         );
     }
@@ -109,7 +110,23 @@ class DashboardTmeTest extends TestCase
 
         $response->assertInertia(fn ($page) => $page
             ->component('Dashboard')
+            ->where('canViewAnalytics', true)
             ->where('stats.avg_wait_mins', 20)
         );
+    }
+
+    public function test_atendente_dashboard_does_not_expose_period_analytics(): void
+    {
+        $atendente = User::factory()->create(['role' => User::ROLE_ATENDENTE]);
+
+        $this->actingAs($atendente)
+            ->get('/dashboard?period=month')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Dashboard')
+                ->where('canViewAnalytics', false)
+                ->missing('stats.avg_tme_mins')
+                ->missing('stats.avg_wait_mins')
+            );
     }
 }

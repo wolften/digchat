@@ -465,6 +465,7 @@ class ReportMetricsService
             Conversation::STATUS_QUEUED    => 'Na fila',
             Conversation::STATUS_BOT       => 'No bot',
             Conversation::STATUS_SURVEYING => 'Em pesquisa',
+            Conversation::STATUS_SNOOZED   => 'Adiada',
         ];
 
         return $this->baseQuery($filters)

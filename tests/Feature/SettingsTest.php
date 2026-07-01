@@ -58,6 +58,43 @@ class SettingsTest extends TestCase
         $this->assertSame('25', AppSetting::get('auto_close_inactive_conversations_minutes'));
     }
 
+    public function test_admin_can_save_global_sla_minutes(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->post('/configuracoes/sistema', [
+                'app_name' => 'DigChat',
+                'notify_customer_on_transfer' => '1',
+                'auto_close_inactive_conversations_minutes' => 60,
+                'sla_first_response_minutes' => 7,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('7', AppSetting::get('sla_first_response_minutes'));
+    }
+
+    public function test_admin_can_disable_auto_assign_distribution(): void
+    {
+        AppSetting::set('auto_assign_conversations_enabled', '1');
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->post('/configuracoes/sistema', [
+                'app_name' => 'DigChat',
+                'notify_customer_on_transfer' => '1',
+                'auto_close_inactive_conversations_minutes' => 60,
+                'auto_assign_conversations_enabled' => '0',
+                'auto_assign_strategy' => 'least_busy',
+                'auto_assign_online_only' => '1',
+                'auto_assign_max_open_per_agent' => 0,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('0', AppSetting::get('auto_assign_conversations_enabled'));
+    }
+
     public function test_admin_can_run_whatsapp_health_check(): void
     {
         Http::fake([

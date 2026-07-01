@@ -128,7 +128,6 @@ export default function Authenticated({
             routeName: 'historico.index',
             activePattern: 'historico.*',
             icon: History,
-            managerOnly: true,
         },
         {
             label: 'Relatórios',

@@ -72,6 +72,7 @@ interface Tag {
 interface ConvItem {
     id: number;
     protocol_number: string | null;
+    status?: string;
     contact: { id: number; name: string; wa_id: string };
     assigned_user: { id: number; name: string; profile_photo_url?: string | null } | null;
     sector: { id: number; name: string } | null;
@@ -99,6 +100,7 @@ interface Msg {
 interface Detail {
     id: number;
     protocol_number: string | null;
+    status?: string;
     contact: { id: number; name: string; wa_id: string };
     assigned_user: { id: number; name: string; profile_photo_url?: string | null } | null;
     sector: { id: number; name: string } | null;
@@ -130,6 +132,8 @@ interface Filters {
     tag_id: number | null;
     search: string | null;
     channel: string | null;
+    contact_id: number | null;
+    anchor: number | null;
 }
 
 interface Props extends PageProps {
@@ -145,9 +149,19 @@ interface Props extends PageProps {
         survey_completed: number;
     };
     filters: Filters;
+    can_export: boolean;
+    contact_view: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const STATUS_LABEL: Record<string, string> = {
+    bot: 'Automação',
+    queued: 'Na fila',
+    open: 'Em atendimento',
+    closed: 'Encerrada',
+    surveying: 'Pesquisa',
+};
 
 function initials(name: string): string {
     return name
@@ -481,7 +495,7 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                         </span>
                     ) : (
                         <Badge variant="outline" className="h-5 shrink-0 px-2 py-0 text-[10px] leading-none">
-                            Encerrado
+                            {conv.status ? (STATUS_LABEL[conv.status] ?? conv.status) : 'Encerrado'}
                         </Badge>
                     )}
 
@@ -719,6 +733,8 @@ export default function HistoricoIndex({
     tags,
     stats,
     filters,
+    can_export,
+    contact_view,
 }: Props) {
     const [localSearch, setLocalSearch] = useState(filters.search ?? '');
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -740,6 +756,8 @@ export default function HistoricoIndex({
         if (filters.tag_id) base.tag_id = filters.tag_id;
         if (filters.search) base.search = filters.search;
         if (filters.channel) base.channel = filters.channel;
+        if (filters.contact_id) base.contact_id = filters.contact_id;
+        if (filters.anchor) base.anchor = filters.anchor;
 
         const params: Record<string, string | number> = { ...base };
         for (const [k, v] of Object.entries(overrides)) {
@@ -803,7 +821,25 @@ export default function HistoricoIndex({
 
             <div className="flex h-full flex-col overflow-hidden">
 
+                {contact_view && selected && (
+                    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-accent/10 bg-accent/[0.04] px-4 py-2.5 lg:px-5">
+                        <div className="min-w-0">
+                            <p className="text-xs font-medium text-ink/45">Histórico do cliente</p>
+                            <p className="truncate text-sm font-semibold text-ink/85">{selected.contact.name}</p>
+                        </div>
+                        {filters.anchor && (
+                            <a
+                                href={route('inbox.index', { conversation: filters.anchor })}
+                                className="shrink-0 rounded-lg border border-accent/20 bg-canvas/60 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/10"
+                            >
+                                Voltar ao atendimento
+                            </a>
+                        )}
+                    </div>
+                )}
+
                 {/* ── Stats + Filters ── */}
+                {!contact_view && (
                 <div className="shrink-0 space-y-3 border-b border-accent/10 px-4 py-3.5 lg:px-5">
 
                     {/* Stats */}
@@ -901,9 +937,11 @@ export default function HistoricoIndex({
                         <div
                             className={cn(
                                 'grid gap-1',
-                                tags.length > 0
+                                tags.length > 0 && users.length > 0
                                     ? 'grid-cols-2 sm:grid-cols-4'
-                                    : 'grid-cols-2 sm:grid-cols-3',
+                                    : tags.length > 0 || users.length > 0
+                                      ? 'grid-cols-2 sm:grid-cols-3'
+                                      : 'grid-cols-2',
                             )}
                         >
                             <Select
@@ -921,20 +959,22 @@ export default function HistoricoIndex({
                                 </SelectContent>
                             </Select>
 
-                            <Select
-                                value={filters.user_id ? String(filters.user_id) : 'all'}
-                                onValueChange={(v) => go({ user_id: v === 'all' ? null : Number(v), conversation: undefined })}
-                            >
-                                <SelectTrigger className={historicoFilterTriggerClass(!!filters.user_id)}>
-                                    <SelectValue placeholder="Atendente" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Todos os atendentes</SelectItem>
-                                    {users.map((u) => (
-                                        <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {users.length > 0 && (
+                                <Select
+                                    value={filters.user_id ? String(filters.user_id) : 'all'}
+                                    onValueChange={(v) => go({ user_id: v === 'all' ? null : Number(v), conversation: undefined })}
+                                >
+                                    <SelectTrigger className={historicoFilterTriggerClass(!!filters.user_id)}>
+                                        <SelectValue placeholder="Atendente" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos os atendentes</SelectItem>
+                                        {users.map((u) => (
+                                            <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
 
                             <Select
                                 value={filters.channel ?? 'all'}
@@ -971,6 +1011,7 @@ export default function HistoricoIndex({
                         </div>
                     </div>
                 </div>
+                )}
 
                 {/* ── Content ── */}
                 <div className="flex min-h-0 flex-1 gap-0 overflow-hidden p-2 lg:gap-2 lg:p-3">
@@ -986,16 +1027,18 @@ export default function HistoricoIndex({
                                     {conversations.total === 1 ? 'atendimento' : 'atendimentos'}
                                 </span>
                             </span>
-                            <a href={exportUrl} download className="shrink-0">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 gap-1.5 rounded-lg border-accent/15 bg-canvas/50 px-2.5 text-[10px] font-medium text-ink/60 shadow-none hover:bg-accent/10 hover:text-accent"
-                                >
-                                    <Download className="h-3 w-3" />
-                                    Exportar
-                                </Button>
-                            </a>
+                            {can_export && (
+                                <a href={exportUrl} download className="shrink-0">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 gap-1.5 rounded-lg border-accent/15 bg-canvas/50 px-2.5 text-[10px] font-medium text-ink/60 shadow-none hover:bg-accent/10 hover:text-accent"
+                                    >
+                                        <Download className="h-3 w-3" />
+                                        Exportar
+                                    </Button>
+                                </a>
+                            )}
                         </div>
 
                         {conversations.data.length === 0 ? (

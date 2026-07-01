@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-type NotificationPayload = {
+type MessageNotificationPayload = {
     message: {
         id: number;
         conversation_id: number;
@@ -14,6 +14,15 @@ type NotificationPayload = {
     };
     contact: {
         name: string | null;
+    };
+};
+
+type ConversationUpdatedPayload = {
+    conversation: {
+        id: number;
+        status: string;
+        assigned_user_id: number | null;
+        snooze_wake_reason?: string | null;
     };
 };
 
@@ -52,38 +61,63 @@ export function useNotifications(currentUserId: number) {
 
         const channel = echo.private('conversations');
 
-        const handler = (data: NotificationPayload) => {
-            if (data.message.direction !== 'in') return;
-            if (!['open', 'surveying'].includes(data.conversation.status)) return;
-            if (data.conversation.assigned_user_id !== currentUserId) return;
+        const notify = (title: string, body: string, tag: string, href = '/inbox') => {
             if (permissionRef.current !== 'granted') return;
 
-            // Notify when browser is hidden OR user navigated away from inbox
             const onInbox = window.location.pathname.startsWith('/inbox');
             if (!document.hidden && onInbox) return;
-
-            const title = data.contact.name ?? 'Nova mensagem';
-            const body = messagePreview(data.message.type, data.message.body);
 
             const options: NotificationOptions & { renotify?: boolean } = {
                 body,
                 icon: '/favicon.ico',
-                tag: `conv-${data.message.conversation_id}`,
+                tag,
                 renotify: true,
             };
             const notification = new Notification(title, options);
 
             notification.onclick = () => {
                 window.focus();
-                window.location.href = '/inbox';
+                window.location.href = href;
                 notification.close();
             };
         };
 
-        channel.listen('.message.created', handler);
+        const onMessageCreated = (data: MessageNotificationPayload) => {
+            if (data.message.direction !== 'in') return;
+            if (!['open', 'surveying'].includes(data.conversation.status)) return;
+            if (data.conversation.assigned_user_id !== currentUserId) return;
+
+            notify(
+                data.contact.name ?? 'Nova mensagem',
+                messagePreview(data.message.type, data.message.body),
+                `conv-${data.message.conversation_id}`,
+            );
+        };
+
+        const onConversationUpdated = (data: ConversationUpdatedPayload) => {
+            const conversation = data.conversation;
+            if (conversation.assigned_user_id !== currentUserId) return;
+            if (conversation.status !== 'open') return;
+            if (!conversation.snooze_wake_reason) return;
+
+            const body = conversation.snooze_wake_reason === 'customer_message'
+                ? 'O cliente enviou uma nova mensagem.'
+                : 'O lembrete de retorno expirou.';
+
+            notify(
+                'Conversa retomada',
+                body,
+                `conv-snooze-${conversation.id}`,
+                `/inbox/${conversation.id}`,
+            );
+        };
+
+        channel.listen('.message.created', onMessageCreated);
+        channel.listen('.conversation.updated', onConversationUpdated);
 
         return () => {
-            channel.stopListening('.message.created', handler);
+            channel.stopListening('.message.created', onMessageCreated);
+            channel.stopListening('.conversation.updated', onConversationUpdated);
         };
     }, [currentUserId]);
 }

@@ -11,6 +11,7 @@ use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
+use App\Services\Conversation\ConversationSnoozeService;
 use App\Services\Flow\FlowEngine;
 use App\Services\OutOfHoursGate;
 use App\Services\Survey\SurveyRunner;
@@ -141,6 +142,8 @@ class ProcessInboundMessage implements ShouldQueue
         $conversation->last_message_at = now();
         $conversation->save();
 
+        $conversation = app(ConversationSnoozeService::class)->wakeOnInboundIfNeeded($conversation);
+
         $whatsApp->markAsRead($waMessageId);
 
         if ($conversation->status === Conversation::STATUS_SURVEYING) {
@@ -166,7 +169,7 @@ class ProcessInboundMessage implements ShouldQueue
         }
 
         $conversation = $contact->conversations()
-            ->active()
+            ->session()
             ->orderByDesc('last_message_at')
             ->orderByDesc('id')
             ->first();

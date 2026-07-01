@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\SurveyAnswer;
+use App\Services\Conversation\LongOpenConversationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -11,8 +12,18 @@ use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
+    public function __construct(private LongOpenConversationService $longOpen)
+    {
+    }
+
     public function index(Request $request)
     {
+        $user = $request->user();
+
+        if (! $user?->isManager()) {
+            return $this->attendantDashboard();
+        }
+
         $period = $request->query('period', 'today');
 
         $from = match ($period) {
@@ -147,7 +158,15 @@ class DashboardController extends Controller
             'avg_mins' => (int) $row->avg_mins,
         ]);
 
+        $longOpenAlert = [
+            'enabled' => $this->longOpen->isEnabled(),
+            'hours' => $this->longOpen->thresholdHours(),
+            'count' => $this->longOpen->count(),
+            'conversations' => $this->longOpen->list(),
+        ];
+
         return Inertia::render('Dashboard', [
+            'canViewAnalytics' => true,
             'stats' => [
                 'queued'            => $queuedCount,
                 'open'              => $openCount,
@@ -167,6 +186,26 @@ class DashboardController extends Controller
             'channelStats'  => $channelStats,
             'topAttendants' => $topAttendants,
             'period'        => $period,
+            'longOpenAlert' => $longOpenAlert,
+        ]);
+    }
+
+    private function attendantDashboard()
+    {
+        return Inertia::render('Dashboard', [
+            'canViewAnalytics' => false,
+            'stats' => [
+                'queued'    => Conversation::where('status', Conversation::STATUS_QUEUED)->count(),
+                'open'      => Conversation::where('status', Conversation::STATUS_OPEN)->count(),
+                'bot'       => Conversation::where('status', Conversation::STATUS_BOT)->count(),
+                'surveying' => Conversation::where('status', Conversation::STATUS_SURVEYING)->count(),
+            ],
+            'volumeData'    => [],
+            'sectorStats'   => [],
+            'channelStats'  => [],
+            'topAttendants' => [],
+            'period'        => 'today',
+            'longOpenAlert' => null,
         ]);
     }
 

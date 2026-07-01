@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\TranscribeAudioMessage;
 use App\Models\AppSetting;
 use App\Models\Channel;
+use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\IntegrationConfig;
 use App\Models\Message;
@@ -14,6 +15,10 @@ use App\Models\Tag;
 use App\Models\Survey;
 use App\Models\SurveyResponse;
 use App\Models\User;
+use App\Events\ConversationViewing;
+use App\Services\Conversation\ConversationSlaService;
+use App\Services\Conversation\ConversationSnoozeService;
+use App\Services\Conversation\ConversationViewingService;
 use App\Services\Survey\SurveyQuestionSender;
 use App\Services\Telegram\TelegramService;
 use App\Services\WebChat\WebChatService;
@@ -25,6 +30,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -32,21 +38,42 @@ use Inertia\Response;
 
 class InboxController extends Controller
 {
+    public function __construct(
+        private ConversationSlaService $sla,
+        private ConversationViewingService $viewing,
+        private ConversationSnoozeService $snooze,
+    ) {
+    }
+
     public function index(Request $request): Response|RedirectResponse
     {
-        $filter = $request->string('filter', 'all')->toString();
+        $user = $request->user();
+        $defaultFilter = $this->defaultInboxFilter($user);
+        $filter = $request->string('filter', $defaultFilter)->toString();
         $sectorId = $request->integer('sector_id') ?: null;
         $filterUserId = $request->integer('user_id') ?: null;
         $tagId = $request->integer('tag_id') ?: null;
         $sort = in_array($request->string('sort')->toString(), ['oldest']) ? 'oldest' : 'newest';
-        $user = $request->user();
         $userId = $user->id;
+
+        if (! $user->isManager() && $filter === 'all') {
+            return redirect()->route('inbox.index', $this->inboxIndexParams(
+                'mine',
+                $sectorId,
+                $filterUserId,
+                $tagId,
+                $sort,
+                $defaultFilter,
+            ));
+        }
 
         $conversations = Conversation::query()
             ->with(['contact.tags:id,name,color', 'assignedUser:id,name,profile_photo_path', 'sector:id,name', 'channel:id,name,type'])
             ->where('status', '!=', Conversation::STATUS_CLOSED)
             ->visibleTo($user)
-            ->when($filter === 'mine', fn ($q) => $q->where('assigned_user_id', $userId))
+            ->when($filter === 'snoozed', fn ($q) => $q->where('status', Conversation::STATUS_SNOOZED))
+            ->when($filter !== 'snoozed', fn ($q) => $q->where('status', '!=', Conversation::STATUS_SNOOZED))
+            ->when($filter === 'mine', fn ($q) => $q->where('assigned_user_id', $userId)->where('status', Conversation::STATUS_OPEN))
             ->when($filter === 'bot', fn ($q) => $q->where('status', Conversation::STATUS_BOT))
             ->when($filter === 'queued', fn ($q) => $q->where('status', Conversation::STATUS_QUEUED))
             ->when($filter === 'open', fn ($q) => $q->where('status', Conversation::STATUS_OPEN))
@@ -62,24 +89,14 @@ class InboxController extends Controller
         if ($request->filled('conversation')) {
             $selected = $this->loadConversation((int) $request->integer('conversation'), $user);
             if ($selected === null) {
-                $params = [];
-                if ($filter !== 'all') {
-                    $params['filter'] = $filter;
-                }
-                if ($sectorId !== null) {
-                    $params['sector_id'] = $sectorId;
-                }
-                if ($filterUserId !== null) {
-                    $params['user_id'] = $filterUserId;
-                }
-                if ($tagId !== null) {
-                    $params['tag_id'] = $tagId;
-                }
-                if ($sort !== 'newest') {
-                    $params['sort'] = $sort;
-                }
-
-                return redirect()->route('inbox.index', $params);
+                return redirect()->route('inbox.index', $this->inboxIndexParams(
+                    $filter,
+                    $sectorId,
+                    $filterUserId,
+                    $tagId,
+                    $sort,
+                    $defaultFilter,
+                ));
             }
         }
 
@@ -108,6 +125,10 @@ class InboxController extends Controller
                     ->where('status', Conversation::STATUS_QUEUED)->count(),
                 'mine' => Conversation::where('assigned_user_id', $userId)
                     ->where('status', Conversation::STATUS_OPEN)->count(),
+                'snoozed' => Conversation::query()->visibleTo($user)
+                    ->where('status', Conversation::STATUS_SNOOZED)
+                    ->when(! $user->isManager(), fn ($q) => $q->where('assigned_user_id', $userId))
+                    ->count(),
             ],
             'auto_close_enabled' => AppSetting::bool('auto_close_inactive_conversations_enabled'),
             'auto_close_minutes' => max(1, (int) AppSetting::get('auto_close_inactive_conversations_minutes', 60)),
@@ -233,6 +254,75 @@ class InboxController extends Controller
         return back();
     }
 
+    public function contactConversationHistory(Contact $contact, Conversation $conversation): JsonResponse
+    {
+        abort_unless($conversation->contact_id === $contact->id, 404);
+
+        $anchorId = (int) request()->integer('anchor');
+        abort_unless($anchorId > 0, 422, 'Informe a conversa de referência.');
+
+        $anchor = Conversation::findOrFail($anchorId);
+        abort_unless($anchor->contact_id === $contact->id, 404);
+        abort_unless($anchor->canBeViewedBy(request()->user()), 403);
+
+        $conversation->load([
+            'assignedUser:id,name,profile_photo_path',
+            'sector:id,name',
+            'channel:id,type,name',
+            'surveyResponse.answers',
+        ]);
+
+        $messages = $conversation->messages()
+            ->with('sender:id,name,profile_photo_path')
+            ->orderBy('created_at')
+            ->limit(300)
+            ->get()
+            ->map(fn ($m) => [
+                'id' => $m->id,
+                'direction' => $m->direction,
+                'type' => $m->type,
+                'body' => $m->body,
+                'media_url' => in_array($m->type, ['image', 'audio', 'video', 'document'], true)
+                    ? route('inbox.messages.media', $m)
+                    : null,
+                'transcription' => $m->transcription,
+                'status' => $m->status,
+                'sender' => $m->sender?->publicSummary(),
+                'created_at' => $m->created_at?->toIso8601String(),
+            ]);
+
+        $survey = null;
+        if ($conversation->surveyResponse) {
+            $sr = $conversation->surveyResponse;
+            $survey = [
+                'status' => $sr->status,
+                'completed_at' => $sr->completed_at?->toIso8601String(),
+                'answers' => $sr->answers->map(fn ($a) => [
+                    'option_label' => $a->option_label,
+                ])->values(),
+            ];
+        }
+
+        $dur = $conversation->created_at && $conversation->last_message_at
+            ? (int) $conversation->created_at->diffInMinutes($conversation->last_message_at)
+            : null;
+
+        return response()->json([
+            'id' => $conversation->id,
+            'protocol_number' => $conversation->protocol_number,
+            'status' => $conversation->status,
+            'channel_type' => $conversation->channel?->type,
+            'channel_name' => $conversation->channel?->name,
+            'assigned_user' => $conversation->assignedUser?->publicSummary(),
+            'sector' => $conversation->sector?->only(['id', 'name']),
+            'duration_minutes' => $dur,
+            'created_at' => $conversation->created_at?->toIso8601String(),
+            'last_message_at' => $conversation->last_message_at?->toIso8601String(),
+            'messages' => $messages,
+            'survey' => $survey,
+        ]);
+    }
+
     public function transcribe(Message $message, GroqTranscriptionService $groq): JsonResponse
     {
         $conversation = $message->conversation()->firstOrFail();
@@ -330,6 +420,68 @@ class InboxController extends Controller
         ]);
     }
 
+    public function viewing(Request $request, Conversation $conversation): JsonResponse
+    {
+        abort_unless($conversation->canBeViewedBy($request->user()), 403);
+
+        $data = $request->validate(['viewing' => ['required', 'boolean']]);
+        $user = $request->user();
+
+        $key = sprintf('inbox-viewing:%d:%d', $user->id, $conversation->id);
+
+        if (RateLimiter::tooManyAttempts($key, 60)) {
+            return response()->json([
+                'ok' => true,
+                'viewers' => $this->viewing->viewersFor($conversation, $user),
+            ]);
+        }
+
+        RateLimiter::hit($key, 60);
+
+        if ($data['viewing']) {
+            $this->viewing->markViewing($conversation, $user);
+        } else {
+            $this->viewing->markNotViewing($conversation, $user);
+        }
+
+        $viewers = $this->viewing->viewersFor($conversation);
+
+        ConversationViewing::dispatch($conversation, $viewers);
+
+        return response()->json([
+            'ok' => true,
+            'viewers' => $this->viewing->viewersFor($conversation, $user),
+        ]);
+    }
+
+    public function snooze(Request $request, Conversation $conversation): RedirectResponse
+    {
+        abort_unless($conversation->canBeSnoozedBy($request->user()), 403);
+
+        $validated = $request->validate([
+            'snoozed_until' => ['required', 'date', 'after:'.now()->addMinutes(4)->toDateTimeString()],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $this->snooze->snooze(
+            $conversation,
+            $request->user(),
+            \Illuminate\Support\Carbon::parse($validated['snoozed_until']),
+            $validated['note'] ?? null,
+        );
+
+        return back()->with('success', 'Lembrete de retorno agendado.');
+    }
+
+    public function wake(Request $request, Conversation $conversation): RedirectResponse
+    {
+        abort_unless($conversation->canBeWokenBy($request->user()), 403);
+
+        $this->snooze->wake($conversation);
+
+        return back()->with('success', 'Conversa retomada.');
+    }
+
     public function transfer(Request $request, Conversation $conversation): RedirectResponse
     {
         $sender = $this->senderFor($conversation);
@@ -338,6 +490,8 @@ class InboxController extends Controller
             403,
             'Sem permissão para transferir esta conversa.',
         );
+
+        $this->snooze->clearSnoozeFields($conversation);
 
         $validated = $request->validate([
             'sector_id' => ['nullable', 'exists:sectors,id'],
@@ -502,6 +656,10 @@ class InboxController extends Controller
             'sector' => $conversation->sector?->only(['id', 'name']),
             'tags' => $conversation->contact->tags->map->only(['id', 'name', 'color'])->values()->all(),
             'can_transfer' => $conversation->canBeTransferredBy($user),
+            'can_snooze' => $conversation->canBeSnoozedBy($user),
+            'can_wake' => $conversation->canBeWokenBy($user),
+            'snoozed_until' => $conversation->snoozed_until?->toIso8601String(),
+            'snooze_note' => $conversation->snooze_note,
             'contact' => [
                 'id' => $conversation->contact->id,
                 'name' => $conversation->contact->displayName(),
@@ -515,6 +673,7 @@ class InboxController extends Controller
             'last_message_direction' => $last?->direction,
             'last_message_status' => $last?->direction === 'out' ? $last?->status : null,
             'unread_count' => $unreadCount,
+            'sla' => $this->sla->evaluate($conversation),
         ];
     }
 
@@ -565,6 +724,10 @@ class InboxController extends Controller
             'can_assign' => $conversation->canBeAssignedBy($user),
             'can_transfer' => $conversation->canBeTransferredBy($user),
             'can_force_close' => $user->isManager(),
+            'can_snooze' => $conversation->canBeSnoozedBy($user),
+            'can_wake' => $conversation->canBeWokenBy($user),
+            'snoozed_until' => $conversation->snoozed_until?->toIso8601String(),
+            'snooze_note' => $conversation->snooze_note,
             'last_message_at' => $conversation->last_message_at?->toIso8601String(),
             'contact' => [
                 'id'                   => $conversation->contact->id,
@@ -575,6 +738,122 @@ class InboxController extends Controller
                 'notes'                => $conversation->contact->notes,
             ],
             'messages' => $messages,
+            'contact_history' => $this->contactHistoryFor($conversation->contact, $conversation->id),
+            'sla' => $this->sla->evaluate($conversation),
         ];
+    }
+
+    /**
+     * @return array{total: int, items: list<array<string, mixed>>}
+     */
+    private function contactHistoryFor(Contact $contact, int $currentConversationId): array
+    {
+        $items = Conversation::query()
+            ->where('contact_id', $contact->id)
+            ->whereKeyNot($currentConversationId)
+            ->with([
+                'assignedUser:id,name,profile_photo_path',
+                'sector:id,name',
+                'channel:id,type,name',
+                'surveyResponse.answers.question',
+                'messages' => fn ($q) => $q->latest()->limit(1),
+            ])
+            ->withCount('messages')
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get()
+            ->map(fn (Conversation $c) => $this->summarizeContactHistoryItem($c, $currentConversationId))
+            ->values()
+            ->all();
+
+        $total = Conversation::where('contact_id', $contact->id)
+            ->whereKeyNot($currentConversationId)
+            ->count();
+
+        return [
+            'total' => $total,
+            'items' => $items,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function summarizeContactHistoryItem(Conversation $conversation, int $currentConversationId): array
+    {
+        $dur = $conversation->created_at && $conversation->last_message_at
+            ? (int) $conversation->created_at->diffInMinutes($conversation->last_message_at)
+            : null;
+
+        $csatScore = null;
+        $surveyCompleted = $conversation->surveyResponse?->isCompleted() ?? false;
+
+        if ($surveyCompleted && $conversation->surveyResponse) {
+            $ratingAnswer = $conversation->surveyResponse->answers
+                ->first(fn ($a) => $a->question?->is_rating);
+
+            if ($ratingAnswer && is_numeric($ratingAnswer->option_label)) {
+                $csatScore = (int) $ratingAnswer->option_label;
+            } elseif (is_numeric($conversation->surveyResponse->answers->first()?->option_label)) {
+                $csatScore = (int) $conversation->surveyResponse->answers->first()->option_label;
+            }
+        }
+
+        $lastMessage = $conversation->messages->first();
+
+        return [
+            'id' => $conversation->id,
+            'protocol_number' => $conversation->protocol_number,
+            'status' => $conversation->status,
+            'is_current' => $conversation->id === $currentConversationId,
+            'channel_type' => $conversation->channel?->type,
+            'channel_name' => $conversation->channel?->name,
+            'assigned_user' => $conversation->assignedUser?->publicSummary(),
+            'sector' => $conversation->sector?->only(['id', 'name']),
+            'bot_only' => $conversation->assigned_user_id === null,
+            'duration_minutes' => $dur,
+            'csat_score' => $csatScore,
+            'survey_completed' => $surveyCompleted,
+            'message_count' => $conversation->messages_count,
+            'created_at' => $conversation->created_at?->toIso8601String(),
+            'last_message_at' => $conversation->last_message_at?->toIso8601String(),
+            'last_message_preview' => $lastMessage?->body,
+        ];
+    }
+
+    private function defaultInboxFilter(User $user): string
+    {
+        return $user->isManager() ? 'all' : 'mine';
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function inboxIndexParams(
+        string $filter,
+        ?int $sectorId,
+        ?int $filterUserId,
+        ?int $tagId,
+        string $sort,
+        ?string $defaultFilter = null,
+    ): array {
+        $defaultFilter ??= 'all';
+        $params = [];
+
+        if ($filter !== $defaultFilter) {
+            $params['filter'] = $filter;
+        }
+        if ($sectorId !== null) {
+            $params['sector_id'] = $sectorId;
+        }
+        if ($filterUserId !== null) {
+            $params['user_id'] = $filterUserId;
+        }
+        if ($tagId !== null) {
+            $params['tag_id'] = $tagId;
+        }
+        if ($sort !== 'newest') {
+            $params['sort'] = $sort;
+        }
+
+        return $params;
     }
 }

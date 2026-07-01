@@ -32,6 +32,7 @@ interface Sector {
     name: string;
     description: string | null;
     is_active: boolean;
+    sla_first_response_minutes: number | null;
     users: Attendant[];
 }
 
@@ -53,7 +54,12 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
         setSectors(initialSectors);
     }, [initialSectors]);
 
-    const form = useForm({ name: '', description: '', is_active: true });
+    const form = useForm({
+        name: '',
+        description: '',
+        is_active: true,
+        sla_first_response_minutes: '' as string | number,
+    });
 
     const filtered = attendants.filter((a) =>
         a.name.toLowerCase().includes(search.toLowerCase()),
@@ -127,6 +133,7 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
             name: sector.name,
             description: sector.description ?? '',
             is_active: sector.is_active,
+            sla_first_response_minutes: sector.sla_first_response_minutes ?? '',
         });
         setSectorDialog(true);
     };
@@ -140,6 +147,13 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                 form.reset();
             },
         };
+        form.transform((data) => ({
+            ...data,
+            sla_first_response_minutes:
+                data.sla_first_response_minutes === '' || data.sla_first_response_minutes === null
+                    ? null
+                    : Number(data.sla_first_response_minutes),
+        }));
         editing
             ? form.put(route('setores.update', editing.id), opts)
             : form.post(route('setores.store'), opts);
@@ -208,6 +222,12 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                                                         {sector.description}
                                                     </p>
                                                 )}
+                                                <p className="mt-1 text-[10px] font-medium text-ink/45">
+                                                    SLA 1ª resposta:{' '}
+                                                    {sector.sla_first_response_minutes
+                                                        ? `${sector.sla_first_response_minutes} min`
+                                                        : 'padrão do sistema'}
+                                                </p>
                                             </div>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -370,6 +390,29 @@ export default function SetoresIndex({ sectors: initialSectors, attendants }: Pr
                                     }
                                     placeholder="Opcional"
                                 />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label htmlFor="sector-sla">SLA da 1ª resposta (minutos)</Label>
+                                <Input
+                                    id="sector-sla"
+                                    type="number"
+                                    min={1}
+                                    max={1440}
+                                    value={form.data.sla_first_response_minutes}
+                                    onChange={(e) =>
+                                        form.setData('sla_first_response_minutes', e.target.value)
+                                    }
+                                    placeholder="Padrão do sistema (ex.: 5)"
+                                />
+                                <p className="text-xs text-ink/45">
+                                    Tempo máximo na fila até o primeiro atendimento. Deixe vazio para usar o padrão global.
+                                </p>
+                                {form.errors.sla_first_response_minutes && (
+                                    <p className="text-xs text-red-500">
+                                        {form.errors.sla_first_response_minutes}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="flex items-center gap-3">

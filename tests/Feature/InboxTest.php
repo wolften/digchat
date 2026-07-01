@@ -48,7 +48,29 @@ class InboxTest extends TestCase
     {
         $atendente = User::factory()->create(['role' => User::ROLE_ATENDENTE]);
 
-        $this->actingAs($atendente)->get('/inbox')->assertOk();
+        $this->actingAs($atendente)
+            ->get('/inbox')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('filter', 'mine'));
+    }
+
+    public function test_atendente_is_redirected_from_all_filter_to_mine(): void
+    {
+        $atendente = User::factory()->create(['role' => User::ROLE_ATENDENTE]);
+
+        $this->actingAs($atendente)
+            ->get('/inbox?filter=all')
+            ->assertRedirect(route('inbox.index'));
+    }
+
+    public function test_manager_defaults_to_all_filter(): void
+    {
+        $gestor = User::factory()->create(['role' => User::ROLE_GESTOR]);
+
+        $this->actingAs($gestor)
+            ->get('/inbox')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('filter', 'all'));
     }
 
     public function test_agent_can_assume_a_conversation(): void
@@ -397,5 +419,107 @@ class InboxTest extends TestCase
     public function test_guests_cannot_access_inbox(): void
     {
         $this->get('/inbox')->assertRedirect('/login');
+    }
+
+    public function test_inbox_includes_contact_history_for_selected_conversation(): void
+    {
+        $atendente = User::factory()->create(['role' => User::ROLE_ATENDENTE]);
+        $contact = Contact::create([
+            'wa_id' => '5547999887766',
+            'profile_name' => 'Cliente Histórico',
+        ]);
+
+        $closed = $contact->conversations()->create([
+            'status' => Conversation::STATUS_CLOSED,
+            'assigned_user_id' => $atendente->id,
+            'last_message_at' => now()->subDay(),
+            'created_at' => now()->subDay(),
+        ]);
+        $closed->updateQuietly(['protocol_number' => '00000042']);
+
+        $closed->messages()->create([
+            'direction' => Message::DIRECTION_IN,
+            'type' => 'text',
+            'body' => 'Problema anterior',
+            'status' => 'received',
+        ]);
+
+        $current = $contact->conversations()->create([
+            'status' => Conversation::STATUS_OPEN,
+            'assigned_user_id' => $atendente->id,
+            'last_message_at' => now(),
+        ]);
+
+        $response = $this->actingAs($atendente)->get("/inbox?conversation={$current->id}");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->component('Inbox/Index')
+            ->where('selected.contact_history.total', 1)
+            ->has('selected.contact_history.items', 1)
+            ->where('selected.id', $current->id)
+            ->where('selected.contact_history.items.0.id', $closed->id)
+            ->where('selected.contact_history.items.0.last_message_preview', 'Problema anterior')
+        );
+    }
+
+    public function test_agent_can_load_past_contact_conversation_history(): void
+    {
+        $atendente = User::factory()->create(['role' => User::ROLE_ATENDENTE]);
+        $contact = Contact::create([
+            'wa_id' => '5547999881122',
+            'profile_name' => 'Cliente Detalhe',
+        ]);
+
+        $past = $contact->conversations()->create([
+            'status' => Conversation::STATUS_CLOSED,
+            'assigned_user_id' => $atendente->id,
+            'last_message_at' => now()->subHours(3),
+        ]);
+        $past->messages()->create([
+            'direction' => Message::DIRECTION_OUT,
+            'type' => 'text',
+            'body' => 'Atendimento encerrado',
+            'status' => 'sent',
+            'sender_user_id' => $atendente->id,
+        ]);
+
+        $current = $contact->conversations()->create([
+            'status' => Conversation::STATUS_OPEN,
+            'assigned_user_id' => $atendente->id,
+            'last_message_at' => now(),
+        ]);
+
+        $this->actingAs($atendente)
+            ->getJson("/contacts/{$contact->id}/conversations/{$past->id}/history?anchor={$current->id}")
+            ->assertOk()
+            ->assertJsonPath('id', $past->id)
+            ->assertJsonPath('messages.0.body', 'Atendimento encerrado');
+    }
+
+    public function test_agent_cannot_load_contact_history_without_access_to_anchor_conversation(): void
+    {
+        $atendente = User::factory()->create(['role' => User::ROLE_ATENDENTE]);
+        $otherAtendente = User::factory()->create(['role' => User::ROLE_ATENDENTE]);
+        $contact = Contact::create([
+            'wa_id' => '5547999883344',
+            'profile_name' => 'Cliente Protegido',
+        ]);
+
+        $past = $contact->conversations()->create([
+            'status' => Conversation::STATUS_CLOSED,
+            'assigned_user_id' => $atendente->id,
+            'last_message_at' => now()->subDay(),
+        ]);
+
+        $current = $contact->conversations()->create([
+            'status' => Conversation::STATUS_OPEN,
+            'assigned_user_id' => $otherAtendente->id,
+            'last_message_at' => now(),
+        ]);
+
+        $this->actingAs($atendente)
+            ->getJson("/contacts/{$contact->id}/conversations/{$past->id}/history?anchor={$current->id}")
+            ->assertForbidden();
     }
 }

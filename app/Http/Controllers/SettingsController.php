@@ -111,6 +111,13 @@ class SettingsController extends Controller
             'survey_on_close_survey_id' => ['nullable', 'integer', 'exists:surveys,id'],
             'survey_on_inactivity_close_enabled' => ['nullable', 'boolean'],
             'ooh_notify_interval_hours'          => ['nullable', 'integer', 'min:1', 'max:72'],
+            'auto_assign_conversations_enabled'  => ['nullable', 'boolean'],
+            'auto_assign_strategy'               => ['nullable', 'string', 'in:round_robin,least_busy'],
+            'auto_assign_online_only'            => ['nullable', 'boolean'],
+            'auto_assign_max_open_per_agent'     => ['nullable', 'integer', 'min:0', 'max:500'],
+            'sla_first_response_minutes'         => ['nullable', 'integer', 'min:1', 'max:1440'],
+            'open_conversation_alert_enabled'    => ['nullable', 'boolean'],
+            'open_conversation_alert_hours'      => ['nullable', 'integer', 'min:1', 'max:720'],
         ]);
 
         if ($request->filled('app_name')) {
@@ -152,6 +159,45 @@ class SettingsController extends Controller
         $intervalHours = $request->integer('ooh_notify_interval_hours');
         if ($intervalHours >= 1) {
             AppSetting::set('ooh_notify_interval_hours', (string) $intervalHours);
+        }
+
+        AppSetting::set(
+            'auto_assign_conversations_enabled',
+            $request->boolean('auto_assign_conversations_enabled') ? '1' : '0',
+        );
+
+        $strategy = $request->string('auto_assign_strategy')->toString();
+        AppSetting::set(
+            'auto_assign_strategy',
+            in_array($strategy, ['round_robin', 'least_busy'], true) ? $strategy : 'least_busy',
+        );
+
+        AppSetting::set(
+            'auto_assign_online_only',
+            $request->boolean('auto_assign_online_only') ? '1' : '0',
+        );
+
+        AppSetting::set(
+            'auto_assign_max_open_per_agent',
+            (string) max(0, $request->integer('auto_assign_max_open_per_agent')),
+        );
+
+        $slaMinutes = $request->integer('sla_first_response_minutes');
+        if ($slaMinutes >= 1) {
+            AppSetting::set('sla_first_response_minutes', (string) min(1440, $slaMinutes));
+        }
+
+        AppSetting::set(
+            'open_conversation_alert_enabled',
+            $request->boolean('open_conversation_alert_enabled') ? '1' : '0',
+        );
+
+        $openAlertHours = $request->integer('open_conversation_alert_hours');
+        if ($openAlertHours >= 1) {
+            AppSetting::set(
+                'open_conversation_alert_hours',
+                (string) min(720, $openAlertHours),
+            );
         }
 
         if ($request->hasFile('app_icon')) {

@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\Conversation;
+use App\Services\Conversation\ConversationSlaService;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -38,12 +39,18 @@ class ConversationUpdated implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
+        $sla = app(ConversationSlaService::class)->evaluate($this->conversation);
+
         return [
             'conversation' => [
                 'id' => $this->conversation->id,
                 'status' => $this->conversation->status,
                 'assigned_user_id' => $this->conversation->assigned_user_id,
                 'last_message_at' => $this->conversation->last_message_at?->toIso8601String(),
+                'snoozed_until' => $this->conversation->snoozed_until?->toIso8601String(),
+                'snooze_note' => $this->conversation->snooze_note,
+                'snooze_wake_reason' => $this->conversation->snoozeWakeReason,
+                'sla' => $sla,
             ],
         ];
     }

@@ -52,6 +52,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Anotações de contato — todos os usuários autenticados.
     Route::patch('/contacts/{contact}/notes', [ContactController::class, 'updateNotes'])->name('contacts.notes.update');
+    Route::get('/contacts/{contact}/conversations/{conversation}/history', [InboxController::class, 'contactConversationHistory'])
+        ->name('contacts.conversations.history');
 
     // Atendimento (inbox) — todos os usuários autenticados.
     Route::put('/inbox/{conversation}/tags', [ConversationTagController::class, 'sync'])->name('inbox.conversations.tags');
@@ -59,11 +61,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/inbox/{conversation}', [InboxController::class, 'show'])->name('inbox.show');
     Route::post('/inbox/{conversation}/assign', [InboxController::class, 'assign'])->name('inbox.assign');
     Route::post('/inbox/{conversation}/messages', [InboxController::class, 'sendMessage'])->name('inbox.messages.store');
+    Route::post('/inbox/{conversation}/viewing', [InboxController::class, 'viewing'])->name('inbox.viewing');
+    Route::post('/inbox/{conversation}/snooze', [InboxController::class, 'snooze'])->name('inbox.snooze');
+    Route::post('/inbox/{conversation}/wake', [InboxController::class, 'wake'])->name('inbox.wake');
     Route::get('/inbox/messages/{message}/media', [InboxController::class, 'media'])->name('inbox.messages.media');
     Route::post('/inbox/messages/{message}/transcribe', [InboxController::class, 'transcribe'])->name('inbox.messages.transcribe');
     Route::post('/inbox/{conversation}/close', [InboxController::class, 'close'])->name('inbox.close');
     Route::post('/inbox/{conversation}/force-close', [InboxController::class, 'forceClose'])->name('inbox.force-close')->middleware('role:admin,gestor');
     Route::post('/inbox/{conversation}/transfer', [InboxController::class, 'transfer'])->name('inbox.transfer');
+
+    // Histórico — todos os usuários autenticados (exportação restrita a gestores).
+    Route::get('/historico', [HistoricoController::class, 'index'])->name('historico.index');
 
     // Fluxos de atendimento — somente admin e gestor.
     Route::middleware('role:admin,gestor')->prefix('flows')->name('flows.')->group(function () {
@@ -114,7 +122,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/etiquetas/{tag}', [TagController::class, 'update'])->name('tags.update');
         Route::delete('/etiquetas/{tag}', [TagController::class, 'destroy'])->name('tags.destroy');
 
-        Route::get('/historico', [HistoricoController::class, 'index'])->name('historico.index');
         Route::get('/historico/export', [HistoricoController::class, 'export'])->name('historico.export');
 
         Route::get('/relatorios', [ReportsController::class, 'index'])->name('relatorios.index');

@@ -15,7 +15,7 @@ const SelectTrigger = React.forwardRef<
     <SelectPrimitive.Trigger
         ref={ref}
         className={cn(
-            'flex h-8 w-full items-center justify-between whitespace-nowrap rounded-lg border border-accent/25 bg-white px-2.5 py-1.5 text-sm text-ink/85 shadow-sm placeholder:text-ink/40 focus:outline-none focus:border-accent/55 focus:ring-1 focus:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-50 dark:border-ink/[0.12] dark:bg-ink/[0.04] [&>span]:line-clamp-1',
+            'flex h-8 w-full items-center justify-between whitespace-nowrap rounded-lg border border-accent/25 bg-canvas px-2.5 py-1.5 text-sm text-ink/85 shadow-sm placeholder:text-ink/40 focus:outline-none focus:border-accent/55 focus:ring-1 focus:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
             className,
         )}
         {...props}
@@ -64,7 +64,7 @@ const SelectContent = React.forwardRef<
         <SelectPrimitive.Content
             ref={ref}
             className={cn(
-                'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-lg border border-ink/[0.12] bg-white p-1 text-ink shadow-xl shadow-black/10 dark:border-accent/20 dark:bg-[#102017] dark:shadow-black/35 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+                'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-lg border border-accent/20 bg-canvas p-1 text-ink shadow-xl shadow-black/10 backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
                 position === 'popper' &&
                     'data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1',
                 className,
@@ -107,7 +107,7 @@ const SelectItem = React.forwardRef<
     <SelectPrimitive.Item
         ref={ref}
         className={cn(
-            'relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pl-2.5 pr-8 text-sm text-ink/75 outline-none transition-colors focus:bg-accent/10 focus:text-ink data-[state=checked]:font-medium data-[state=checked]:text-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+            'relative flex w-full cursor-default select-none items-center rounded-md py-1.5 pl-2.5 pr-8 text-sm text-ink/75 outline-none transition-colors data-[highlighted]:bg-accent/12 data-[highlighted]:text-accent data-[state=checked]:font-medium data-[state=checked]:text-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
             className,
         )}
         {...props}

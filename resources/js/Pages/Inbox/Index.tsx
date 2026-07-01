@@ -2,6 +2,9 @@ import { ChatMessage } from '@/Components/ChatMessage';
 import { UserAvatar } from '@/Components/UserAvatar';
 import { ChatThread, MessageScrollerItem } from '@/Components/ChatThread';
 import type { ChatBubbleVariant } from '@/Components/ui/bubble';
+import ContactHistoryPanel from '@/Components/ContactHistoryPanel';
+import SnoozeDateTimePicker from '@/Components/SnoozeDateTimePicker';
+import SlaIndicator from '@/Components/SlaIndicator';
 import IxcPanel from '@/Components/IxcPanel';
 import NotesPanel from '@/Components/NotesPanel';
 import { Badge } from '@/Components/ui/badge';
@@ -29,14 +32,25 @@ import {
     SelectValue,
 } from '@/Components/ui/select';
 import { Input } from '@/Components/ui/input';
+import { Label } from '@/Components/ui/label';
 import { Textarea } from '@/Components/ui/textarea';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { isMediaMessageType, mediaCaption, mediaTypeFromPlaceholder } from '@/lib/messageMedia';
+import { useInboxViewing } from '@/hooks/useInboxViewing';
+import { computeLiveSla, SLA_STATUS_META, type ConversationSla } from '@/lib/sla';
+import {
+    defaultCustomSnoozeDate,
+    defaultCustomSnoozeTime,
+    formatSnoozeUntil,
+    snoozeUntilFromPreset,
+    type SnoozePreset,
+} from '@/lib/snooze';
 import { cn, formatClientDisplayName, formatClientPhone, onlyDigits } from '@/lib/utils';
 import { PageProps } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import {
+    AlarmClock,
     AlertTriangle,
     ArrowDownUp,
     ArrowLeft,
@@ -48,8 +62,10 @@ import {
     CheckCheck,
     CircleX,
     Clock,
+    Eye,
     Copy,
     FileText,
+    History,
     ImageIcon,
     Loader2,
     MessageSquare,
@@ -93,7 +109,7 @@ const WebIcon = ({ className }: { className?: string }) => (
     </svg>
 );
 
-type Status = 'bot' | 'queued' | 'open' | 'closed' | 'surveying';
+type Status = 'bot' | 'queued' | 'open' | 'closed' | 'surveying' | 'snoozed';
 
 interface Sector {
     id: number;
@@ -115,6 +131,10 @@ interface ConversationSummary {
     assigned_user: { id: number; name: string; profile_photo_url?: string | null } | null;
     sector: Sector | null;
     can_transfer: boolean;
+    can_snooze: boolean;
+    can_wake: boolean;
+    snoozed_until: string | null;
+    snooze_note: string | null;
     contact: {
         id: number;
         name: string;
@@ -128,6 +148,7 @@ interface ConversationSummary {
     last_message_status?: string | null;
     unread_count: number;
     tags: Tag[];
+    sla: ConversationSla | null;
 }
 
 interface Msg {
@@ -151,6 +172,25 @@ interface QuickReply {
     content: string;
 }
 
+interface ContactHistoryItem {
+    id: number;
+    protocol_number: string | null;
+    status: Status;
+    is_current: boolean;
+    channel_type: 'whatsapp' | 'telegram' | 'web' | null;
+    channel_name: string | null;
+    assigned_user: { id: number; name: string; profile_photo_url?: string | null } | null;
+    sector: Sector | null;
+    bot_only: boolean;
+    duration_minutes: number | null;
+    csat_score: number | null;
+    survey_completed: boolean;
+    message_count: number;
+    created_at: string | null;
+    last_message_at: string | null;
+    last_message_preview: string | null;
+}
+
 interface Selected {
     id: number;
     protocol_number: string | null;
@@ -164,6 +204,10 @@ interface Selected {
     can_assign: boolean;
     can_transfer: boolean;
     can_force_close: boolean;
+    can_snooze: boolean;
+    can_wake: boolean;
+    snoozed_until: string | null;
+    snooze_note: string | null;
     last_message_at: string | null;
     contact: {
         id: number;
@@ -175,6 +219,11 @@ interface Selected {
     };
     messages: Msg[];
     tags: Tag[];
+    contact_history: {
+        total: number;
+        items: ContactHistoryItem[];
+    };
+    sla: ConversationSla | null;
 }
 
 interface UserFilter {
@@ -194,7 +243,7 @@ interface Props {
     users: UserFilter[];
     tags: Tag[];
     transfer_users: UserFilter[];
-    counts: { bot: number; queued: number; mine: number };
+    counts: { bot: number; queued: number; mine: number; snoozed: number };
     auto_close_enabled: boolean;
     auto_close_minutes: number;
     quick_replies: QuickReply[];
@@ -229,6 +278,7 @@ const STATUS_LABEL: Record<Status, string> = {
     open: 'Em atendimento',
     closed: 'Encerrada',
     surveying: 'Pesquisa',
+    snoozed: 'Adiada',
 };
 
 const STATUS_VARIANT: Record<
@@ -240,6 +290,7 @@ const STATUS_VARIANT: Record<
     open: 'default',
     closed: 'outline',
     surveying: 'secondary',
+    snoozed: 'secondary',
 };
 
 function formatTime(iso: string | null): string {
@@ -556,6 +607,10 @@ export default function InboxIndex({
     has_ixc,
 }: Props) {
     const { auth: { user: currentUser }, autoTranscribeAudio } = usePage<PageProps>().props;
+    const { viewers: otherViewers, viewingLabel } = useInboxViewing(
+        currentUser.id,
+        selected?.id ?? null,
+    );
 
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -586,6 +641,13 @@ export default function InboxIndex({
     const [isAudioPlaying, setIsAudioPlaying] = useState(false);
     const [audioDuration, setAudioDuration] = useState(0);
     const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+    const [snoozeOpen, setSnoozeOpen] = useState(false);
+    const [snoozePreset, setSnoozePreset] = useState<SnoozePreset>('tomorrow_10');
+    const [snoozeCustomDate, setSnoozeCustomDate] = useState<Date | undefined>(defaultCustomSnoozeDate);
+    const [snoozeCustomTime, setSnoozeCustomTime] = useState(defaultCustomSnoozeTime);
+    const [snoozeNote, setSnoozeNote] = useState('');
+    const [snoozing, setSnoozing] = useState(false);
+    const [waking, setWaking] = useState(false);
     const [transferOpen, setTransferOpen] = useState(false);
     const [transferMode, setTransferMode] = useState<'sector' | 'user'>('sector');
     const [transferSectorId, setTransferSectorId] = useState<string>('');
@@ -593,12 +655,13 @@ export default function InboxIndex({
     const [transferring, setTransferring] = useState(false);
     const [ixcPanelOpen, setIxcPanelOpen] = useState(false);
     const [notesPanelOpen, setNotesPanelOpen] = useState(false);
+    const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
     const [ixcContact, setIxcContact] = useState<{
         ixc_customer_id: string | null;
         ixc_customer_name: string | null;
     } | null>(null);
     const [optimisticMessages, setOptimisticMessages] = useState<(Msg & { optimistic: true })[]>([]);
-    const [inactivityTick, setInactivityTick] = useState(0);
+    const [liveTick, setLiveTick] = useState(0);
     const [slashMatches, setSlashMatches] = useState<QuickReply[]>([]);
     const [slashIndex, setSlashIndex] = useState(0);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -681,6 +744,7 @@ export default function InboxIndex({
         } else {
             setIxcContact(null);
             setIxcPanelOpen(false);
+            setHistoryPanelOpen(false);
         }
     }, [selected?.id]);
 
@@ -721,12 +785,20 @@ export default function InboxIndex({
 
     // Tick a cada segundo enquanto há timer ativo (conversa selecionada ou lista com conversas abertas).
     const hasOpenInList = auto_close_enabled && conversations.some(c => c.status === 'open');
+    const hasQueuedSlaInList = conversations.some((c) => c.sla !== null);
+    const hasSelectedSla = selected?.sla !== null;
+
+    const needsLiveTick =
+        inactivityExpiresAt !== null
+        || hasOpenInList
+        || hasQueuedSlaInList
+        || hasSelectedSla;
 
     useEffect(() => {
-        if (inactivityExpiresAt === null && !hasOpenInList) return;
-        const interval = setInterval(() => setInactivityTick(t => t + 1), 1000);
+        if (!needsLiveTick) return;
+        const interval = setInterval(() => setLiveTick((t) => t + 1), 1000);
         return () => clearInterval(interval);
-    }, [inactivityExpiresAt, hasOpenInList]);
+    }, [needsLiveTick]);
 
     // Valor derivado: calculado no render, sem lag de estado.
     // inactivityTick força re-render a cada segundo; inactivityExpiresAt vem direto dos props.
@@ -751,7 +823,7 @@ export default function InboxIndex({
                 { preserveScroll: true, preserveState: true },
             );
         }
-    }, [inactivityTick, inactivityExpiresAt, selected?.id, selected?.status, selected?.can_act]);
+    }, [liveTick, inactivityExpiresAt, selected?.id, selected?.status, selected?.can_act]);
 
     const selectConversation = (id: number) => {
         router.get(
@@ -1258,6 +1330,54 @@ export default function InboxIndex({
         setTransferOpen(true);
     };
 
+    const openSnoozeDialog = () => {
+        const defaultDate = defaultCustomSnoozeDate();
+        setSnoozePreset('tomorrow_10');
+        setSnoozeCustomDate(defaultDate);
+        setSnoozeCustomTime(defaultCustomSnoozeTime(defaultDate));
+        setSnoozeNote('');
+        setSnoozeOpen(true);
+    };
+
+    const submitSnooze = () => {
+        if (!selected) return;
+        const snoozedUntil = snoozeUntilFromPreset(
+            snoozePreset,
+            snoozePreset === 'custom'
+                ? { date: snoozeCustomDate!, time: snoozeCustomTime }
+                : undefined,
+        );
+        if (!snoozedUntil) {
+            toast.error('Escolha uma data e hora válidas (mínimo 5 minutos no futuro).');
+            return;
+        }
+
+        setSnoozing(true);
+        router.post(
+            route('inbox.snooze', selected.id),
+            {
+                snoozed_until: snoozedUntil,
+                note: snoozeNote.trim() || null,
+            },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => setSnoozeOpen(false),
+                onFinish: () => setSnoozing(false),
+            },
+        );
+    };
+
+    const wakeConversation = () => {
+        if (!selected) return;
+        setWaking(true);
+        router.post(route('inbox.wake', selected.id), {}, {
+            preserveScroll: true,
+            preserveState: true,
+            onFinish: () => setWaking(false),
+        });
+    };
+
     const submitTransfer = () => {
         if (!selected) return;
         const payload =
@@ -1302,12 +1422,18 @@ export default function InboxIndex({
     const canActSelected = Boolean(selected?.can_act);
     const canTransferSelected = Boolean(selected?.can_transfer);
     const canForceCloseSelected = Boolean(selected?.can_force_close);
+    const canSnoozeSelected = Boolean(selected?.can_snooze);
+    const canWakeSelected = Boolean(selected?.can_wake);
     const isAssignedToCurrentUser = selected?.assigned_user_id === currentUser.id;
     const composerErrors = composer.errors as Record<string, string | undefined>;
 
+    const isManager = currentUser.role === 'admin' || currentUser.role === 'gestor';
     const filters = [
-        { key: 'all', label: 'Todas', title: 'Todas as conversas', Icon: MessageSquare },
+        ...(isManager
+            ? [{ key: 'all', label: 'Todas', title: 'Todas as conversas', Icon: MessageSquare }]
+            : []),
         { key: 'mine', label: 'Minhas', title: 'Minhas conversas', count: counts.mine, Icon: UserCheck },
+        { key: 'snoozed', label: 'Adiadas', title: 'Conversas adiadas', count: counts.snoozed, Icon: AlarmClock },
         { key: 'bot', label: 'Auto', title: 'Conversas em automação', count: counts.bot, Icon: Bot },
         { key: 'queued', label: 'Fila', title: 'Conversas na fila', count: counts.queued, Icon: Clock },
     ];
@@ -1339,7 +1465,10 @@ export default function InboxIndex({
                                 <div className="sticky top-0 z-10 border-b border-accent/10 bg-canvas px-2 py-2">
                                     <div className="space-y-2 rounded-xl border border-accent/10 bg-canvas/50 p-2 dark:bg-ink/[0.02]">
                                         <div
-                                            className="grid grid-cols-4 gap-0.5 rounded-lg bg-ink/[0.04] p-0.5"
+                                            className={cn(
+                                                'grid gap-0.5 rounded-lg bg-ink/[0.04] p-0.5',
+                                                isManager ? 'grid-cols-5' : 'grid-cols-4',
+                                            )}
                                             role="tablist"
                                             aria-label="Visualização das conversas"
                                         >
@@ -1523,6 +1652,7 @@ export default function InboxIndex({
                                     </div>
                                 )}
                                 {filteredConversations.map((c) => {
+                                    void liveTick;
                                     const preview = mediaPreview(c);
                                     const PreviewIcon = preview?.icon;
                                     const contactName = conversationDisplayName(c);
@@ -1534,6 +1664,8 @@ export default function InboxIndex({
                                         convExpiresAt !== null
                                             ? Math.max(0, Math.floor((convExpiresAt - Date.now()) / 1000))
                                             : null;
+                                    const liveSla = c.sla ? computeLiveSla(c.sla) : null;
+                                    const slaRowClass = liveSla ? SLA_STATUS_META[liveSla.status].rowClass : '';
 
                                     const isSelected = selected?.id === c.id;
                                     const unread = isSelected ? 0 : c.unread_count;
@@ -1543,7 +1675,8 @@ export default function InboxIndex({
                                             key={c.id}
                                             onClick={() => selectConversation(c.id)}
                                             className={cn(
-                                                'group relative w-full border-b border-accent/5 px-4 py-3 text-left text-ink transition hover:bg-ink/[0.04]',
+                                                'group relative w-full border-b border-l-[3px] border-accent/5 px-4 py-3 text-left text-ink transition hover:bg-ink/[0.04]',
+                                                slaRowClass || 'border-l-transparent',
                                                 isSelected ? 'bg-accent/10' : 'hover:bg-ink/[0.04]',
                                             )}
                                         >
@@ -1593,7 +1726,9 @@ export default function InboxIndex({
                                                         {contactName}
                                                     </span>
                                                     <div className="flex shrink-0 items-center gap-1.5">
-                                                        {convCountdown !== null ? (
+                                                        {c.sla ? (
+                                                            <SlaIndicator sla={c.sla} variant="compact" />
+                                                        ) : convCountdown !== null ? (
                                                             <span
                                                                 className={cn(
                                                                     'inline-flex items-center gap-1 text-xs font-medium',
@@ -1640,7 +1775,12 @@ export default function InboxIndex({
                                             </div>
 
                                             <div className="mt-2 flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium leading-none">
-                                                    {c.status === 'surveying' ? (
+                                                    {c.status === 'snoozed' && c.snoozed_until ? (
+                                                        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-accent/20 bg-accent/10 px-2 font-semibold text-accent">
+                                                            <AlarmClock className="h-3 w-3" />
+                                                            {formatSnoozeUntil(c.snoozed_until)}
+                                                        </span>
+                                                    ) : c.status === 'surveying' ? (
                                                         <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-ink/15 bg-violet-50 px-2 font-semibold text-violet-700 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
                                                             <Star className="h-3 w-3" />
                                                             Pesquisa
@@ -1657,6 +1797,9 @@ export default function InboxIndex({
                                                         >
                                                             {STATUS_LABEL[c.status]}
                                                         </Badge>
+                                                    )}
+                                                    {liveSla && liveSla.status !== 'ok' && (
+                                                        <SlaIndicator sla={c.sla!} />
                                                     )}
                                                     {c.sector && (
                                                         <span
@@ -1779,7 +1922,11 @@ export default function InboxIndex({
                                                         <WhatsAppIcon className="h-2.5 w-2.5" />{selected.channel_name ?? 'WhatsApp'}
                                                     </span>
                                                 )}
-                                                {selected.status === 'surveying' ? (
+                                                {selected.status === 'snoozed' ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                                                        <AlarmClock className="h-2.5 w-2.5" />Adiada
+                                                    </span>
+                                                ) : selected.status === 'surveying' ? (
                                                     <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
                                                         <Star className="h-2.5 w-2.5" />Pesquisa
                                                     </span>
@@ -1810,6 +1957,12 @@ export default function InboxIndex({
                                                         {selected.sector.name}
                                                     </span>
                                                 )}
+                                                {selected.sla && (
+                                                    <>
+                                                        {void liveTick}
+                                                        <SlaIndicator sla={selected.sla} variant="inline" />
+                                                    </>
+                                                )}
                                                 {inactivityCountdown !== null && (
                                                     <span
                                                         className={cn(
@@ -1829,6 +1982,8 @@ export default function InboxIndex({
                                         <div className="flex w-full items-center gap-2 md:w-auto">
                                             {/* ── Ações ── */}
                                             {((canAssignSelected && selected.status !== 'open') ||
+                                              (canSnoozeSelected) ||
+                                              (canWakeSelected) ||
                                               (canTransferSelected && (sectors.length > 0 || transfer_users.length > 0)) ||
                                               (canActSelected && selected.status !== 'closed' && selected.status !== 'surveying') ||
                                               (canForceCloseSelected && selected.status !== 'closed')) && (
@@ -1843,6 +1998,16 @@ export default function InboxIndex({
                                                             {canAssignSelected && selected.status !== 'open' && (
                                                                 <DropdownMenuItem onClick={() => action('inbox.assign')}>
                                                                     <UserCheck className="mr-2 h-4 w-4" /> Assumir
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {canSnoozeSelected && (
+                                                                <DropdownMenuItem onClick={openSnoozeDialog}>
+                                                                    <AlarmClock className="mr-2 h-4 w-4" /> Adiar retorno
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {canWakeSelected && (
+                                                                <DropdownMenuItem onClick={wakeConversation} disabled={waking}>
+                                                                    <UserCheck className="mr-2 h-4 w-4" /> Retomar agora
                                                                 </DropdownMenuItem>
                                                             )}
                                                             {canTransferSelected && (sectors.length > 0 || transfer_users.length > 0) && (
@@ -1884,7 +2049,7 @@ export default function InboxIndex({
                                                 <button
                                                     type="button"
                                                     title="Painel IXC"
-                                                    onClick={() => { setIxcPanelOpen((v) => !v); setNotesPanelOpen(false); }}
+                                                    onClick={() => { setIxcPanelOpen((v) => !v); setNotesPanelOpen(false); setHistoryPanelOpen(false); }}
                                                     className={cn(
                                                         'rounded p-1.5 transition-colors',
                                                         ixcPanelOpen
@@ -1896,11 +2061,26 @@ export default function InboxIndex({
                                                 </button>
                                             )}
 
+                                            {/* ── Histórico do contato ── */}
+                                            <button
+                                                type="button"
+                                                title="Histórico do cliente"
+                                                onClick={() => { setHistoryPanelOpen((v) => !v); setIxcPanelOpen(false); setNotesPanelOpen(false); }}
+                                                className={cn(
+                                                    'rounded p-1.5 transition-colors',
+                                                    historyPanelOpen
+                                                        ? 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400'
+                                                        : 'text-ink/40 hover:bg-ink/[0.06] hover:text-ink/70',
+                                                )}
+                                            >
+                                                <History className="h-4 w-4" />
+                                            </button>
+
                                             {/* ── Notes + Tags ── */}
                                             <button
                                                     type="button"
                                                     title="Anotações do cliente"
-                                                    onClick={() => { setNotesPanelOpen((v) => !v); setIxcPanelOpen(false); }}
+                                                    onClick={() => { setNotesPanelOpen((v) => !v); setIxcPanelOpen(false); setHistoryPanelOpen(false); }}
                                                     className={cn(
                                                         'rounded p-1.5 transition-colors',
                                                         notesPanelOpen
@@ -1965,6 +2145,54 @@ export default function InboxIndex({
                                             )}
                                         </div>
                                     </div>
+
+                                    {selected.status === 'snoozed' && selected.snoozed_until && (
+                                        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-accent/15 bg-accent/[0.08] px-3 py-2 text-xs text-accent">
+                                            <AlarmClock className="h-3.5 w-3.5 shrink-0 text-accent/80" />
+                                            <div className="min-w-0 flex-1">
+                                                <span>
+                                                    Voltar a falar com este cliente {formatSnoozeUntil(selected.snoozed_until)}.
+                                                </span>
+                                                {selected.snooze_note && (
+                                                    <span className="mt-0.5 block text-[11px] text-accent/75">
+                                                        {selected.snooze_note}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {canWakeSelected && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-7 border-accent/25 bg-canvas/70 text-accent hover:bg-accent/10"
+                                                    onClick={wakeConversation}
+                                                    disabled={waking}
+                                                >
+                                                    {waking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Retomar agora'}
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {viewingLabel && (
+                                        <div className="flex shrink-0 items-center gap-2 border-b border-accent/15 bg-accent/[0.08] px-3 py-2 text-xs text-accent">
+                                            <Eye className="h-3.5 w-3.5 shrink-0 text-accent/80" />
+                                            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                                                <div className="flex -space-x-1.5">
+                                                    {otherViewers.slice(0, 3).map((viewer) => (
+                                                        <UserAvatar
+                                                            key={viewer.user_id}
+                                                            name={viewer.user_name}
+                                                            photoUrl={viewer.profile_photo_url}
+                                                            size="xs"
+                                                            className="h-5 w-5 border border-accent/20 text-[9px]"
+                                                        />
+                                                    ))}
+                                                </div>
+                                                <span className="min-w-0 truncate">{viewingLabel}</span>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <ChatThread contentClassName="gap-2">
                                         {[...selected.messages, ...optimisticMessages].map(
@@ -2348,6 +2576,19 @@ export default function InboxIndex({
                                                 </button>
                                             )}
                                         </div>
+                                    ) : selected.status === 'snoozed' ? (
+                                        <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
+                                            Conversa adiada até {formatSnoozeUntil(selected.snoozed_until)}.{' '}
+                                            {canWakeSelected && (
+                                                <button
+                                                    className="underline"
+                                                    onClick={wakeConversation}
+                                                    disabled={waking}
+                                                >
+                                                    Retomar agora
+                                                </button>
+                                            )}
+                                        </div>
                                     ) : (
                                         <div className="border-t border-accent/10 p-3 text-center text-sm text-ink/45">
                                             {canAssignSelected || isAssignedToCurrentUser
@@ -2406,8 +2647,101 @@ export default function InboxIndex({
                                     </div>
                                 </div>
                             )}
+
+                            {/* Contact history side panel */}
+                            {historyPanelOpen && selected?.contact_history && (
+                                <div className="fixed inset-0 z-40 md:static md:inset-auto md:z-auto md:shrink-0">
+                                    <button
+                                        type="button"
+                                        aria-label="Fechar painel"
+                                        className="absolute inset-0 bg-black/70 backdrop-blur-sm md:hidden"
+                                        onClick={() => setHistoryPanelOpen(false)}
+                                    />
+                                    <div className="relative h-full md:h-auto">
+                                        <ContactHistoryPanel
+                                            key={`${selected.contact.id}-${selected.id}`}
+                                            contactId={selected.contact.id}
+                                            anchorConversationId={selected.id}
+                                            history={selected.contact_history}
+                                            onClose={() => setHistoryPanelOpen(false)}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
             </div>
+
+            {/* Dialog: adiar retorno */}
+            <Dialog open={snoozeOpen} onOpenChange={setSnoozeOpen}>
+                <DialogContent className="scrollbar-thin gap-4 p-5 sm:max-w-xl">
+                    <DialogHeader className="pr-8">
+                        <div className="flex items-start gap-3">
+                            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent">
+                                <AlarmClock className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 space-y-1">
+                                <DialogTitle>Adiar retorno</DialogTitle>
+                                <DialogDescription>
+                                    A conversa sai da sua lista ativa e volta automaticamente no horário escolhido.
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        {([
+                            ['1h', 'Em 1 hora'],
+                            ['3h', 'Em 3 horas'],
+                            ['tomorrow_10', 'Amanhã às 10h'],
+                            ['custom', 'Personalizado'],
+                        ] as const).map(([value, label]) => (
+                            <button
+                                key={value}
+                                type="button"
+                                onClick={() => setSnoozePreset(value)}
+                                className={cn(
+                                    'rounded-xl border px-3 py-2 text-left text-sm transition-colors',
+                                    snoozePreset === value
+                                        ? 'border-accent/35 bg-accent/10 text-accent'
+                                        : 'border-ink/[0.08] bg-ink/[0.03] text-ink/70 hover:text-ink',
+                                )}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {snoozePreset === 'custom' && (
+                        <SnoozeDateTimePicker
+                            date={snoozeCustomDate}
+                            time={snoozeCustomTime}
+                            onDateChange={setSnoozeCustomDate}
+                            onTimeChange={setSnoozeCustomTime}
+                        />
+                    )}
+
+                    <div className="space-y-2">
+                        <Label htmlFor="snooze_note">Lembrete (opcional)</Label>
+                        <Textarea
+                            id="snooze_note"
+                            value={snoozeNote}
+                            onChange={(e) => setSnoozeNote(e.target.value)}
+                            placeholder="Ex.: Confirmar se o técnico já visitou o cliente"
+                            rows={2}
+                            maxLength={500}
+                        />
+                    </div>
+
+                    <DialogFooter className="gap-2 sm:space-x-0">
+                        <Button type="button" variant="outline" onClick={() => setSnoozeOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button type="button" onClick={submitSnooze} disabled={snoozing}>
+                            {snoozing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Adiar conversa'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Dialog: transferir */}
             <Dialog open={transferOpen} onOpenChange={setTransferOpen}>

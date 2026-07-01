@@ -10,6 +10,7 @@ use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
+use App\Services\Conversation\ConversationSnoozeService;
 use App\Services\Flow\FlowEngine;
 use App\Services\OutOfHoursGate;
 use App\Services\Survey\SurveyRunner;
@@ -88,6 +89,8 @@ class ProcessTelegramMessage implements ShouldQueue
         }
 
         $conversation->forceFill(['last_message_at' => now()])->save();
+
+        $conversation = app(ConversationSnoozeService::class)->wakeOnInboundIfNeeded($conversation);
 
         $this->markPreviousOutboundMessagesAsRead($conversation, $message);
 
@@ -226,7 +229,7 @@ class ProcessTelegramMessage implements ShouldQueue
         }
 
         $conversation = $contact->conversations()
-            ->active()
+            ->session()
             ->orderByDesc('last_message_at')
             ->first();
 

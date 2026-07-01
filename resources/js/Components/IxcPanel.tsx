@@ -771,9 +771,6 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
                                                 onClick={() => openContractDetails(c)}
                                                 className="group w-full overflow-hidden rounded-xl border border-ink/[0.08] text-left transition-all hover:border-ink/[0.15] hover:shadow-sm"
                                             >
-                                                {/* Colored top accent */}
-                                                <div className={`h-0.5 w-full ${c.online ? 'bg-emerald-400' : 'bg-ink/10'}`} />
-
                                                 <div className="p-3">
                                                     <div className="flex items-center justify-between gap-2">
                                                         <div className="min-w-0">
@@ -836,15 +833,6 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
             {/* ── Modal de detalhes do contrato ── */}
             <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
                 <DialogContent aria-describedby={undefined} className="max-w-5xl gap-0 overflow-hidden p-0">
-                    {/* Status accent stripe */}
-                    <div
-                        className={`h-1 w-full ${
-                            selectedContract?.online
-                                ? 'bg-gradient-to-r from-emerald-400 to-emerald-500'
-                                : 'bg-gradient-to-r from-ink/20 to-ink/10'
-                        }`}
-                    />
-
                     {/* Header */}
                     <div className="px-5 pb-4 pt-4 pr-14">
                         <div className="flex items-center gap-3">
