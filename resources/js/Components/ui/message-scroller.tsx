@@ -86,15 +86,20 @@ function MessageScrollerButton({
             data-slot="message-scroller-button"
             direction={direction}
             className={cn(
-                'absolute left-1/2 z-10 -translate-x-1/2 rounded-full border border-ink/10 bg-canvas text-ink shadow-md',
-                'transition-[transform,opacity] duration-200 hover:bg-ink/[0.06]',
+                'absolute left-1/2 z-10 -translate-x-1/2 transition-[transform,opacity] duration-200',
                 'data-[active=false]:pointer-events-none data-[active=false]:scale-95 data-[active=false]:opacity-0',
                 'data-[active=true]:translate-y-0 data-[active=true]:scale-100 data-[active=true]:opacity-100',
                 direction === 'end' && 'bottom-4 data-[active=false]:translate-y-full',
                 direction === 'start' && 'top-4 data-[active=false]:-translate-y-full [&_svg]:rotate-180',
                 className,
             )}
-            render={<Button variant="secondary" size="icon" />}
+            render={
+                <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 rounded-full border-ink/15 bg-canvas text-ink shadow-md hover:border-accent/40 hover:bg-canvas hover:text-accent"
+                />
+            }
             {...props}
         >
             {children ?? (
