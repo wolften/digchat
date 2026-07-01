@@ -1,5 +1,12 @@
 import { ChatMessage } from '@/Components/ChatMessage';
+import { ChatThread, MessageScrollerItem } from '@/Components/ChatThread';
 import { Button } from '@/Components/ui/button';
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
+} from '@/Components/ui/context-menu';
 import {
     Dialog,
     DialogContent,
@@ -23,6 +30,7 @@ import {
     ArrowLeft,
     Check,
     CheckCheck,
+    Eye,
     MessageSquarePlus,
     Search,
     Send,
@@ -32,6 +40,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type ChatUser = { id: number; name: string };
+
+type SeenByViewer = { user_id: number; name: string; seen_at: string | null };
+type SeenByResponse = { viewers: SeenByViewer[]; pending: SeenByViewer[] };
 
 interface Props {
     conversations: InternalConversationSummary[];
@@ -118,6 +129,7 @@ function sortConversationList(
 export default function Index({ conversations: initialConversations, selected, users }: Props) {
     const { auth } = usePage<PageProps>().props;
     const me = auth.user;
+    const canViewReceipts = me.role === 'admin' || me.role === 'gestor';
 
     const [conversations, setConversations] = useState(initialConversations);
     const [active, setActive] = useState<InternalConversationDetail | null>(selected);
@@ -128,8 +140,11 @@ export default function Index({ conversations: initialConversations, selected, u
     const [mobileShowThread, setMobileShowThread] = useState(!!selected);
     const [sort, setSort] = useState<ConversationSort>('newest');
     const [listSearch, setListSearch] = useState('');
+    const [seenByTarget, setSeenByTarget] = useState<InternalChatMessage | null>(null);
+    const [seenByData, setSeenByData] = useState<SeenByResponse | null>(null);
+    const [seenByLoading, setSeenByLoading] = useState(false);
 
-    const listRef = useRef<HTMLDivElement>(null);
+
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
     const directForm = useForm({ user_id: 0 });
@@ -147,12 +162,6 @@ export default function Index({ conversations: initialConversations, selected, u
             );
         }
     }, [selected]);
-
-    useEffect(() => {
-        if (active && listRef.current) {
-            listRef.current.scrollTop = listRef.current.scrollHeight;
-        }
-    }, [active?.messages, active?.id]);
 
     useEffect(() => {
         if (active) {
@@ -309,6 +318,17 @@ export default function Index({ conversations: initialConversations, selected, u
     const changeSort = () => {
         setSort((prev) => (prev === 'newest' ? 'oldest' : 'newest'));
     };
+
+    const openSeenBy = useCallback((conversationId: number, message: InternalChatMessage) => {
+        setSeenByTarget(message);
+        setSeenByData(null);
+        setSeenByLoading(true);
+        window.axios
+            .get<SeenByResponse>(route('chat-interno.messages.seen-by', [conversationId, message.id]))
+            .then(({ data }) => setSeenByData(data))
+            .catch(() => setSeenByData({ viewers: [], pending: [] }))
+            .finally(() => setSeenByLoading(false));
+    }, []);
 
     return (
         <AuthenticatedLayout
@@ -491,25 +511,21 @@ export default function Index({ conversations: initialConversations, selected, u
                                 </div>
                             </div>
 
-                            <div
-                                ref={listRef}
-                                className="chat-bg scrollbar-thin flex-1 space-y-3 overflow-y-auto p-4"
-                            >
+                            <ChatThread contentClassName="gap-3">
                                 {active.messages.length === 0 && (
                                     <p className="pt-8 text-center text-xs text-ink/30">
                                         Nenhuma mensagem ainda. Diga olá!
                                     </p>
                                 )}
-                                {active.messages.map((msg) => {
+                                {active.messages.map((msg, index, messages) => {
                                     const isMe = msg.user_id === me.id;
                                     const showReceipt =
                                         isMe &&
                                         active.type === 'direct' &&
                                         isReadByOther(msg, active.other_last_read_at);
 
-                                    return (
+                                    const bubble = (
                                         <ChatMessage
-                                            key={msg.id}
                                             align={isMe ? 'end' : 'start'}
                                             variant={isMe ? 'outgoing-accent' : 'incoming-muted'}
                                             avatar={
@@ -552,8 +568,36 @@ export default function Index({ conversations: initialConversations, selected, u
                                             {msg.body}
                                         </ChatMessage>
                                     );
+
+                                    const content = !canViewReceipts ? (
+                                        bubble
+                                    ) : (
+                                        <ContextMenu>
+                                            <ContextMenuTrigger asChild>
+                                                <div>{bubble}</div>
+                                            </ContextMenuTrigger>
+                                            <ContextMenuContent>
+                                                <ContextMenuItem
+                                                    onClick={() => openSeenBy(active.id, msg)}
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                    Ver quem visualizou
+                                                </ContextMenuItem>
+                                            </ContextMenuContent>
+                                        </ContextMenu>
+                                    );
+
+                                    return (
+                                        <MessageScrollerItem
+                                            key={msg.id}
+                                            messageId={String(msg.id)}
+                                            scrollAnchor={index === messages.length - 1}
+                                        >
+                                            {content}
+                                        </MessageScrollerItem>
+                                    );
                                 })}
-                            </div>
+                            </ChatThread>
 
                             <div className="flex shrink-0 flex-col border-t border-accent/10">
                                 {typingLabel && (
@@ -667,6 +711,80 @@ export default function Index({ conversations: initialConversations, selected, u
                             </button>
                         ))}
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={!!seenByTarget}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setSeenByTarget(null);
+                        setSeenByData(null);
+                    }
+                }}
+            >
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Visualizações</DialogTitle>
+                    </DialogHeader>
+                    {seenByTarget && (
+                        <p className="-mt-2 truncate text-xs text-ink/40">
+                            &ldquo;{seenByTarget.body}&rdquo;
+                        </p>
+                    )}
+                    {seenByLoading ? (
+                        <p className="py-6 text-center text-xs text-ink/40">Carregando...</p>
+                    ) : (
+                        <div className="scrollbar-thin max-h-72 space-y-4 overflow-y-auto">
+                            <div>
+                                <p className="mb-2 text-xs font-semibold text-ink/50">
+                                    Visualizou ({seenByData?.viewers.length ?? 0})
+                                </p>
+                                {seenByData?.viewers.length ? (
+                                    <ul className="space-y-2">
+                                        {seenByData.viewers.map((viewer) => (
+                                            <li
+                                                key={viewer.user_id}
+                                                className="flex items-center justify-between gap-2"
+                                            >
+                                                <span className="flex items-center gap-2 text-sm text-ink/80">
+                                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-[10px] font-bold text-accent">
+                                                        {abbr(viewer.name)}
+                                                    </span>
+                                                    {viewer.name}
+                                                </span>
+                                                <span className="shrink-0 text-[11px] text-ink/40">
+                                                    {fmtListTime(viewer.seen_at)}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-xs text-ink/35">Ninguém visualizou ainda</p>
+                                )}
+                            </div>
+                            {!!seenByData?.pending.length && (
+                                <div>
+                                    <p className="mb-2 text-xs font-semibold text-ink/50">
+                                        Ainda não visualizou ({seenByData.pending.length})
+                                    </p>
+                                    <ul className="space-y-2">
+                                        {seenByData.pending.map((viewer) => (
+                                            <li
+                                                key={viewer.user_id}
+                                                className="flex items-center gap-2 text-sm text-ink/45"
+                                            >
+                                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink/[0.08] text-[10px] font-bold text-ink/40">
+                                                    {abbr(viewer.name)}
+                                                </span>
+                                                {viewer.name}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </AuthenticatedLayout>

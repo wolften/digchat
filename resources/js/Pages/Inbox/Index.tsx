@@ -1,4 +1,5 @@
 import { ChatMessage } from '@/Components/ChatMessage';
+import { ChatThread, MessageScrollerItem } from '@/Components/ChatThread';
 import type { ChatBubbleVariant } from '@/Components/ui/bubble';
 import IxcPanel from '@/Components/IxcPanel';
 import NotesPanel from '@/Components/NotesPanel';
@@ -549,7 +550,7 @@ export default function InboxIndex({
     has_ixc,
 }: Props) {
     const { auth: { user: currentUser }, autoTranscribeAudio } = usePage<PageProps>().props;
-    const threadRef = useRef<HTMLDivElement>(null);
+
     const attachmentInputRef = useRef<HTMLInputElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -702,13 +703,6 @@ export default function InboxIndex({
             });
         });
     }, [selected?.id, selected?.messages?.length]);
-
-    // Auto-scroll para o fim da thread quando muda a seleção/mensagens.
-    useEffect(() => {
-        if (threadRef.current) {
-            threadRef.current.scrollTop = threadRef.current.scrollHeight;
-        }
-    }, [selected?.id, selected?.messages.length, optimisticMessages.length]);
 
     // Calcula quando o timer expira direto dos props (sem armazenar em estado).
     const inactivityExpiresAt = useMemo(() => {
@@ -1961,21 +1955,25 @@ export default function InboxIndex({
                                         </div>
                                     </div>
 
-                                    <div
-                                        ref={threadRef}
-                                        className="scrollbar-thin flex-1 space-y-2 overflow-y-auto chat-bg p-4"
-                                    >
-                                        {[...selected.messages, ...optimisticMessages].map((m) => (
-                                            <InboxMessageBubble
-                                                key={m.id}
-                                                message={m}
-                                                isOptimistic={'optimistic' in m}
-                                                autoTranscribeAudio={autoTranscribeAudio}
-                                                isTranscribing={transcribingIds.has(m.id)}
-                                                onTranscribe={transcribeMessage}
-                                            />
-                                        ))}
-                                    </div>
+                                    <ChatThread contentClassName="gap-2">
+                                        {[...selected.messages, ...optimisticMessages].map(
+                                            (m, index, messages) => (
+                                                <MessageScrollerItem
+                                                    key={m.id}
+                                                    messageId={String(m.id)}
+                                                    scrollAnchor={index === messages.length - 1}
+                                                >
+                                                    <InboxMessageBubble
+                                                        message={m}
+                                                        isOptimistic={'optimistic' in m}
+                                                        autoTranscribeAudio={autoTranscribeAudio}
+                                                        isTranscribing={transcribingIds.has(m.id)}
+                                                        onTranscribe={transcribeMessage}
+                                                    />
+                                                </MessageScrollerItem>
+                                            ),
+                                        )}
+                                    </ChatThread>
 
                                     {selected.status !== 'closed' && canActSelected ? (
                                         <form

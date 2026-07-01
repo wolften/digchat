@@ -1,4 +1,5 @@
 import { ChatMessage } from '@/Components/ChatMessage';
+import { ChatThread } from '@/Components/ChatThread';
 import { Badge } from '@/Components/ui/badge';
 import { Button } from '@/Components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
@@ -502,12 +503,7 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
 // ─── DetailPanel ─────────────────────────────────────────────────────────────
 
 function DetailPanel({ detail }: { detail: Detail }) {
-    const threadRef = useRef<HTMLDivElement>(null);
     const timeline = buildTimeline(detail);
-
-    useEffect(() => {
-        threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
-    }, [detail.id]);
 
     return (
         <>
@@ -610,7 +606,7 @@ function DetailPanel({ detail }: { detail: Detail }) {
             </div>
 
             {/* Thread */}
-            <div ref={threadRef} className="chat-bg scrollbar-thin flex-1 overflow-y-auto px-5 py-5">
+            <ChatThread viewportClassName="px-5 py-5">
                 <Divider label={`Início · ${formatDateTime(detail.created_at)}`} variant="muted" />
 
                 {timeline.map((event, i) => {
@@ -672,7 +668,7 @@ function DetailPanel({ detail }: { detail: Detail }) {
 
                     return null;
                 })}
-            </div>
+            </ChatThread>
         </>
     );
 }

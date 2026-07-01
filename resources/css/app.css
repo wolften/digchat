@@ -198,6 +198,14 @@
         border-radius: 999px;
     }
 
+    [data-slot='message-scroller-viewport'][data-autoscrolling] {
+        scrollbar-width: none;
+    }
+
+    [data-slot='message-scroller-viewport'][data-autoscrolling]::-webkit-scrollbar {
+        display: none;
+    }
+
     /* ── Light mode overrides ───────────────────────────────── */
 
     html.light body {

@@ -45,7 +45,7 @@ export function ChatMessage({
             <MessageContent className={contentClassName}>
                 {header ? <MessageHeader>{header}</MessageHeader> : null}
                 <Bubble variant={variant} align={align} className={bubbleClassName}>
-                    <BubbleContent align={align}>
+                    <BubbleContent variant={variant} align={align}>
                         {children}
                         {footerInside && footer ? (
                             <div className="mt-1">{footer}</div>
