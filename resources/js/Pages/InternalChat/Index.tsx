@@ -1,3 +1,4 @@
+import { ChatMessage } from '@/Components/ChatMessage';
 import { Button } from '@/Components/ui/button';
 import {
     Dialog,
@@ -507,46 +508,28 @@ export default function Index({ conversations: initialConversations, selected, u
                                         isReadByOther(msg, active.other_last_read_at);
 
                                     return (
-                                        <div
+                                        <ChatMessage
                                             key={msg.id}
-                                            className={cn(
-                                                'flex items-end gap-2',
-                                                isMe ? 'flex-row-reverse' : '',
-                                            )}
-                                        >
-                                            {!isMe && (
-                                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-[10px] font-bold text-accent">
-                                                    {abbr(msg.user_name)}
-                                                </div>
-                                            )}
-                                            <div
-                                                className={cn(
-                                                    'flex max-w-[75%] flex-col gap-0.5',
-                                                    isMe ? 'items-end' : 'items-start',
-                                                )}
-                                            >
-                                                {!isMe && active.type === 'general' && (
-                                                    <span className="px-1 text-[10px] font-medium text-ink/40">
-                                                        {msg.user_name}
-                                                    </span>
-                                                )}
-                                                <div
-                                                    className={cn(
-                                                        'rounded-2xl px-3 py-2 text-sm leading-relaxed',
-                                                        isMe
-                                                            ? 'rounded-tr-sm bg-accent text-canvas dark:text-black'
-                                                            : 'rounded-tl-sm bg-ink/[0.06] text-ink',
-                                                    )}
-                                                >
-                                                    {msg.body}
-                                                </div>
-                                                <div className="flex items-center gap-1 px-1">
+                                            align={isMe ? 'end' : 'start'}
+                                            variant={isMe ? 'outgoing-accent' : 'incoming-muted'}
+                                            avatar={
+                                                !isMe ? (
+                                                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-[10px] font-bold text-accent">
+                                                        {abbr(msg.user_name)}
+                                                    </div>
+                                                ) : undefined
+                                            }
+                                            header={
+                                                !isMe && active.type === 'general'
+                                                    ? msg.user_name
+                                                    : undefined
+                                            }
+                                            footer={
+                                                <>
                                                     <span
                                                         className={cn(
-                                                            'text-[10px]',
-                                                            isMe
-                                                                ? 'text-ink/70 dark:text-white/75'
-                                                                : 'text-ink/55',
+                                                            isMe &&
+                                                                'text-ink/70 dark:text-white/75',
                                                         )}
                                                     >
                                                         {fmtTime(msg.created_at)}
@@ -563,9 +546,11 @@ export default function Index({ conversations: initialConversations, selected, u
                                                             />
                                                         )
                                                     )}
-                                                </div>
-                                            </div>
-                                        </div>
+                                                </>
+                                            }
+                                        >
+                                            {msg.body}
+                                        </ChatMessage>
                                     );
                                 })}
                             </div>

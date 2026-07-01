@@ -1,3 +1,4 @@
+import { ChatMessage } from '@/Components/ChatMessage';
 import { Badge } from '@/Components/ui/badge';
 import { Button } from '@/Components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
@@ -274,38 +275,30 @@ function MessageBubble({ msg }: { msg: Msg }) {
 
     const caption = mediaCaption(msg.body, msg.type);
 
+    const variant = isIn
+        ? 'incoming'
+        : isHuman
+          ? 'outgoing-attendant'
+          : 'outgoing-automation';
+
     return (
-        <div className={cn('mb-2 flex', isIn ? 'justify-start' : 'justify-end')}>
-            <div className="max-w-[78%]">
-                {!isIn && (
-                    <p className="mb-1 text-right text-[10px] font-medium text-ink/35">
-                        {msg.sender?.name ?? 'Bot'}
-                    </p>
-                )}
-                <div
-                    className={cn(
-                        'overflow-hidden rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm',
-                        isIn
-                            ? 'rounded-tl-sm border border-black/[0.08] bg-white text-gray-800 dark:border-white/[0.10] dark:bg-zinc-700 dark:text-zinc-100'
-                            : isHuman
-                              ? 'rounded-tr-sm border border-green-400/50 bg-green-50 text-green-950 dark:border-green-500/40 dark:bg-green-900 dark:text-green-50'
-                              : 'rounded-tr-sm border border-sky-400/50 bg-sky-50 text-sky-950 dark:border-sky-500/40 dark:bg-sky-900 dark:text-sky-50',
-                    )}
-                >
-                    {mediaLabel && MediaIcon ? (
-                        <span className="flex items-center gap-2 opacity-70">
-                            <MediaIcon className="h-3.5 w-3.5 shrink-0" />
-                            <span>{caption ? `${caption} · ${mediaLabel}` : mediaLabel}</span>
-                        </span>
-                    ) : (
-                        <span className="[overflow-wrap:anywhere] whitespace-pre-wrap">{msg.body ?? '—'}</span>
-                    )}
-                </div>
-                <p className={cn('mt-1 text-[10px] text-ink/30', isIn ? 'text-left' : 'text-right')}>
-                    {formatTime(msg.created_at)}
-                </p>
-            </div>
-        </div>
+        <ChatMessage
+            className="mb-2"
+            align={isIn ? 'start' : 'end'}
+            variant={variant}
+            contentClassName="max-w-[78%]"
+            header={!isIn ? (msg.sender?.name ?? 'Bot') : undefined}
+            footer={<span className="text-ink/30">{formatTime(msg.created_at)}</span>}
+        >
+            {mediaLabel && MediaIcon ? (
+                <span className="flex items-center gap-2 opacity-70">
+                    <MediaIcon className="h-3.5 w-3.5 shrink-0" />
+                    <span>{caption ? `${caption} · ${mediaLabel}` : mediaLabel}</span>
+                </span>
+            ) : (
+                <span className="whitespace-pre-wrap">{msg.body ?? '—'}</span>
+            )}
+        </ChatMessage>
     );
 }
 

@@ -1,3 +1,5 @@
+import { ChatMessage } from '@/Components/ChatMessage';
+import type { ChatBubbleVariant } from '@/Components/ui/bubble';
 import IxcPanel from '@/Components/IxcPanel';
 import NotesPanel from '@/Components/NotesPanel';
 import { Badge } from '@/Components/ui/badge';
@@ -349,38 +351,16 @@ function messageRole(message: Msg): MessageRole {
 
 const MESSAGE_ROLE_META = {
     client: {
-        Icon: UserRound,
-        label: 'Cliente',
-        row: 'justify-start',
-        bubble: 'border border-black/[0.08] bg-white text-gray-800 dark:border-white/[0.10] dark:bg-zinc-700 dark:text-zinc-100',
-        roundedBubble: 'rounded-2xl rounded-tl-sm',
-        icon: 'bg-ink/[0.06] text-ink/55 dark:bg-white/10 dark:text-white/65',
-        labelText: 'text-ink/55 dark:text-white/60',
         metaText: 'text-ink/42',
         tick: 'text-gray-800/70 dark:text-ink/70',
         tickRead: 'text-gray-800 dark:text-ink',
     },
     attendant: {
-        Icon: UserCheck,
-        label: 'Atendente',
-        row: 'justify-end',
-        bubble: 'border border-green-400/50 bg-green-50 text-green-950 dark:border-green-500/40 dark:bg-green-900 dark:text-green-50',
-        roundedBubble: 'rounded-2xl rounded-br-sm',
-        icon: 'bg-green-200/70 text-green-900 dark:bg-green-800 dark:text-green-100',
-        labelText: 'text-green-900/70 dark:text-green-100/70',
         metaText: 'text-green-800/55 dark:text-green-200/60',
         tick: 'text-green-950/70 dark:text-white/70',
         tickRead: 'text-green-950 dark:text-white',
     },
     automation: {
-        Icon: Bot,
-        label: 'Automação',
-        row: 'justify-end',
-        bubble:
-            'border border-sky-400/50 bg-sky-50 text-sky-950 dark:border-sky-500/40 dark:bg-sky-900 dark:text-sky-50',
-        roundedBubble: 'rounded-2xl rounded-br-sm',
-        icon: 'bg-sky-200/70 text-sky-900 dark:bg-sky-800 dark:text-sky-100',
-        labelText: 'text-sky-900/70 dark:text-sky-100/70',
         metaText: 'text-sky-800/55 dark:text-sky-200/60',
         tick: 'text-sky-950/70 dark:text-white/70',
         tickRead: 'text-sky-950 dark:text-white',
@@ -388,18 +368,167 @@ const MESSAGE_ROLE_META = {
 } satisfies Record<
     MessageRole,
     {
-        Icon: typeof UserRound;
-        label: string;
-        row: string;
-        bubble: string;
-        roundedBubble: string;
-        icon: string;
-        labelText: string;
         metaText: string;
         tick: string;
         tickRead: string;
     }
 >;
+
+const BUBBLE_VARIANT: Record<MessageRole, ChatBubbleVariant> = {
+    client: 'incoming',
+    attendant: 'outgoing-attendant',
+    automation: 'outgoing-automation',
+};
+
+function InboxMessageBubble({
+    message: m,
+    isOptimistic,
+    autoTranscribeAudio,
+    isTranscribing,
+    onTranscribe,
+}: {
+    message: Msg;
+    isOptimistic?: boolean;
+    autoTranscribeAudio: boolean;
+    isTranscribing: boolean;
+    onTranscribe: (id: number) => void;
+}) {
+    const role = messageRole(m);
+    const roleMeta = MESSAGE_ROLE_META[role];
+    const caption = mediaCaption(m.body, m.type);
+    const align = role === 'client' ? 'start' : 'end';
+
+    return (
+        <ChatMessage
+            align={align}
+            variant={BUBBLE_VARIANT[role]}
+            footerInside
+            className={isOptimistic ? 'opacity-50' : undefined}
+            footer={
+                <div
+                    className={cn(
+                        'flex items-center gap-1 text-[10px]',
+                        role === 'automation' ? 'justify-between' : 'justify-end',
+                        roleMeta.metaText,
+                    )}
+                >
+                    {role === 'automation' && (
+                        <Bot className="h-3 w-3 shrink-0 opacity-60" />
+                    )}
+                    <div className="flex items-center gap-1">
+                        {formatTime(m.created_at)}
+                        {m.direction === 'out' &&
+                            (m.status === 'sending' ? (
+                                <Loader2 className={cn('h-3 w-3 animate-spin', roleMeta.tick)} />
+                            ) : m.status === 'read' ? (
+                                <CheckCheck className={cn('h-3 w-3', roleMeta.tickRead)} />
+                            ) : m.status === 'delivered' ? (
+                                <CheckCheck className={cn('h-3 w-3', roleMeta.tick)} />
+                            ) : m.status === 'sent' || m.status === 'accepted' ? (
+                                <Check className={cn('h-3 w-3', roleMeta.tick)} />
+                            ) : null)}
+                    </div>
+                </div>
+            }
+        >
+            {m.type === 'image' && m.media_url ? (
+                <div className="space-y-2">
+                    <a href={m.media_url} target="_blank" rel="noreferrer">
+                        <img
+                            src={m.media_url}
+                            alt="Imagem recebida"
+                            className="max-h-56 w-auto max-w-[280px] rounded-lg border border-ink/[0.10] bg-black/20 object-contain"
+                            loading="lazy"
+                        />
+                    </a>
+                    {caption && (
+                        <p className="whitespace-pre-wrap break-words">{caption}</p>
+                    )}
+                </div>
+            ) : m.type === 'video' && m.media_url ? (
+                <div className="space-y-2">
+                    <video
+                        controls
+                        preload="metadata"
+                        src={m.media_url}
+                        className="max-h-64 w-[300px] max-w-full rounded-md border bg-black/80"
+                    />
+                    {caption && (
+                        <p className="whitespace-pre-wrap break-words">{caption}</p>
+                    )}
+                </div>
+            ) : m.type === 'audio' && m.media_url ? (
+                <div className="space-y-1.5">
+                    <audio
+                        controls
+                        preload="metadata"
+                        src={m.media_url}
+                        className="h-10 w-[260px] max-w-full"
+                    />
+                    {m.transcription ? (
+                        <p className="max-w-[260px] whitespace-pre-wrap break-words text-xs leading-relaxed opacity-80">
+                            {m.transcription}
+                        </p>
+                    ) : isTranscribing ||
+                      (autoTranscribeAudio &&
+                          new Date(m.created_at ?? 0).getTime() > Date.now() - 120_000) ? (
+                        <p className="text-[10px] opacity-40 italic">Transcrevendo…</p>
+                    ) : !autoTranscribeAudio ? (
+                        <button
+                            type="button"
+                            onClick={() => onTranscribe(m.id)}
+                            className="inline-flex items-center gap-1 rounded-md border border-black/[0.12] bg-black/[0.05] px-2 py-1 text-[10px] font-medium opacity-70 transition hover:bg-black/[0.1] hover:opacity-100 dark:border-white/[0.12] dark:bg-white/[0.05] dark:hover:bg-white/[0.1]"
+                        >
+                            <Mic className="h-3 w-3" />
+                            Transcrever
+                        </button>
+                    ) : null}
+                    {caption && (
+                        <p className="whitespace-pre-wrap break-words">{caption}</p>
+                    )}
+                </div>
+            ) : m.type === 'document' && m.media_url ? (
+                <div className="space-y-2">
+                    <a
+                        href={m.media_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-lg border border-black/[0.18] bg-black/[0.07] px-3 py-2 text-xs font-medium hover:bg-black/[0.12] dark:border-white/[0.18] dark:bg-white/[0.07] dark:hover:bg-white/[0.12]"
+                    >
+                        <FileText className="h-4 w-4" />
+                        Abrir documento
+                    </a>
+                    {caption && (
+                        <p className="whitespace-pre-wrap break-words">{caption}</p>
+                    )}
+                </div>
+            ) : isMediaMessageType(m.type) ? (
+                <div className="inline-flex items-center gap-2 rounded-lg border border-black/[0.12] bg-black/[0.05] px-3 py-2 text-xs opacity-60 dark:border-white/[0.12] dark:bg-white/[0.05]">
+                    {m.type === 'image' ? (
+                        <ImageIcon className="h-4 w-4" />
+                    ) : m.type === 'video' ? (
+                        <Video className="h-4 w-4" />
+                    ) : m.type === 'audio' ? (
+                        <Mic className="h-4 w-4" />
+                    ) : (
+                        <FileText className="h-4 w-4" />
+                    )}
+                    <span>
+                        {m.type === 'image'
+                            ? 'Imagem'
+                            : m.type === 'video'
+                              ? 'Vídeo'
+                              : m.type === 'audio'
+                                ? 'Áudio'
+                                : caption ?? 'Documento'}
+                    </span>
+                </div>
+            ) : (
+                <p className="whitespace-pre-wrap break-words">{m.body}</p>
+            )}
+        </ChatMessage>
+    );
+}
 
 export default function InboxIndex({
     conversations,
@@ -1836,163 +1965,16 @@ export default function InboxIndex({
                                         ref={threadRef}
                                         className="scrollbar-thin flex-1 space-y-2 overflow-y-auto chat-bg p-4"
                                     >
-                                        {[...selected.messages, ...optimisticMessages].map((m) => {
-                                            const role = messageRole(m);
-                                            const roleMeta = MESSAGE_ROLE_META[role];
-                                            const isOptimistic = 'optimistic' in m && m.optimistic;
-                                            const caption = mediaCaption(m.body, m.type);
-
-                                            return (
-                                                <div
-                                                    key={m.id}
-                                                    className={cn('flex transition-opacity duration-300', roleMeta.row, isOptimistic ? 'opacity-50' : '')}
-                                                >
-                                                    <div className="relative w-fit max-w-[75%]">
-                                                    <div
-                                                        className={cn(
-                                                            'px-3 py-2 text-sm shadow-sm',
-                                                            roleMeta.roundedBubble,
-                                                            roleMeta.bubble,
-                                                        )}
-                                                    >
-{m.type === 'image' &&
-                                                        m.media_url ? (
-                                                            <div className="space-y-2">
-                                                                <a
-                                                                    href={m.media_url}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                >
-                                                                    <img
-                                                                        src={m.media_url}
-                                                                        alt="Imagem recebida"
-                                                                        className="max-h-56 w-auto max-w-[280px] rounded-lg border border-ink/[0.10] bg-black/20 object-contain"
-                                                                        loading="lazy"
-                                                                    />
-                                                                </a>
-                                                                {caption && (
-                                                                    <p className="whitespace-pre-wrap break-words">
-                                                                        {caption}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        ) : m.type === 'video' &&
-                                                          m.media_url ? (
-                                                            <div className="space-y-2">
-                                                                <video
-                                                                    controls
-                                                                    preload="metadata"
-                                                                    src={m.media_url}
-                                                                    className="max-h-64 w-[300px] max-w-full rounded-md border bg-black/80"
-                                                                />
-                                                                {caption && (
-                                                                    <p className="whitespace-pre-wrap break-words">
-                                                                        {caption}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        ) : m.type === 'audio' &&
-                                                          m.media_url ? (
-                                                            <div className="space-y-1.5">
-                                                                <audio
-                                                                    controls
-                                                                    preload="metadata"
-                                                                    src={m.media_url}
-                                                                    className="h-10 w-[260px] max-w-full"
-                                                                />
-                                                                {m.transcription ? (
-                                                                    <p className="max-w-[260px] whitespace-pre-wrap break-words text-xs leading-relaxed opacity-80">
-                                                                        {m.transcription}
-                                                                    </p>
-                                                                ) : transcribingIds.has(m.id) || (
-                                                                    autoTranscribeAudio &&
-                                                                    new Date(m.created_at ?? 0).getTime() > Date.now() - 120_000
-                                                                ) ? (
-                                                                    <p className="text-[10px] opacity-40 italic">
-                                                                        Transcrevendo…
-                                                                    </p>
-                                                                ) : !autoTranscribeAudio ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => transcribeMessage(m.id)}
-                                                                        className="inline-flex items-center gap-1 rounded-md border border-black/[0.12] bg-black/[0.05] px-2 py-1 text-[10px] font-medium opacity-70 transition hover:bg-black/[0.1] hover:opacity-100 dark:border-white/[0.12] dark:bg-white/[0.05] dark:hover:bg-white/[0.1]"
-                                                                    >
-                                                                        <Mic className="h-3 w-3" />
-                                                                        Transcrever
-                                                                    </button>
-                                                                ) : null}
-                                                                {caption && (
-                                                                    <p className="whitespace-pre-wrap break-words">
-                                                                        {caption}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        ) : m.type === 'document' &&
-                                                          m.media_url ? (
-                                                            <div className="space-y-2">
-                                                                <a
-                                                                    href={m.media_url}
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    className="inline-flex items-center gap-2 rounded-lg border border-black/[0.18] bg-black/[0.07] px-3 py-2 text-xs font-medium hover:bg-black/[0.12] dark:border-white/[0.18] dark:bg-white/[0.07] dark:hover:bg-white/[0.12]"
-                                                                >
-                                                                    <FileText className="h-4 w-4" />
-                                                                    Abrir documento
-                                                                </a>
-                                                                {caption && (
-                                                                    <p className="whitespace-pre-wrap break-words">
-                                                                        {caption}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        ) : isMediaMessageType(m.type) ? (
-                                                            <div className="inline-flex items-center gap-2 rounded-lg border border-black/[0.12] bg-black/[0.05] px-3 py-2 text-xs opacity-60 dark:border-white/[0.12] dark:bg-white/[0.05]">
-                                                                {m.type === 'image' ? <ImageIcon className="h-4 w-4" /> :
-                                                                 m.type === 'video' ? <Video className="h-4 w-4" /> :
-                                                                 m.type === 'audio' ? <Mic className="h-4 w-4" /> :
-                                                                 <FileText className="h-4 w-4" />}
-                                                                <span>
-                                                                    {m.type === 'image' ? 'Imagem' :
-                                                                     m.type === 'video' ? 'Vídeo' :
-                                                                     m.type === 'audio' ? 'Áudio' :
-                                                                     caption ?? 'Documento'}
-                                                                </span>
-                                                            </div>
-                                                        ) : (
-                                                            <p className="whitespace-pre-wrap break-words">
-                                                                {m.body}
-                                                            </p>
-                                                        )}
-                                                        <div
-                                                            className={cn(
-                                                                'mt-1 flex items-center gap-1 text-[10px]',
-                                                                role === 'automation' ? 'justify-between' : 'justify-end',
-                                                                roleMeta.metaText,
-                                                            )}
-                                                        >
-                                                            {role === 'automation' && (
-                                                                <Bot className="h-3 w-3 shrink-0 opacity-60" />
-                                                            )}
-                                                            <div className="flex items-center gap-1">
-                                                                {formatTime(m.created_at)}
-                                                                {m.direction === 'out' &&
-                                                                    (m.status === 'sending' ? (
-                                                                        <Loader2 className={cn('h-3 w-3 animate-spin', roleMeta.tick)} />
-                                                                    ) : m.status === 'read' ? (
-                                                                        <CheckCheck className={cn('h-3 w-3', roleMeta.tickRead)} />
-                                                                    ) : m.status === 'delivered' ? (
-                                                                        <CheckCheck className={cn('h-3 w-3', roleMeta.tick)} />
-                                                                    ) : m.status === 'sent' ||
-                                                                      m.status === 'accepted' ? (
-                                                                        <Check className={cn('h-3 w-3', roleMeta.tick)} />
-                                                                    ) : null)}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                        {[...selected.messages, ...optimisticMessages].map((m) => (
+                                            <InboxMessageBubble
+                                                key={m.id}
+                                                message={m}
+                                                isOptimistic={'optimistic' in m}
+                                                autoTranscribeAudio={autoTranscribeAudio}
+                                                isTranscribing={transcribingIds.has(m.id)}
+                                                onTranscribe={transcribeMessage}
+                                            />
+                                        ))}
                                     </div>
 
                                     {selected.status !== 'closed' && canActSelected ? (
