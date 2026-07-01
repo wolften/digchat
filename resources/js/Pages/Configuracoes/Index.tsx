@@ -121,9 +121,11 @@ export default function ConfiguracoesIndex({ settings, surveys, integrations }: 
             setHealthResult(response.data);
 
             if (response.data.status === 'ok') {
-                toast.success(response.data.title);
+                toast.success(response.data.title, { description: response.data.message });
+            } else if (response.data.status === 'warning') {
+                toast.warning(response.data.title, { description: response.data.message });
             } else {
-                toast.error(response.data.title);
+                toast.error(response.data.title, { description: response.data.message });
             }
         } catch (error) {
             const message = axios.isAxiosError(error)

@@ -167,6 +167,8 @@ export default function CanaisIndex({ channels }: Props) {
             .then(({ data }) => {
                 if (data.status === 'ok') {
                     toast.success(data.title, { description: data.message });
+                } else if (data.status === 'warning') {
+                    toast.warning(data.title, { description: data.message });
                 } else {
                     toast.error(data.title, { description: data.message });
                 }
@@ -246,6 +248,7 @@ export default function CanaisIndex({ channels }: Props) {
                 </div>
 
                 <Card className="overflow-hidden">
+                    <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-ink/[0.08] bg-ink/[0.03] text-xs font-semibold uppercase tracking-wide text-ink/50">
@@ -367,6 +370,7 @@ export default function CanaisIndex({ channels }: Props) {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 </Card>
             </div>
 
@@ -385,7 +389,7 @@ export default function CanaisIndex({ channels }: Props) {
                         </DialogHeader>
 
                         <div className="space-y-4 py-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div className="space-y-1.5">
                                     <Label>Tipo</Label>
                                     <Select
@@ -549,7 +553,7 @@ function WhatsAppFields({ form, editing }: FieldProps) {
 
     return (
         <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                     <Label>Phone Number ID</Label>
                     <Input
@@ -587,7 +591,7 @@ function WhatsAppFields({ form, editing }: FieldProps) {
                 )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                     <Label>Verify Token</Label>
                     <Input
@@ -707,7 +711,7 @@ function WebFields({ form, editing }: FieldProps) {
 
     return (
         <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                     <Label>Posição do botão</Label>
                     <Select

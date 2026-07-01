@@ -14,8 +14,8 @@ class Tag extends Model
         return ['is_active' => 'boolean'];
     }
 
-    public function conversations(): BelongsToMany
+    public function contacts(): BelongsToMany
     {
-        return $this->belongsToMany(Conversation::class);
+        return $this->belongsToMany(Contact::class);
     }
 }

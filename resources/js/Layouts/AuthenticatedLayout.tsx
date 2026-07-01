@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { PageProps } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import {
-    Bot,
+    BarChart3,
     ChevronDown,
     ChevronsLeft,
     ChevronsRight,
@@ -77,6 +77,7 @@ export default function Authenticated({
     useEffect(() => {
         if (flash?.success) toast.success(flash.success);
         if (flash?.error) toast.error(flash.error);
+        if (flash?.warning) toast.warning(flash.warning);
     }, [flash]);
 
     const toggleCollapsed = () => {
@@ -108,6 +109,13 @@ export default function Authenticated({
             routeName: 'historico.index',
             activePattern: 'historico.*',
             icon: History,
+            managerOnly: true,
+        },
+        {
+            label: 'Relatórios',
+            routeName: 'relatorios.index',
+            activePattern: 'relatorios.*',
+            icon: BarChart3,
             managerOnly: true,
         },
         {
@@ -210,6 +218,11 @@ export default function Authenticated({
         .join('')
         .toUpperCase();
 
+    const activeNavItem = navItems.find((item) => item.active);
+    const HeaderIcon = route().current('profile.*')
+        ? User
+        : activeNavItem?.icon ?? Gauge;
+
     const makeSidebar = (collapsed: boolean) => (
         <aside
             className={cn(
@@ -237,10 +250,10 @@ export default function Authenticated({
                 </Link>
                 {!collapsed && (
                     <div className="min-w-0 flex-1">
-                        <p className="font-manrope text-[11px] font-bold uppercase tracking-widest text-accent">
+                        <p className="font-manrope text-[11px] font-bold uppercase tracking-widest text-black dark:text-white">
                             {appName}
                         </p>
-                        <p className="truncate text-[11px] text-ink/40">
+                        <p className="truncate text-[11px] text-black/75 dark:text-white/75">
                             {appSubtitle}
                         </p>
                     </div>
@@ -258,7 +271,7 @@ export default function Authenticated({
                             onClick={() => setSidebarOpen(false)}
                             title={collapsed ? item.label : undefined}
                             className={cn(
-                                'group flex h-9 items-center rounded-xl text-xs font-medium transition-all',
+                                'group flex h-9 items-center rounded-xl text-sm font-medium transition-all',
                                 collapsed ? 'justify-center px-0' : 'gap-3 px-3',
                                 item.active
                                     ? 'bg-accent text-canvas hover:bg-accent/90 dark:text-black dark:hover:text-black'
@@ -412,12 +425,14 @@ export default function Authenticated({
                             </button>
                             <div className="hidden h-4 w-px bg-ink/15 md:block" />
                             <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent md:flex">
-                                <Bot className="h-4 w-4" />
+                                <HeaderIcon className="h-4 w-4" />
                             </div>
                             <div className="min-w-0 [&_h2]:truncate [&_h2]:font-manrope [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:tracking-widest [&_h2]:text-ink/48">
                                 {header ?? (
                                     <h2 className="text-sm font-semibold uppercase tracking-widest text-ink/48">
-                                        {appName}
+                                        {route().current('profile.*')
+                                            ? 'Perfil'
+                                            : activeNavItem?.label ?? appName}
                                     </h2>
                                 )}
                             </div>

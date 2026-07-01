@@ -88,6 +88,7 @@ export default function RespostasRapidas({ replies }: Props) {
                 </div>
 
                 <Card className="overflow-hidden">
+                    <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-ink/[0.08] bg-ink/[0.03] text-xs font-semibold uppercase tracking-wide text-ink/50">
@@ -142,6 +143,7 @@ export default function RespostasRapidas({ replies }: Props) {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 </Card>
             </div>
 

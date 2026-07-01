@@ -15,6 +15,7 @@ use App\Http\Controllers\IxcController;
 use App\Http\Controllers\PresenceController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuickReplyController;
+use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SectorController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SurveyController;
@@ -109,6 +110,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('/historico', [HistoricoController::class, 'index'])->name('historico.index');
         Route::get('/historico/export', [HistoricoController::class, 'export'])->name('historico.export');
+
+        Route::get('/relatorios', [ReportsController::class, 'index'])->name('relatorios.index');
+        Route::get('/relatorios/export', [ReportsController::class, 'export'])->name('relatorios.export');
 
         // Canais (omnichannel) — admin e gestor
         Route::get('/canais', [ChannelController::class, 'index'])->name('canais.index');

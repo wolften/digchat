@@ -51,7 +51,7 @@ class WhatsAppService implements MessagingChannel
     }
 
     /**
-     * Test whether the configured token can read the configured phone number.
+     * Test whether the configured token can read the phone number and send messages.
      *
      * @return array{status: string, title: string, message: string, details: array<string, mixed>}
      */
@@ -103,41 +103,88 @@ class WhatsAppService implements MessagingChannel
             ];
         }
 
-        if ($response->successful()) {
-            $displayPhone = $response->json('display_phone_number');
-            $verifiedName = $response->json('verified_name');
+        if (! $response->successful()) {
+            $authMessage = $this->authenticationErrorMessage($response);
+            if ($authMessage) {
+                return [
+                    'status' => 'error',
+                    'title' => 'Token inválido ou expirado',
+                    'message' => $authMessage,
+                    'details' => $this->responseDiagnosticDetails($response),
+                ];
+            }
 
-            return [
-                'status' => 'ok',
-                'title' => 'Conexão ativa',
-                'message' => 'A Meta aceitou o token e retornou os dados do número configurado.',
-                'details' => [
-                    'api_version' => $this->apiVersion,
-                    'phone_number_id' => $response->json('id') ?: $this->phoneNumberId,
-                    'display_phone_number' => is_string($displayPhone) ? $displayPhone : null,
-                    'verified_name' => is_string($verifiedName) ? $verifiedName : null,
-                ],
-            ];
-        }
+            $message = $this->extractErrorMessage($response)
+                ?? 'A Meta recusou o teste de conexão. Verifique Phone Number ID, versão da API e permissões do token.';
 
-        $authMessage = $this->authenticationErrorMessage($response);
-        if ($authMessage) {
             return [
                 'status' => 'error',
-                'title' => 'Token inválido ou expirado',
-                'message' => $authMessage,
+                'title' => 'Falha no teste de conexão',
+                'message' => $message,
                 'details' => $this->responseDiagnosticDetails($response),
             ];
         }
 
-        $message = $this->extractErrorMessage($response)
-            ?? 'A Meta recusou o teste de conexão. Verifique Phone Number ID, versão da API e permissões do token.';
+        $displayPhone = $response->json('display_phone_number');
+        $verifiedName = $response->json('verified_name');
+
+        $details = [
+            'api_version' => $this->apiVersion,
+            'phone_number_id' => $response->json('id') ?: $this->phoneNumberId,
+            'display_phone_number' => is_string($displayPhone) ? $displayPhone : null,
+            'verified_name' => is_string($verifiedName) ? $verifiedName : null,
+        ];
+
+        $messagingProbe = $this->probeMessagingAccess();
+        $isSandboxNumber = $this->isSandboxTestNumber(
+            is_string($verifiedName) ? $verifiedName : null,
+            is_string($displayPhone) ? $displayPhone : null,
+        );
+
+        $details['messaging_probe'] = $messagingProbe['status'];
+        if (isset($messagingProbe['meta_code'])) {
+            $details['messaging_meta_code'] = $messagingProbe['meta_code'];
+        }
+        if ($isSandboxNumber) {
+            $details['sandbox_test_number'] = true;
+        }
+
+        if ($messagingProbe['status'] === 'denied') {
+            return [
+                'status' => 'warning',
+                'title' => 'Leitura OK, envio bloqueado',
+                'message' => 'O token autentica e lê o número configurado, mas a Meta negou o envio de mensagens. '
+                    .'Gere um token permanente de System User com a permissão whatsapp_business_messaging '
+                    .'e associe-o ao WhatsApp Business Account e ao Phone Number ID.',
+                'details' => array_merge($details, [
+                    'messaging_error' => $messagingProbe['error'] ?? null,
+                ]),
+            ];
+        }
+
+        if ($messagingProbe['status'] === 'restricted' || $isSandboxNumber) {
+            $message = $isSandboxNumber
+                ? 'O token autentica e alcança a API de mensagens, mas este é um número de teste da Meta. '
+                    .'Em sandbox, só é possível enviar para telefones adicionados em '
+                    .'Meta for Developers → WhatsApp → API Setup → To (lista de destinatários).'
+                : 'O token autentica, mas a Meta bloqueou o envio para destinatários fora da lista de permissão. '
+                    .'Adicione os telefones de teste na Meta ou migre para um número comercial verificado.';
+
+            return [
+                'status' => 'warning',
+                'title' => 'Leitura OK, envio restrito',
+                'message' => $message,
+                'details' => array_merge($details, [
+                    'messaging_error' => $messagingProbe['error'] ?? null,
+                ]),
+            ];
+        }
 
         return [
-            'status' => 'error',
-            'title' => 'Falha no teste de conexão',
-            'message' => $message,
-            'details' => $this->responseDiagnosticDetails($response),
+            'status' => 'ok',
+            'title' => 'Conexão ativa',
+            'message' => 'O token autentica, lê o número configurado e tem permissão para enviar mensagens.',
+            'details' => $details,
         ];
     }
 
@@ -615,6 +662,161 @@ class WhatsAppService implements MessagingChannel
             $this->phoneNumberId,
             ltrim($resource, '/'),
         );
+    }
+
+    /**
+     * Probe messaging in two steps: endpoint reachability, then delivery rules.
+     *
+     * @return array{status: 'granted'|'denied'|'restricted', error?: string, meta_code?: int}
+     */
+    private function probeMessagingAccess(): array
+    {
+        $endpointProbe = $this->probeMessagingEndpoint();
+
+        if ($endpointProbe['status'] === 'denied') {
+            return $endpointProbe;
+        }
+
+        return $this->probeMessagingDelivery();
+    }
+
+    /**
+     * @return array{status: 'granted'|'denied', error?: string, meta_code?: int}
+     */
+    private function probeMessagingEndpoint(): array
+    {
+        try {
+            $response = Http::withToken($this->accessToken)
+                ->acceptJson()
+                ->timeout(15)
+                ->post($this->endpointUrl('messages'), [
+                    'messaging_product' => 'whatsapp',
+                ]);
+        } catch (\Throwable $e) {
+            Log::warning('WhatsApp messaging endpoint probe failed', [
+                'phone_number_id' => $this->phoneNumberId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'status' => 'denied',
+                'error' => 'Não foi possível alcançar o endpoint de mensagens da Meta.',
+            ];
+        }
+
+        if ($response->successful()) {
+            return ['status' => 'granted'];
+        }
+
+        if ($this->authenticationErrorMessage($response)) {
+            return [
+                'status' => 'denied',
+                'error' => $this->authenticationErrorMessage($response),
+                'meta_code' => (int) data_get($response->json(), 'error.code', 0) ?: null,
+            ];
+        }
+
+        if ($this->isMessagingPermissionDenied($response)) {
+            return [
+                'status' => 'denied',
+                'error' => $this->extractErrorMessage($response)
+                    ?? 'A Meta negou o acesso ao endpoint de mensagens com este token.',
+                'meta_code' => (int) data_get($response->json(), 'error.code', 0) ?: null,
+            ];
+        }
+
+        return [
+            'status' => 'granted',
+            'meta_code' => (int) data_get($response->json(), 'error.code', 0) ?: null,
+        ];
+    }
+
+    /**
+     * @return array{status: 'granted'|'denied'|'restricted', error?: string, meta_code?: int}
+     */
+    private function probeMessagingDelivery(): array
+    {
+        try {
+            $response = Http::withToken($this->accessToken)
+                ->acceptJson()
+                ->timeout(15)
+                ->post($this->endpointUrl('messages'), [
+                    'messaging_product' => 'whatsapp',
+                    'recipient_type' => 'individual',
+                    'to' => '0000000000000',
+                    'type' => 'text',
+                    'text' => ['body' => 'DigChat connection probe — ignore.'],
+                ]);
+        } catch (\Throwable $e) {
+            Log::warning('WhatsApp messaging delivery probe failed', [
+                'phone_number_id' => $this->phoneNumberId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'status' => 'denied',
+                'error' => 'Não foi possível validar o envio de mensagens na Meta.',
+            ];
+        }
+
+        if ($response->successful()) {
+            return ['status' => 'granted'];
+        }
+
+        $code = (int) data_get($response->json(), 'error.code', 0);
+
+        if ($this->authenticationErrorMessage($response) || $this->isMessagingPermissionDenied($response)) {
+            return [
+                'status' => 'denied',
+                'error' => $this->extractErrorMessage($response)
+                    ?? 'A Meta negou o envio de mensagens com este token.',
+                'meta_code' => $code ?: null,
+            ];
+        }
+
+        if ($code === 131030) {
+            return [
+                'status' => 'restricted',
+                'error' => 'Destinatário fora da lista de permissão da Meta.',
+                'meta_code' => $code,
+            ];
+        }
+
+        return [
+            'status' => 'granted',
+            'meta_code' => $code ?: null,
+        ];
+    }
+
+    private function isSandboxTestNumber(?string $verifiedName, ?string $displayPhone): bool
+    {
+        if (is_string($verifiedName) && str_contains(strtolower($verifiedName), 'test number')) {
+            return true;
+        }
+
+        if (is_string($displayPhone) && str_contains($displayPhone, '555')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * True when Meta rejects the call before recipient validation (token scope).
+     */
+    private function isMessagingPermissionDenied(Response $response): bool
+    {
+        $code = (int) data_get($response->json(), 'error.code', 0);
+
+        if (in_array($code, [131005, 200, 10, 3], true)) {
+            return true;
+        }
+
+        if ($response->status() === 403 && ! in_array($code, [131030, 131026, 131009, 133010, 100], true)) {
+            return true;
+        }
+
+        return false;
     }
 
     private function extractErrorMessage(?Response $response): ?string

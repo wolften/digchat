@@ -76,6 +76,7 @@ export default function FlowsIndex({ flows }: Props) {
                     </div>
                 ) : (
                     <Card className="overflow-hidden">
+                        <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-ink/[0.08] bg-ink/[0.03] text-xs font-semibold uppercase tracking-wide text-ink/50">
@@ -92,7 +93,7 @@ export default function FlowsIndex({ flows }: Props) {
                                             <div className="flex items-center gap-2">
                                                 <p className="font-medium">{flow.name}</p>
                                                 {flow.is_default && (
-                                                    <Badge variant="outline" className="border-accent/40 text-accent text-[10px]">
+                                                    <Badge variant="outline" className="border-ink/15 text-accent dark:border-accent/40 text-[10px]">
                                                         padrão
                                                     </Badge>
                                                 )}
@@ -147,6 +148,7 @@ export default function FlowsIndex({ flows }: Props) {
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </Card>
                 )}
             </div>

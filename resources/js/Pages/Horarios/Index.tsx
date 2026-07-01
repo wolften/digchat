@@ -236,7 +236,7 @@ export default function HorariosIndex({
                             <div
                                 key={row.weekday}
                                 className={cn(
-                                    'flex items-center gap-4 px-4 py-3 transition-colors',
+                                    'flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors',
                                     !row.is_active && 'opacity-50',
                                 )}
                             >
@@ -331,10 +331,10 @@ export default function HorariosIndex({
                     <Clock className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                     <p className="text-sm text-ink/70">
                         <strong className="font-semibold text-ink/85">Comportamento do bot:</strong>{' '}
-                        fora do horário, o fluxo não é executado em WhatsApp, Telegram e chat web, e a mensagem automática é enviada com frequência controlada por conversa (configurável em Configurações).
-                        No editor de fluxos, use o nó{' '}
-                        <code className="rounded bg-ink/[0.06] px-1 py-0.5 text-xs font-mono">horário de atendimento</code>{' '}
-                        para criar ramificações aberto/fechado dentro do fluxo.
+                        se o fluxo tiver o nó{' '}
+                        <code className="rounded bg-ink/[0.06] px-1 py-0.5 text-xs font-mono">horário de atendimento</code>, o ramo{' '}
+                        <strong className="font-semibold text-ink/85">Fechado</strong> define o que acontece fora do horário (a mensagem automática desta tela é ignorada).
+                        Sem esse nó, o fluxo não é executado em WhatsApp, Telegram e chat web, e a mensagem automática acima é enviada com frequência controlada por conversa (configurável em Configurações).
                     </p>
                 </div>
 

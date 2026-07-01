@@ -39,6 +39,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'warning' => fn () => $request->session()->get('warning'),
             ],
             'appName'    => fn () => AppSetting::get('app_name', config('app.name')) ?: config('app.name'),
             'appIconUrl'  => fn () => AppSetting::get('app_icon_url'),

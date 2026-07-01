@@ -20,10 +20,11 @@ import {
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { cn } from '@/lib/utils';
 import { UserRole } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import {
     Clock3,
     Headphones,
+    MessageSquare,
     RefreshCcw,
     Search,
     ShieldCheck,
@@ -32,8 +33,9 @@ import {
     UserRoundCheck,
     UsersRound,
     WifiOff,
+    X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type PresenceState = 'online' | 'away' | 'offline' | 'inactive';
 
@@ -78,31 +80,31 @@ const ROLE_META: Record<UserRole, { Icon: typeof ShieldCheck; variant: BadgeProp
 
 const PRESENCE_META: Record<
     PresenceState,
-    { label: string; detail: string; dot: string; variant: BadgeProps['variant'] }
+    { label: string; dot: string; variant: BadgeProps['variant']; avatar: string }
 > = {
     online: {
         label: 'Online',
-        detail: 'ativo agora',
         dot: 'bg-emerald-400',
         variant: 'default',
+        avatar: 'border-accent/35 bg-accent/15 text-accent',
     },
     away: {
         label: 'Ausente',
-        detail: 'atividade recente',
         dot: 'bg-amber-400',
         variant: 'queued',
+        avatar: 'border-amber-500/45 bg-amber-400/18 text-amber-800 dark:border-amber-300/35 dark:bg-amber-400/16 dark:text-amber-200',
     },
     offline: {
         label: 'Offline',
-        detail: 'fora da sessão',
         dot: 'bg-slate-400 dark:bg-ink/30',
         variant: 'secondary',
+        avatar: 'border-ink/[0.14] bg-ink/[0.06] text-ink/45',
     },
     inactive: {
         label: 'Inativo',
-        detail: 'usuário bloqueado',
         dot: 'bg-red-400',
         variant: 'destructive',
+        avatar: 'border-red-500/35 bg-red-500/12 text-red-700 dark:border-red-400/30 dark:bg-red-500/14 dark:text-red-200',
     },
 };
 
@@ -158,16 +160,21 @@ function formatClock(value: string | null): string {
     }).format(new Date(value));
 }
 
-function refreshPresence() {
-    router.reload({
-        only: ['users', 'summary', 'generatedAt'],
-    });
-}
-
 export default function PresenceIndex({ users, summary, generatedAt }: Props) {
+    const currentUser = usePage().props.auth.user;
+
     const [query, setQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
     const [presenceFilter, setPresenceFilter] = useState<PresenceState | 'all'>('all');
+    const [refreshing, setRefreshing] = useState(false);
+
+    const refreshPresence = useCallback((silent = false) => {
+        if (!silent) setRefreshing(true);
+        router.reload({
+            only: ['users', 'summary', 'generatedAt'],
+            onFinish: () => setRefreshing(false),
+        });
+    }, []);
 
     const countsByRole = useMemo(
         () =>
@@ -204,12 +211,20 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
     }, [users, query, roleFilter, presenceFilter]);
 
     const hasFilters = query.trim() !== '' || roleFilter !== 'all' || presenceFilter !== 'all';
-    const onlineRatio = summary.total > 0 ? Math.round((summary.online / summary.total) * 100) : 0;
+
+    const pct = (n: number) => (summary.total > 0 ? Math.round((n / summary.total) * 100) : 0);
+    const onlineRatio = pct(summary.online);
+
+    const clearFilters = () => {
+        setQuery('');
+        setRoleFilter('all');
+        setPresenceFilter('all');
+    };
 
     useEffect(() => {
-        const id = window.setInterval(refreshPresence, 30000);
+        const id = window.setInterval(() => refreshPresence(true), 30000);
         return () => window.clearInterval(id);
-    }, []);
+    }, [refreshPresence]);
 
     return (
         <AuthenticatedLayout header={<h2>Presença</h2>}>
@@ -219,28 +234,78 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                 <div className="flex flex-col gap-4">
 
                     {/* Page intro row */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <h1 className="font-manrope text-lg font-semibold text-ink">
+                            <h1 className="font-manrope text-xl font-bold text-ink">
                                 Presença da equipe
                             </h1>
-                            <p className="mt-0.5 text-sm text-ink/48">
-                                Atualizado {timeAgo(generatedAt)} · {formatClock(generatedAt)}
-                            </p>
+                            <div className="mt-1 flex items-center gap-2">
+                                <span
+                                    className="relative flex h-2 w-2"
+                                    title="Atualiza automaticamente a cada 30 segundos"
+                                >
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+                                    <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+                                </span>
+                                <p className="text-sm text-ink/48">
+                                    Atualizado {timeAgo(generatedAt)} · {formatClock(generatedAt)}
+                                </p>
+                            </div>
                         </div>
-                        <Button type="button" variant="outline" size="sm" onClick={refreshPresence}>
-                            <RefreshCcw className="h-3.5 w-3.5" />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => refreshPresence(false)}
+                            disabled={refreshing}
+                        >
+                            <RefreshCcw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} />
                             Atualizar
                         </Button>
                     </div>
 
                     {/* Stat cards */}
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                        <StatCard icon={UserRoundCheck} label="Online" value={summary.online} tone="emerald" />
-                        <StatCard icon={Clock3} label="Ausentes" value={summary.away} tone="amber" />
-                        <StatCard icon={WifiOff} label="Offline" value={summary.offline} tone="muted" />
-                        <StatCard icon={UserMinus} label="Inativos" value={summary.inactive} tone="red" />
-                        <StatCard icon={UsersRound} label="Cobertura" value={`${onlineRatio}%`} tone="accent" />
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                        <StatCard
+                            icon={UserRoundCheck}
+                            label="Online"
+                            value={summary.online}
+                            sub="ativos agora"
+                            tone="emerald"
+                            progress={pct(summary.online)}
+                        />
+                        <StatCard
+                            icon={Clock3}
+                            label="Ausentes"
+                            value={summary.away}
+                            sub="inatividade recente"
+                            tone="amber"
+                            progress={pct(summary.away)}
+                        />
+                        <StatCard
+                            icon={WifiOff}
+                            label="Offline"
+                            value={summary.offline}
+                            sub="fora do ar"
+                            tone="muted"
+                            progress={pct(summary.offline)}
+                        />
+                        <StatCard
+                            icon={UserMinus}
+                            label="Inativos"
+                            value={summary.inactive}
+                            sub="conta desativada"
+                            tone="red"
+                            progress={pct(summary.inactive)}
+                        />
+                        <StatCard
+                            icon={UsersRound}
+                            label="Cobertura"
+                            value={`${onlineRatio}%`}
+                            sub="da equipe disponível"
+                            tone="accent"
+                            progress={onlineRatio}
+                        />
                     </div>
 
                     {/* Filters + table unified */}
@@ -260,11 +325,7 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                         size="sm"
                                         variant="ghost"
                                         className="h-7 text-xs text-ink/55 hover:text-ink"
-                                        onClick={() => {
-                                            setQuery('');
-                                            setRoleFilter('all');
-                                            setPresenceFilter('all');
-                                        }}
+                                        onClick={clearFilters}
                                     >
                                         Limpar filtros
                                     </Button>
@@ -278,8 +339,17 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                         value={query}
                                         onChange={(event) => setQuery(event.target.value)}
                                         placeholder="Buscar por nome, e-mail ou setor"
-                                        className="h-9 pl-9"
+                                        className="h-9 pl-9 pr-8"
                                     />
+                                    {query !== '' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setQuery('')}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/35 transition-colors hover:text-ink/70"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
                                 </div>
                                 <Select
                                     value={roleFilter}
@@ -305,7 +375,7 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                 </Select>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-1">
+                            <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-xl border border-accent/15 bg-ink/[0.04] p-1">
                                 {PRESENCE_FILTERS.map((status) => (
                                     <button
                                         key={status.value}
@@ -314,7 +384,7 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                         className={cn(
                                             'rounded-lg px-3 py-1 text-sm font-medium transition-colors',
                                             presenceFilter === status.value
-                                                ? 'bg-accent text-canvas dark:text-black'
+                                                ? 'bg-accent text-canvas shadow-sm dark:text-black'
                                                 : 'text-ink/58 hover:bg-ink/[0.06] hover:text-ink',
                                         )}
                                     >
@@ -332,10 +402,22 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                         {/* Table */}
                         <CardContent className="p-0">
                             {filteredUsers.length === 0 ? (
-                                <div className="px-5 py-5">
-                                    <div className="rounded-xl border border-ink/10 bg-ink/[0.03] p-5 text-sm text-ink/55">
+                                <div className="flex flex-col items-center gap-2 px-5 py-12 text-center">
+                                    <UsersRound className="h-6 w-6 text-ink/20" />
+                                    <p className="text-sm text-ink/55">
                                         Nenhum usuário encontrado com os filtros atuais.
-                                    </div>
+                                    </p>
+                                    {hasFilters && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            className="text-xs text-ink/55 hover:text-ink"
+                                            onClick={clearFilters}
+                                        >
+                                            Limpar filtros
+                                        </Button>
+                                    )}
                                 </div>
                             ) : (
                                 <Table className="[&_tbody_tr]:align-top">
@@ -366,6 +448,7 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                             const role = ROLE_META[user.role];
                                             const RoleIcon = role.Icon;
                                             const presence = PRESENCE_META[user.presence];
+                                            const isSelf = user.id === currentUser.id;
 
                                             return (
                                                 <TableRow
@@ -375,20 +458,36 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                                     <TableCell className="pl-5">
                                                         <div className="flex items-center gap-3">
                                                             <div className="relative shrink-0">
-                                                                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent/35 bg-accent/15 text-xs font-bold text-accent">
+                                                                <div
+                                                                    className={cn(
+                                                                        'flex h-10 w-10 items-center justify-center rounded-full border text-xs font-bold',
+                                                                        presence.avatar,
+                                                                    )}
+                                                                >
                                                                     {initials(user.name) || 'DC'}
                                                                 </div>
                                                                 <span
                                                                     className={cn(
                                                                         'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-canvas',
                                                                         presence.dot,
+                                                                        user.presence === 'online' && 'animate-pulse',
                                                                     )}
                                                                 />
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <p className="truncate text-[15px] font-semibold text-ink/92">
-                                                                    {user.name}
-                                                                </p>
+                                                                <div className="flex min-w-0 items-center gap-1.5">
+                                                                    <p className="truncate text-[15px] font-semibold text-ink/92">
+                                                                        {user.name}
+                                                                    </p>
+                                                                    {isSelf && (
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="shrink-0 px-1.5 py-0 text-[10px] leading-4"
+                                                                        >
+                                                                            Você
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
                                                                 <p className="truncate text-sm text-ink/58">
                                                                     {user.email}
                                                                 </p>
@@ -396,17 +495,9 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <div>
-                                                            <Badge
-                                                                variant={presence.variant}
-                                                                className="mb-1"
-                                                            >
-                                                                {presence.label}
-                                                            </Badge>
-                                                            <p className="text-xs text-ink/58">
-                                                                {presence.detail}
-                                                            </p>
-                                                        </div>
+                                                        <Badge variant={presence.variant}>
+                                                            {presence.label}
+                                                        </Badge>
                                                     </TableCell>
                                                     <TableCell>
                                                         <Badge variant={role.variant} className="gap-1">
@@ -416,7 +507,7 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                                     </TableCell>
                                                     <TableCell>
                                                         {user.sectors.length === 0 ? (
-                                                            <Badge variant="secondary">Sem setor</Badge>
+                                                            <Badge variant="outline">Sem setor</Badge>
                                                         ) : (
                                                             <div className="flex flex-wrap gap-1">
                                                                 {user.sectors.slice(0, 2).map((sector) => (
@@ -436,9 +527,13 @@ export default function PresenceIndex({ users, summary, generatedAt }: Props) {
                                                         )}
                                                     </TableCell>
                                                     <TableCell className="text-right">
-                                                        <span className="inline-flex min-w-8 items-center justify-center rounded-lg border border-ink/25 bg-white px-2 py-0.5 text-sm font-semibold text-ink dark:border-ink/15 dark:bg-ink/[0.05] dark:text-ink/90">
+                                                        <Badge
+                                                            variant={user.open_conversations_count > 0 ? 'bot' : 'secondary'}
+                                                            className="gap-1 tabular-nums"
+                                                        >
+                                                            <MessageSquare className="h-3 w-3" />
                                                             {user.open_conversations_count}
-                                                        </span>
+                                                        </Badge>
                                                     </TableCell>
                                                     <TableCell className="pr-5">
                                                         <div className="text-xs">
@@ -468,12 +563,16 @@ function StatCard({
     icon: Icon,
     label,
     value,
+    sub,
     tone,
+    progress,
 }: {
     icon: typeof UsersRound;
     label: string;
     value: number | string;
+    sub: string;
     tone: 'emerald' | 'amber' | 'muted' | 'accent' | 'red';
+    progress: number;
 }) {
     const toneClass = {
         emerald: 'text-emerald-300 bg-emerald-400/12 border-emerald-400/25',
@@ -483,22 +582,37 @@ function StatCard({
         red: 'text-red-200 bg-red-400/12 border-red-400/25',
     }[tone];
 
+    const barClass = {
+        emerald: 'bg-emerald-400',
+        amber: 'bg-amber-400',
+        muted: 'bg-ink/25',
+        accent: 'bg-accent',
+        red: 'bg-red-400',
+    }[tone];
+
     return (
         <Card className="rounded-2xl">
-            <CardContent className="flex items-center justify-between p-4">
-                <div>
+            <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-3">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-ink/45">
                         {label}
                     </p>
-                    <p className="mt-1 font-manrope text-3xl font-bold text-ink">{value}</p>
+                    <div
+                        className={cn(
+                            'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border',
+                            toneClass,
+                        )}
+                    >
+                        <Icon className="h-4 w-4" />
+                    </div>
                 </div>
-                <div
-                    className={cn(
-                        'flex h-10 w-10 items-center justify-center rounded-xl border',
-                        toneClass,
-                    )}
-                >
-                    <Icon className="h-4 w-4" />
+                <p className="mt-2 font-manrope text-3xl font-bold text-ink">{value}</p>
+                <p className="mt-0.5 text-xs text-ink/45">{sub}</p>
+                <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-ink/[0.08]">
+                    <div
+                        className={cn('h-full rounded-full transition-all duration-500', barClass)}
+                        style={{ width: `${progress > 0 ? Math.max(4, Math.min(100, progress)) : 0}%` }}
+                    />
                 </div>
             </CardContent>
         </Card>

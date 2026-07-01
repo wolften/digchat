@@ -1,8 +1,11 @@
-import { useState } from 'react';
 import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { CHANNEL_BAR_COLORS, ChannelIcon, type ChannelType } from '@/Components/charts/ChannelIcons';
+import { HorizontalBarChart } from '@/Components/charts/HorizontalBarChart';
+import { VolumeChart } from '@/Components/charts/VolumeChart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Badge } from '@/Components/ui/badge';
+import { formatDuration } from '@/lib/formatDuration';
 import { cn } from '@/lib/utils';
 import {
     Select,
@@ -52,11 +55,6 @@ interface Stats {
     csat_count: number;
 }
 
-interface VolumeDataPoint {
-    label: string;
-    count: number;
-}
-
 interface SectorStat {
     name: string;
     total: number;
@@ -64,7 +62,7 @@ interface SectorStat {
 
 interface ChannelStat {
     name: string;
-    type: 'whatsapp' | 'telegram' | 'web';
+    type: ChannelType;
     total: number;
 }
 
@@ -78,44 +76,12 @@ interface TopAttendant {
 
 interface Props {
     stats: Stats;
-    volumeData: VolumeDataPoint[];
+    volumeData: { label: string; count: number }[];
     sectorStats: SectorStat[];
     channelStats: ChannelStat[];
     topAttendants: TopAttendant[];
     period: string;
 }
-
-const WhatsAppIcon = ({ className }: { className?: string }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-    </svg>
-);
-
-const TelegramIcon = ({ className }: { className?: string }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
-    </svg>
-);
-
-const WebIcon = ({ className }: { className?: string }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z" />
-    </svg>
-);
-
-const CHANNEL_BAR_COLORS: Record<ChannelStat['type'], string> = {
-    whatsapp: 'bg-green-500',
-    telegram: 'bg-blue-500',
-    web: 'bg-violet-500',
-};
-
-function ChannelIcon({ type, className }: { type: ChannelStat['type']; className?: string }) {
-    if (type === 'telegram') return <TelegramIcon className={className} />;
-    if (type === 'web') return <WebIcon className={className} />;
-    return <WhatsAppIcon className={className} />;
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────
 
 const PERIOD_LABELS: Record<string, string> = {
     today: 'Hoje',
@@ -123,14 +89,6 @@ const PERIOD_LABELS: Record<string, string> = {
     month: 'Este mês',
     all: 'Todo período',
 };
-
-function formatDuration(mins: number): string {
-    if (mins <= 0) return '—';
-    if (mins < 60) return `${mins}min`;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return m > 0 ? `${h}h ${m}min` : `${h}h`;
-}
 
 function getInitials(name: string): string {
     return name
@@ -140,70 +98,6 @@ function getInitials(name: string): string {
         .slice(0, 2)
         .join('')
         .toUpperCase();
-}
-
-// ── Volume chart ─────────────────────────────────────────────────────
-
-function VolumeChart({ data }: { data: VolumeDataPoint[] }) {
-    const [hovered, setHovered] = useState<number | null>(null);
-
-    if (data.length === 0) {
-        return (
-            <div className="flex h-24 items-center justify-center text-sm text-muted-foreground sm:h-28">
-                Sem conversas iniciadas no período.
-            </div>
-        );
-    }
-
-    const max = Math.max(...data.map((d) => d.count), 1);
-    const total = data.length;
-    const showEvery = total <= 7 ? 1 : total <= 14 ? 2 : total <= 24 ? 3 : 5;
-
-    return (
-        <div className="select-none space-y-1">
-            <div className="flex h-24 items-end gap-px sm:h-28">
-                {data.map((d, i) => {
-                    const pct = d.count > 0 ? Math.max((d.count / max) * 100, 4) : 1;
-                    const isHovered = hovered === i;
-                    return (
-                        <div
-                            key={i}
-                            className="relative flex h-full flex-1 flex-col items-center justify-end cursor-default"
-                            onMouseEnter={() => setHovered(i)}
-                            onMouseLeave={() => setHovered(null)}
-                        >
-                            {isHovered && d.count > 0 && (
-                                <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-[11px] font-semibold text-popover-foreground shadow-lg">
-                                    {d.count} {d.count === 1 ? 'conversa' : 'conversas'}
-                                </div>
-                            )}
-                            <div
-                                className={`w-full rounded-t-[3px] transition-colors duration-100 ${
-                                    isHovered ? 'bg-accent' : 'bg-accent/55'
-                                } ${d.count === 0 ? 'opacity-20' : ''}`}
-                                style={{ height: `${pct}%` }}
-                            />
-                        </div>
-                    );
-                })}
-            </div>
-            <div className="flex gap-px">
-                {data.map((d, i) => (
-                    <div key={i} className="flex-1 overflow-hidden text-center">
-                        {i % showEvery === 0 ? (
-                            <span
-                                className={`block truncate text-[9px] leading-tight transition-colors ${
-                                    hovered === i ? 'font-medium text-foreground' : 'text-muted-foreground'
-                                }`}
-                            >
-                                {d.label}
-                            </span>
-                        ) : null}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
 }
 
 // ── Ranking de atendentes ────────────────────────────────────────────
@@ -343,8 +237,6 @@ export default function Dashboard({ stats, volumeData, sectorStats, channelStats
     const totalClosed = topAttendants.reduce((t, a) => t + a.closed, 0);
     const totalOpen   = topAttendants.reduce((t, a) => t + a.open, 0);
     const maxClosed   = Math.max(...topAttendants.map((a) => a.closed), 1);
-    const maxSector   = Math.max(...sectorStats.map((s) => s.total), 1);
-    const maxChannel  = Math.max(...channelStats.map((c) => c.total), 1);
     const liveTotal   = stats.queued + stats.open + stats.bot + stats.surveying;
 
     function onPeriodChange(value: string) {
@@ -499,34 +391,21 @@ export default function Dashboard({ stats, volumeData, sectorStats, channelStats
                                 <CardTitle className="text-base">Por canal</CardTitle>
                                 <p className="text-xs text-muted-foreground">Atendimentos por canal</p>
                             </CardHeader>
-                            <CardContent className="space-y-3 pt-2">
-                                {channelStats.length === 0 ? (
-                                    <p className="py-4 text-center text-sm text-muted-foreground">
-                                        Sem conversas com canal definido.
-                                    </p>
-                                ) : (
-                                    channelStats.map((c) => (
-                                        <div key={`${c.type}-${c.name}`} className="space-y-1.5">
-                                            <div className="flex items-center justify-between gap-2 text-sm">
-                                                <span className="flex min-w-0 items-center gap-1.5 truncate font-medium">
-                                                    <ChannelIcon type={c.type} className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                                                    {c.name}
-                                                </span>
-                                                <span className="shrink-0 tabular-nums text-muted-foreground">
-                                                    {c.total}
-                                                </span>
-                                            </div>
-                                            <div className="h-1.5 overflow-hidden rounded-full bg-ink/[0.08]">
-                                                <div
-                                                    className={`h-full rounded-full transition-all duration-500 ${CHANNEL_BAR_COLORS[c.type]}`}
-                                                    style={{
-                                                        width: `${Math.round((c.total / maxChannel) * 100)}%`,
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
+                            <CardContent className="pt-2">
+                                <HorizontalBarChart
+                                    items={channelStats.map((c) => ({
+                                        key: `${c.type}-${c.name}`,
+                                        label: (
+                                            <>
+                                                <ChannelIcon type={c.type} className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                                                {c.name}
+                                            </>
+                                        ),
+                                        value: c.total,
+                                        barClassName: CHANNEL_BAR_COLORS[c.type],
+                                    }))}
+                                    emptyLabel="Sem conversas com canal definido."
+                                />
                             </CardContent>
                         </Card>
 
@@ -535,31 +414,15 @@ export default function Dashboard({ stats, volumeData, sectorStats, channelStats
                                 <CardTitle className="text-base">Por setor</CardTitle>
                                 <p className="text-xs text-muted-foreground">Distribuição de conversas</p>
                             </CardHeader>
-                            <CardContent className="space-y-3 pt-2">
-                                {sectorStats.length === 0 ? (
-                                    <p className="py-4 text-center text-sm text-muted-foreground">
-                                        Sem conversas com setor definido.
-                                    </p>
-                                ) : (
-                                    sectorStats.map((s) => (
-                                        <div key={s.name} className="space-y-1.5">
-                                            <div className="flex items-center justify-between gap-2 text-sm">
-                                                <span className="truncate font-medium">{s.name}</span>
-                                                <span className="shrink-0 tabular-nums text-muted-foreground">
-                                                    {s.total}
-                                                </span>
-                                            </div>
-                                            <div className="h-1.5 overflow-hidden rounded-full bg-ink/[0.08]">
-                                                <div
-                                                    className="h-full rounded-full bg-accent transition-all duration-500"
-                                                    style={{
-                                                        width: `${Math.round((s.total / maxSector) * 100)}%`,
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
+                            <CardContent className="pt-2">
+                                <HorizontalBarChart
+                                    items={sectorStats.map((s) => ({
+                                        key: s.name,
+                                        label: s.name,
+                                        value: s.total,
+                                    }))}
+                                    emptyLabel="Sem conversas com setor definido."
+                                />
                             </CardContent>
                         </Card>
                 </div>

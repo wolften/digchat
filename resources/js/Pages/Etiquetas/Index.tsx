@@ -38,14 +38,14 @@ const COLOR_OPTIONS = [
 ] as const;
 
 const TAG_BADGE_CLASSES: Record<string, string> = {
-    blue:   'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40',
-    green:  'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/40',
-    amber:  'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/40',
-    red:    'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40',
-    purple: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/40',
-    teal:   'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800/40',
-    coral:  'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
-    pink:   'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-800/40',
+    blue:   'bg-blue-100 text-blue-800 border-ink/15 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40',
+    green:  'bg-green-100 text-green-800 border-ink/15 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/40',
+    amber:  'bg-amber-100 text-amber-800 border-ink/15 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/40',
+    red:    'bg-red-100 text-red-800 border-ink/15 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40',
+    purple: 'bg-purple-100 text-purple-800 border-ink/15 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/40',
+    teal:   'bg-teal-100 text-teal-800 border-ink/15 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800/40',
+    coral:  'bg-orange-100 text-orange-800 border-ink/15 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
+    pink:   'bg-pink-100 text-pink-800 border-ink/15 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-800/40',
 };
 
 export default function EtiquetasIndex({ tags }: Props) {
@@ -107,6 +107,7 @@ export default function EtiquetasIndex({ tags }: Props) {
                 </div>
 
                 <Card className="overflow-hidden">
+                    <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-ink/[0.08] bg-ink/[0.03] text-xs font-semibold uppercase tracking-wide text-ink/50">
@@ -146,7 +147,6 @@ export default function EtiquetasIndex({ tags }: Props) {
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => handleDelete(t)}
-                                                className="text-red-500 hover:text-red-600"
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
@@ -156,6 +156,7 @@ export default function EtiquetasIndex({ tags }: Props) {
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 </Card>
             </div>
 

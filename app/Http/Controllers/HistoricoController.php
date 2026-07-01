@@ -29,7 +29,7 @@ class HistoricoController extends Controller
             ->whereDate('created_at', '<=', $dateTo)
             ->when($sectorId, fn ($q) => $q->where('sector_id', $sectorId))
             ->when($userId, fn ($q) => $q->where('assigned_user_id', $userId))
-            ->when($tagId, fn ($q) => $q->whereHas('tags', fn ($q2) => $q2->where('tags.id', $tagId)))
+            ->when($tagId, fn ($q) => $q->whereHas('contact.tags', fn ($q2) => $q2->where('tags.id', $tagId)))
             ->when($channel, fn ($q) => $q->whereHas('channel', fn ($q2) => $q2->where('type', $channel)))
             ->when($search, fn ($q) => $q
                 ->where('protocol_number', 'like', "%{$search}%")
@@ -49,7 +49,7 @@ class HistoricoController extends Controller
             ->count();
 
         $conversations = $base()
-            ->with(['contact', 'assignedUser:id,name', 'sector:id,name', 'surveyResponse.answers', 'channel:id,type,name', 'tags:id,name,color'])
+            ->with(['contact.tags:id,name,color', 'assignedUser:id,name', 'sector:id,name', 'surveyResponse.answers', 'channel:id,type,name'])
             ->orderByDesc('last_message_at')
             ->paginate(40)
             ->through(fn (Conversation $c) => $this->summarize($c));
@@ -151,7 +151,7 @@ class HistoricoController extends Controller
             ],
             'assigned_user'    => $conversation->assignedUser?->only(['id', 'name']),
             'sector'           => $conversation->sector?->only(['id', 'name']),
-            'tags'             => $conversation->tags->map->only(['id', 'name', 'color'])->values()->all(),
+            'tags'             => $conversation->contact->tags->map->only(['id', 'name', 'color'])->values()->all(),
             'bot_only'         => $conversation->assigned_user_id === null,
             'duration_minutes' => $dur,
             'survey_answer'    => $surveyAns,
@@ -170,6 +170,7 @@ class HistoricoController extends Controller
             'contact',
             'assignedUser:id,name',
             'sector:id,name',
+            'channel:id,type,name',
             'surveyResponse.answers',
         ])->findOrFail($id);
 
@@ -215,6 +216,8 @@ class HistoricoController extends Controller
             ],
             'assigned_user'    => $c->assignedUser?->only(['id', 'name']),
             'sector'           => $c->sector?->only(['id', 'name']),
+            'channel_type'     => $c->channel?->type,
+            'channel_name'     => $c->channel?->name,
             'duration_minutes' => $dur,
             'created_at'       => $c->created_at?->toIso8601String(),
             'last_message_at'  => $c->last_message_at?->toIso8601String(),

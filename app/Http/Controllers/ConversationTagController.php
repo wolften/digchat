@@ -17,7 +17,7 @@ class ConversationTagController extends Controller
             'tag_ids.*' => ['integer', 'exists:tags,id'],
         ]);
 
-        $conversation->tags()->sync($validated['tag_ids'] ?? []);
+        $conversation->contact->tags()->sync($validated['tag_ids'] ?? []);
 
         return back();
     }

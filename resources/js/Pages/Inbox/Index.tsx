@@ -33,6 +33,7 @@ import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
     ArrowDownUp,
+    ArrowLeft,
     ArrowRightLeft,
     Bot,
     Building2,
@@ -193,14 +194,14 @@ interface Props {
 }
 
 const TAG_BADGE_CLASSES: Record<string, string> = {
-    blue:   'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40',
-    green:  'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/40',
-    amber:  'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/40',
-    red:    'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40',
-    purple: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/40',
-    teal:   'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800/40',
-    coral:  'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
-    pink:   'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-800/40',
+    blue:   'bg-blue-100 text-blue-800 border-ink/15 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40',
+    green:  'bg-green-100 text-green-800 border-ink/15 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/40',
+    amber:  'bg-amber-100 text-amber-800 border-ink/15 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/40',
+    red:    'bg-red-100 text-red-800 border-ink/15 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40',
+    purple: 'bg-purple-100 text-purple-800 border-ink/15 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/40',
+    teal:   'bg-teal-100 text-teal-800 border-ink/15 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800/40',
+    coral:  'bg-orange-100 text-orange-800 border-ink/15 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
+    pink:   'bg-pink-100 text-pink-800 border-ink/15 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-800/40',
 };
 
 const TAG_DOT_CLASSES: Record<string, string> = {
@@ -299,7 +300,7 @@ const MESSAGE_ROLE_META = {
         label: 'Cliente',
         row: 'justify-start',
         bubble: 'border border-black/[0.08] bg-white text-gray-800 dark:border-white/[0.10] dark:bg-zinc-700 dark:text-zinc-100',
-        roundedBubble: 'rounded-2xl',
+        roundedBubble: 'rounded-2xl rounded-tl-sm',
         icon: 'bg-ink/[0.06] text-ink/55 dark:bg-white/10 dark:text-white/65',
         labelText: 'text-ink/55 dark:text-white/60',
         metaText: 'text-ink/42',
@@ -311,7 +312,7 @@ const MESSAGE_ROLE_META = {
         label: 'Atendente',
         row: 'justify-end',
         bubble: 'border border-green-400/50 bg-green-50 text-green-950 dark:border-green-500/40 dark:bg-green-900 dark:text-green-50',
-        roundedBubble: 'rounded-2xl',
+        roundedBubble: 'rounded-2xl rounded-br-sm',
         icon: 'bg-green-200/70 text-green-900 dark:bg-green-800 dark:text-green-100',
         labelText: 'text-green-900/70 dark:text-green-100/70',
         metaText: 'text-green-800/55 dark:text-green-200/60',
@@ -324,7 +325,7 @@ const MESSAGE_ROLE_META = {
         row: 'justify-end',
         bubble:
             'border border-sky-400/50 bg-sky-50 text-sky-950 dark:border-sky-500/40 dark:bg-sky-900 dark:text-sky-50',
-        roundedBubble: 'rounded-2xl',
+        roundedBubble: 'rounded-2xl rounded-br-sm',
         icon: 'bg-sky-200/70 text-sky-900 dark:bg-sky-800 dark:text-sky-100',
         labelText: 'text-sky-900/70 dark:text-sky-100/70',
         metaText: 'text-sky-800/55 dark:text-sky-200/60',
@@ -536,6 +537,20 @@ export default function InboxIndex({
         router.get(
             route('inbox.show', id),
             {},
+            { preserveState: true, preserveScroll: true },
+        );
+    };
+
+    const deselectConversation = () => {
+        router.get(
+            route('inbox.index'),
+            {
+                filter,
+                sort,
+                ...(sector_id ? { sector_id } : {}),
+                ...(user_id ? { user_id } : {}),
+                ...(tag_id ? { tag_id } : {}),
+            },
             { preserveState: true, preserveScroll: true },
         );
     };
@@ -1089,7 +1104,10 @@ export default function InboxIndex({
 
             <div className="flex-1 min-h-0 grid grid-cols-1 overflow-hidden md:grid-cols-[340px_1fr]">
                         {/* Lista de conversas */}
-                        <div className="relative flex min-h-0 flex-col border-r border-ink/[0.08]">
+                        <div className={cn(
+                            "relative flex min-h-0 flex-col border-r border-ink/[0.08]",
+                            selected && "hidden md:flex",
+                        )}>
                             <div className="flex h-16 items-center border-b border-ink/[0.08] px-2">
                                 <div className="grid w-full grid-cols-4 gap-1 rounded-2xl border border-ink/[0.08] bg-white p-1 shadow-sm dark:bg-ink/[0.03]">
                                     {filters.map((f) => {
@@ -1370,12 +1388,12 @@ export default function InboxIndex({
 
                                             <div className="mt-2 flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium leading-none">
                                                     {c.status === 'surveying' ? (
-                                                        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-violet-300 bg-violet-50 px-2 font-semibold text-violet-700 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
+                                                        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-ink/15 bg-violet-50 px-2 font-semibold text-violet-700 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
                                                             <Star className="h-3 w-3" />
                                                             Pesquisa
                                                         </span>
                                                     ) : c.status === 'bot' ? (
-                                                        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-sky-400/45 bg-sky-400/12 px-2 font-semibold text-sky-700 dark:border-sky-400/35 dark:bg-sky-400/12 dark:text-sky-300">
+                                                        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-ink/15 bg-sky-400/12 px-2 font-semibold text-sky-700 dark:border-sky-400/35 dark:bg-sky-400/12 dark:text-sky-300">
                                                             <Bot className="h-3 w-3" />
                                                             Automação
                                                         </span>
@@ -1442,7 +1460,10 @@ export default function InboxIndex({
                         </div>
 
                         {/* Thread + IXC Panel */}
-                        <div className="relative flex min-h-0 overflow-hidden">
+                        <div className={cn(
+                            "relative flex min-h-0 overflow-hidden",
+                            !selected && "hidden md:flex",
+                        )}>
                             {!selected && (
                                 <div className="flex flex-1 flex-col items-center justify-center text-ink/45">
                                     <MessageSquare className="mb-2 h-10 w-10" />
@@ -1452,7 +1473,15 @@ export default function InboxIndex({
 
                             {selected && (
                                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                                    <div className="flex h-16 shrink-0 items-center gap-3 border-b border-ink/[0.08] px-3">
+                                    <div className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-ink/[0.08] px-3 py-2 md:flex-nowrap">
+                                        <button
+                                            type="button"
+                                            onClick={deselectConversation}
+                                            aria-label="Voltar para a lista"
+                                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ink/50 transition hover:bg-ink/[0.07] hover:text-ink md:hidden"
+                                        >
+                                            <ArrowLeft className="h-4 w-4" />
+                                        </button>
                                         <div className="min-w-0 flex-1">
                                             <div className="truncate text-sm font-semibold text-ink/90">
                                                 {selected.channel_type === 'web'
@@ -1541,7 +1570,7 @@ export default function InboxIndex({
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex w-full items-center gap-2 md:w-auto">
                                             {/* ── Ações ── */}
                                             {((canAssignSelected && selected.status !== 'open') ||
                                               (canTransferSelected && (sectors.length > 0 || transfer_users.length > 0)) ||
@@ -1969,7 +1998,7 @@ export default function InboxIndex({
                                                                         skinTonesDisabled
                                                                         previewConfig={{ showPreview: false }}
                                                                         height={380}
-                                                                        width={320}
+                                                                        width={typeof window !== 'undefined' ? Math.min(320, window.innerWidth - 32) : 320}
                                                                         categories={[
                                                                             { category: Categories.SUGGESTED, name: 'Recentes' },
                                                                             { category: Categories.SMILEYS_PEOPLE, name: 'Rostos e Pessoas' },
@@ -2206,31 +2235,51 @@ export default function InboxIndex({
 
                             {/* IXC side panel */}
                             {ixcPanelOpen && selected && ixcContact && (
-                                <IxcPanel
-                                    contact={{
-                                        id: selected.contact.id,
-                                        ixc_customer_id: ixcContact.ixc_customer_id,
-                                        ixc_customer_name: ixcContact.ixc_customer_name,
-                                    }}
-                                    conversationId={selected.id}
-                                    onClose={() => setIxcPanelOpen(false)}
-                                    onLinked={(id, name) =>
-                                        setIxcContact({ ixc_customer_id: id, ixc_customer_name: name })
-                                    }
-                                    onUnlinked={() =>
-                                        setIxcContact({ ixc_customer_id: null, ixc_customer_name: null })
-                                    }
-                                />
+                                <div className="fixed inset-0 z-40 md:static md:inset-auto md:z-auto md:shrink-0">
+                                    <button
+                                        type="button"
+                                        aria-label="Fechar painel"
+                                        className="absolute inset-0 bg-black/70 backdrop-blur-sm md:hidden"
+                                        onClick={() => setIxcPanelOpen(false)}
+                                    />
+                                    <div className="relative h-full md:h-auto">
+                                        <IxcPanel
+                                            contact={{
+                                                id: selected.contact.id,
+                                                ixc_customer_id: ixcContact.ixc_customer_id,
+                                                ixc_customer_name: ixcContact.ixc_customer_name,
+                                            }}
+                                            conversationId={selected.id}
+                                            onClose={() => setIxcPanelOpen(false)}
+                                            onLinked={(id, name) =>
+                                                setIxcContact({ ixc_customer_id: id, ixc_customer_name: name })
+                                            }
+                                            onUnlinked={() =>
+                                                setIxcContact({ ixc_customer_id: null, ixc_customer_name: null })
+                                            }
+                                        />
+                                    </div>
+                                </div>
                             )}
 
                             {/* Notes side panel */}
                             {notesPanelOpen && selected && (
-                                <NotesPanel
-                                    key={selected.contact.id}
-                                    contactId={selected.contact.id}
-                                    initialNotes={selected.contact.notes}
-                                    onClose={() => setNotesPanelOpen(false)}
-                                />
+                                <div className="fixed inset-0 z-40 md:static md:inset-auto md:z-auto md:shrink-0">
+                                    <button
+                                        type="button"
+                                        aria-label="Fechar painel"
+                                        className="absolute inset-0 bg-black/70 backdrop-blur-sm md:hidden"
+                                        onClick={() => setNotesPanelOpen(false)}
+                                    />
+                                    <div className="relative h-full md:h-auto">
+                                        <NotesPanel
+                                            key={selected.contact.id}
+                                            contactId={selected.contact.id}
+                                            initialNotes={selected.contact.notes}
+                                            onClose={() => setNotesPanelOpen(false)}
+                                        />
+                                    </div>
+                                </div>
                             )}
                         </div>
             </div>

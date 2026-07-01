@@ -49,10 +49,12 @@ class ChannelController extends Controller
 
         if ($channel->type === Channel::TYPE_TELEGRAM && ! empty($data['config']['bot_token'])) {
             $telegram = new TelegramService($channel);
-            $telegram->setWebhook(
-                $channel->webhookUrl(),
-                $data['config']['webhook_secret'] ?? null,
-            );
+            if (! $telegram->setWebhook($channel->webhookUrl(), $data['config']['webhook_secret'] ?? null)) {
+                return redirect()->route('canais.index')->with('warning',
+                    'Canal criado, mas o webhook do Telegram não pôde ser registrado: '
+                    . ($telegram->getLastErrorMessage() ?? 'erro desconhecido')
+                    . '. As mensagens não chegarão até que o webhook seja registrado com sucesso.');
+            }
         }
 
         return redirect()->route('canais.index')
@@ -61,14 +63,9 @@ class ChannelController extends Controller
 
     public function update(Request $request, Channel $channel): RedirectResponse
     {
-        $data = $this->validated($request);
+        $data = $this->validated($request, isUpdate: true);
 
-        $config = $data['config'];
-
-        // Preserva a api_key ao atualizar canal web (não pode ser alterada pelo front).
-        if ($channel->type === Channel::TYPE_WEB && ! empty($channel->config['api_key'])) {
-            $config['api_key'] = $channel->config['api_key'];
-        }
+        $config = $this->mergeUnchangedSecrets($channel, $data['config']);
 
         $channel->update([
             'type'      => $data['type'],
@@ -77,12 +74,14 @@ class ChannelController extends Controller
             'is_active' => $data['is_active'] ?? $channel->is_active,
         ]);
 
-        if ($channel->type === Channel::TYPE_TELEGRAM && ! empty($data['config']['bot_token'])) {
+        if ($channel->type === Channel::TYPE_TELEGRAM && ! empty($config['bot_token'])) {
             $telegram = new TelegramService($channel->fresh());
-            $telegram->setWebhook(
-                $channel->webhookUrl(),
-                $data['config']['webhook_secret'] ?? null,
-            );
+            if (! $telegram->setWebhook($channel->webhookUrl(), $config['webhook_secret'] ?? null)) {
+                return redirect()->route('canais.index')->with('warning',
+                    'Canal atualizado, mas o webhook do Telegram não pôde ser registrado: '
+                    . ($telegram->getLastErrorMessage() ?? 'erro desconhecido')
+                    . '. As mensagens não chegarão até que o webhook seja registrado com sucesso.');
+            }
         }
 
         return redirect()->route('canais.index')
@@ -147,7 +146,7 @@ class ChannelController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function validated(Request $request): array
+    private function validated(Request $request, bool $isUpdate = false): array
     {
         $type = $request->input('type');
 
@@ -166,7 +165,8 @@ class ChannelController extends Controller
             $rules['config.app_secret']      = 'nullable|string';
             $rules['config.waba_id']         = 'nullable|string';
         } elseif ($type === Channel::TYPE_TELEGRAM) {
-            $rules['config.bot_token']        = 'required|string';
+            // No update, campo em branco significa "manter o token atual" (ver mergeUnchangedSecrets).
+            $rules['config.bot_token']        = $isUpdate ? 'nullable|string' : 'required|string';
             $rules['config.webhook_secret']   = 'nullable|string';
             $rules['config.webhook_base_url'] = 'nullable|url';
         } else {
@@ -178,6 +178,31 @@ class ChannelController extends Controller
         }
 
         return $request->validate($rules);
+    }
+
+    /**
+     * O front sempre envia os campos de segredo (token, secrets) em branco ao editar,
+     * para não reexibi-los. Um valor vazio nesses campos significa "manter o atual".
+     *
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function mergeUnchangedSecrets(Channel $channel, array $config): array
+    {
+        $secretKeys = match ($channel->type) {
+            Channel::TYPE_WHATSAPP => ['access_token', 'app_secret', 'verify_token'],
+            Channel::TYPE_TELEGRAM => ['bot_token', 'webhook_secret'],
+            Channel::TYPE_WEB      => ['api_key'],
+            default                => [],
+        };
+
+        foreach ($secretKeys as $key) {
+            if (empty($config[$key]) && ! empty($channel->config[$key])) {
+                $config[$key] = $channel->config[$key];
+            }
+        }
+
+        return $config;
     }
 
     /** Remove informações sensíveis antes de enviar ao front */

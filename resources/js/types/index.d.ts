@@ -38,6 +38,7 @@ export type PageProps<
     flash: {
         success: string | null;
         error: string | null;
+        warning: string | null;
     };
     appName: string;
     appIconUrl: string | null;

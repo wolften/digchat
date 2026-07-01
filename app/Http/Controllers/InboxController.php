@@ -40,7 +40,7 @@ class InboxController extends Controller
         $userId = $user->id;
 
         $conversations = Conversation::query()
-            ->with(['contact', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type', 'tags:id,name,color'])
+            ->with(['contact.tags:id,name,color', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type'])
             ->where('status', '!=', Conversation::STATUS_CLOSED)
             ->visibleTo($user)
             ->when($filter === 'mine', fn ($q) => $q->where('assigned_user_id', $userId))
@@ -49,7 +49,7 @@ class InboxController extends Controller
             ->when($filter === 'open', fn ($q) => $q->where('status', Conversation::STATUS_OPEN))
             ->when($sectorId !== null, fn ($q) => $q->where('sector_id', $sectorId))
             ->when($filterUserId !== null, fn ($q) => $q->where('assigned_user_id', $filterUserId))
-            ->when($tagId !== null, fn ($q) => $q->whereHas('tags', fn ($q2) => $q2->where('tags.id', $tagId)))
+            ->when($tagId !== null, fn ($q) => $q->whereHas('contact.tags', fn ($q2) => $q2->where('tags.id', $tagId)))
             ->when($sort === 'oldest', fn ($q) => $q->orderBy('last_message_at'), fn ($q) => $q->orderByDesc('last_message_at'))
             ->limit(100)
             ->get()
@@ -477,7 +477,7 @@ class InboxController extends Controller
             'assigned_user_id' => $conversation->assigned_user_id,
             'assigned_user' => $conversation->assignedUser?->only(['id', 'name']),
             'sector' => $conversation->sector?->only(['id', 'name']),
-            'tags' => $conversation->tags->map->only(['id', 'name', 'color'])->values()->all(),
+            'tags' => $conversation->contact->tags->map->only(['id', 'name', 'color'])->values()->all(),
             'can_transfer' => $conversation->canBeTransferredBy($user),
             'contact' => [
                 'id' => $conversation->contact->id,
@@ -500,7 +500,7 @@ class InboxController extends Controller
      */
     private function loadConversation(int $id, User $user): ?array
     {
-        $conversation = Conversation::with(['contact', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type', 'tags:id,name,color'])->find($id);
+        $conversation = Conversation::with(['contact.tags:id,name,color', 'assignedUser:id,name', 'sector:id,name', 'channel:id,name,type'])->find($id);
         if (! $conversation || ! $conversation->canBeViewedBy($user)) {
             return null;
         }
@@ -537,7 +537,7 @@ class InboxController extends Controller
             'assigned_user_id' => $conversation->assigned_user_id,
             'assigned_user' => $conversation->assignedUser?->only(['id', 'name']),
             'sector' => $conversation->sector?->only(['id', 'name']),
-            'tags' => $conversation->tags->map->only(['id', 'name', 'color'])->values()->all(),
+            'tags' => $conversation->contact->tags->map->only(['id', 'name', 'color'])->values()->all(),
             'can_act' => $conversation->canBeActedOnBy($user),
             'can_assign' => $conversation->canBeAssignedBy($user),
             'can_transfer' => $conversation->canBeTransferredBy($user),

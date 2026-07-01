@@ -50,4 +50,10 @@ class Flow extends Model
             ->where('is_default', true)
             ->first();
     }
+
+    public function hasBusinessHoursCheck(): bool
+    {
+        return collect($this->definition['nodes'] ?? [])
+            ->contains(fn ($n) => ($n['type'] ?? null) === 'business_hours_check');
+    }
 }

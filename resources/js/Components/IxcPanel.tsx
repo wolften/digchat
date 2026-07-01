@@ -632,7 +632,7 @@ export default function IxcPanel({ contact, conversationId, onClose, onLinked, o
 
     return (
         <>
-            <div className="flex h-full w-72 shrink-0 flex-col border-l border-ink/[0.08]">
+            <div className="flex h-full w-full shrink-0 flex-col border-l border-ink/[0.08] md:w-72">
                 {/* Header */}
                 <div className="flex h-16 items-center justify-between border-b border-ink/[0.08] px-4">
                     <div className="flex items-center gap-2.5 min-w-0">

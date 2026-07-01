@@ -2,6 +2,7 @@
 
 namespace App\Services\Flow;
 
+use App\Models\AppSetting;
 use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
@@ -148,10 +149,21 @@ class FlowEngine
                     continue 2;
 
                 case 'business_hours_check':
-                    $checkSectorId = isset($node['data']['sector_id']) && $node['data']['sector_id']
-                        ? (int) $node['data']['sector_id']
-                        : $conversation->sector_id;
+                    $checkSectorId = $this->resolveBusinessHoursSectorId($node, $conversation);
                     $isOpen = (new BusinessHoursService())->isOpen($checkSectorId);
+
+                    if (! $isOpen) {
+                        $lastNotified  = $conversation->last_ooh_notified_at;
+                        $intervalHours = (int) AppSetting::get('ooh_notify_interval_hours', 4);
+                        $shouldNotify  = ! $lastNotified || now()->diffInHours($lastNotified) >= $intervalHours;
+
+                        if (! $shouldNotify) {
+                            return;
+                        }
+
+                        $conversation->update(['last_ooh_notified_at' => now()]);
+                    }
+
                     $nextId = $this->findEdgeTarget($flow, $currentId, $isOpen ? 'open' : 'closed');
                     if (! $nextId) {
                         $conversation->update(['status' => Conversation::STATUS_QUEUED, 'flow_id' => null, 'current_node_id' => null]);
@@ -353,6 +365,30 @@ class FlowEngine
         }
 
         return null;
+    }
+
+    private function resolveBusinessHoursSectorId(array $node, Conversation $conversation): ?int
+    {
+        $scope = $node['data']['hours_scope'] ?? null;
+
+        if ($scope === 'global') {
+            return null;
+        }
+
+        if ($scope === 'sector' && ! empty($node['data']['sector_id'])) {
+            return (int) $node['data']['sector_id'];
+        }
+
+        if ($scope === 'conversation') {
+            return $conversation->sector_id;
+        }
+
+        // Legacy nodes saved before hours_scope existed.
+        if (! empty($node['data']['sector_id'])) {
+            return (int) $node['data']['sector_id'];
+        }
+
+        return $conversation->sector_id;
     }
 
     private function findEdgeTarget(Flow $flow, string $sourceNodeId, ?string $sourceHandle = null): ?string

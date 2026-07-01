@@ -56,6 +56,44 @@ class OutOfHoursGateTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_gate_defers_to_flow_with_business_hours_check_node(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-07 20:00:00', 'America/Sao_Paulo'));
+        $this->seedClosedGlobalHours();
+        AppSetting::setMany([
+            'out_of_hours_enabled' => '1',
+            'out_of_hours_message' => 'Estamos fora do horário.',
+        ]);
+
+        $flow = Flow::create([
+            'name' => 'Fluxo com horário',
+            'definition' => [
+                'nodes' => [
+                    ['id' => 'start', 'type' => 'start', 'data' => []],
+                    ['id' => 'hours', 'type' => 'business_hours_check', 'data' => []],
+                ],
+                'edges' => [],
+            ],
+            'is_active' => true,
+            'is_default' => true,
+        ]);
+
+        $channel = new FakeMessagingChannel;
+        $contact = Contact::create(['wa_id' => '5547999999999']);
+        $conversation = $contact->conversations()->create([
+            'status' => Conversation::STATUS_BOT,
+            'flow_id' => $flow->id,
+            'last_message_at' => now(),
+        ]);
+
+        $blocked = (new OutOfHoursGate)->blocksBotFlow($conversation, $channel);
+
+        $this->assertFalse($blocked);
+        $this->assertSame(0, $conversation->messages()->where('direction', Message::DIRECTION_OUT)->count());
+
+        Carbon::setTestNow();
+    }
+
     public function test_gate_allows_flow_during_business_hours(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-07-07 10:00:00', 'America/Sao_Paulo'));

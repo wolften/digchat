@@ -192,13 +192,12 @@ export function InternalChat() {
             {/* Painel — abre para baixo, alinhado à direita do trigger */}
             <div
                 className={cn(
-                    'absolute right-0 top-full z-50 mt-2 flex w-80 flex-col overflow-hidden rounded-2xl border border-accent/20 bg-white shadow-2xl dark:bg-[#142a1b]',
+                    'fixed inset-x-3 top-16 z-50 flex h-[min(440px,calc(100vh-5rem))] flex-col overflow-hidden rounded-2xl border border-accent/20 bg-white shadow-2xl dark:bg-[#142a1b] md:absolute md:inset-x-auto md:right-0 md:top-full md:mt-2 md:h-[440px] md:w-80',
                     'transition-all duration-200 ease-out',
                     open
                         ? 'pointer-events-auto translate-y-0 opacity-100'
                         : 'pointer-events-none -translate-y-1 opacity-0',
                 )}
-                style={{ height: '440px' }}
             >
                     {/* Header */}
                     <div className="flex shrink-0 items-center justify-between border-b border-accent/10 px-4 py-3">

@@ -6,7 +6,6 @@ use App\Events\ConversationUpdated;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Models\Channel;
@@ -117,11 +116,6 @@ class Conversation extends Model
     public function surveyResponse(): HasOne
     {
         return $this->hasOne(SurveyResponse::class);
-    }
-
-    public function tags(): BelongsToMany
-    {
-        return $this->belongsToMany(Tag::class);
     }
 
     public function isHandledByBot(): bool

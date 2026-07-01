@@ -1,5 +1,6 @@
 import { Badge } from '@/Components/ui/badge';
 import { Button } from '@/Components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Input } from '@/Components/ui/input';
 import {
     Select,
@@ -9,7 +10,9 @@ import {
     SelectValue,
 } from '@/Components/ui/select';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { formatDuration as fmtDuration } from '@/lib/formatDuration';
 import { mediaCaption } from '@/lib/messageMedia';
+
 import { cn } from '@/lib/utils';
 import { PageProps } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -22,14 +25,17 @@ import {
     Copy,
     Download,
     FileText,
+    Filter,
     History,
     ImageIcon,
     MessageCircle,
     Mic,
     Search,
+    SlidersHorizontal,
     Star,
     UserRound,
     Video,
+    X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Fragment, useEffect, useRef, useState } from 'react';
@@ -95,6 +101,8 @@ interface Detail {
     contact: { id: number; name: string; wa_id: string };
     assigned_user: { id: number; name: string } | null;
     sector: { id: number; name: string } | null;
+    channel_type: 'whatsapp' | 'telegram' | 'web' | null;
+    channel_name: string | null;
     duration_minutes: number | null;
     created_at: string | null;
     last_message_at: string | null;
@@ -151,10 +159,7 @@ function initials(name: string): string {
 
 function formatDuration(mins: number | null): string {
     if (mins === null || mins < 0) return '—';
-    if (mins < 60) return `${mins}m`;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    return fmtDuration(mins);
 }
 
 function formatTime(iso: string | null): string {
@@ -323,159 +328,170 @@ function StatCard({
     label,
     value,
     sub,
-    icon: Icon,
-    iconClass,
+    icon,
+    iconBg,
 }: {
     label: string;
     value: string;
     sub: string;
-    icon: React.ElementType;
-    iconClass: string;
+    icon: React.ReactNode;
+    iconBg: string;
 }) {
     return (
-        <div className="group relative overflow-hidden rounded-2xl border border-accent/10 bg-ink/[0.025] px-4 py-3.5 transition-colors hover:border-accent/20 hover:bg-ink/[0.04]">
-            <div className={cn('absolute right-3.5 top-3.5 rounded-xl p-2', iconClass)}>
-                <Icon className="h-4 w-4" />
-            </div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-ink/40">{label}</p>
-            <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink/90">{value}</p>
-            <p className="mt-0.5 text-[11px] text-ink/35">{sub}</p>
-        </div>
-    );
-}
-
-// ─── ChannelBadge ─────────────────────────────────────────────────────────────
-
-function ChannelBadge({ type, name }: { type: 'whatsapp' | 'telegram' | 'web' | null; name: string | null }) {
-    if (type === 'telegram') {
-        return (
-            <span className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full border border-blue-300/50 bg-blue-50 px-1.5 text-[10px] font-medium text-blue-600 dark:border-blue-400/25 dark:bg-blue-950/40 dark:text-blue-400">
-                <TelegramIcon className="h-2.5 w-2.5" />
-                {name ?? 'Telegram'}
-            </span>
-        );
-    }
-    if (type === 'web') {
-        return (
-            <span className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full border border-violet-300/50 bg-violet-50 px-1.5 text-[10px] font-medium text-violet-600 dark:border-violet-400/25 dark:bg-violet-950/40 dark:text-violet-400">
-                <WebIcon className="h-2.5 w-2.5" />
-                {name ?? 'Chat Web'}
-            </span>
-        );
-    }
-    return (
-        <span className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full border border-green-300/50 bg-green-50 px-1.5 text-[10px] font-medium text-green-600 dark:border-green-400/25 dark:bg-green-950/40 dark:text-green-400">
-            <WhatsAppIcon className="h-2.5 w-2.5" />
-            {name ?? 'WhatsApp'}
-        </span>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {label}
+                </CardTitle>
+                <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', iconBg)}>
+                    {icon}
+                </div>
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold tracking-tight sm:text-3xl">{value}</div>
+                <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
+            </CardContent>
+        </Card>
     );
 }
 
 // ─── ConvRow ─────────────────────────────────────────────────────────────────
 
 const TAG_BADGE_CLASSES: Record<string, string> = {
-    blue:   'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40',
-    green:  'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/40',
-    amber:  'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/40',
-    red:    'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40',
-    purple: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/40',
-    teal:   'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800/40',
-    coral:  'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
-    pink:   'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-800/40',
+    blue:   'bg-blue-100 text-blue-800 border-ink/15 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/40',
+    green:  'bg-green-100 text-green-800 border-ink/15 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/40',
+    amber:  'bg-amber-100 text-amber-800 border-ink/15 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/40',
+    red:    'bg-red-100 text-red-800 border-ink/15 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/40',
+    purple: 'bg-purple-100 text-purple-800 border-ink/15 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/40',
+    teal:   'bg-teal-100 text-teal-800 border-ink/15 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800/40',
+    coral:  'bg-orange-100 text-orange-800 border-ink/15 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800/40',
+    pink:   'bg-pink-100 text-pink-800 border-ink/15 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-800/40',
 };
 
 function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolean; onClick: () => void }) {
+    const previewParts: string[] = [];
+    if (conv.protocol_number) previewParts.push(`#${conv.protocol_number}`);
+    if (conv.duration_minutes !== null) previewParts.push(formatDuration(conv.duration_minutes));
+    if (conv.survey_completed && conv.survey_answer) previewParts.push(conv.survey_answer);
+    const preview = previewParts.join(' · ') || '—';
+
     return (
-        <li className="relative">
-            {selected && (
-                <span className="absolute inset-y-0 left-0 z-10 w-[3px] rounded-r-full bg-accent" />
-            )}
+        <li>
             <button
                 type="button"
                 onClick={onClick}
                 className={cn(
-                    'w-full px-4 py-3.5 text-left transition-all',
-                    selected
-                        ? 'bg-accent/[0.08]'
-                        : 'hover:bg-ink/[0.03]',
+                    'group relative w-full border-b border-ink/[0.07] px-4 py-3 text-left text-ink transition',
+                    selected ? 'bg-accent/[0.08]' : 'hover:bg-ink/[0.05]',
                 )}
             >
+                {selected && (
+                    <span className="absolute inset-y-0 left-0 z-10 w-[3px] rounded-r-full bg-accent" />
+                )}
+
                 <div className="flex items-start gap-3">
-                    <div className={cn(
-                        'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold transition-colors',
-                        selected
-                            ? 'bg-accent text-canvas'
-                            : 'border border-accent/25 bg-accent/10 text-accent',
-                    )}>
-                        {initials(conv.contact.name)}
+                    <div className="relative mt-0.5 shrink-0">
+                        <div
+                            className={cn(
+                                'h-10 w-10 overflow-hidden rounded-full transition-colors',
+                                selected
+                                    ? 'bg-accent shadow-sm shadow-accent/30'
+                                    : 'border border-accent/25 bg-accent/10',
+                            )}
+                        >
+                            <div
+                                className={cn(
+                                    'flex h-full w-full items-center justify-center text-xs font-semibold',
+                                    selected ? 'text-canvas' : 'text-accent',
+                                )}
+                            >
+                                {initials(conv.contact.name)}
+                            </div>
+                        </div>
+                        <span
+                            className={cn(
+                                'absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-canvas',
+                                conv.channel_type === 'telegram'
+                                    ? 'bg-blue-500 text-white'
+                                    : conv.channel_type === 'web'
+                                      ? 'bg-violet-500 text-white'
+                                      : 'bg-green-500 text-white',
+                            )}
+                            title={conv.channel_name ?? (conv.channel_type === 'telegram' ? 'Telegram' : conv.channel_type === 'web' ? 'Chat Web' : 'WhatsApp')}
+                        >
+                            {conv.channel_type === 'telegram' ? (
+                                <TelegramIcon className="h-2.5 w-2.5" />
+                            ) : conv.channel_type === 'web' ? (
+                                <WebIcon className="h-2.5 w-2.5" />
+                            ) : (
+                                <WhatsAppIcon className="h-2.5 w-2.5" />
+                            )}
+                        </span>
                     </div>
 
                     <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline justify-between gap-2">
-                            <span className={cn(
-                                'truncate text-sm font-semibold',
-                                selected ? 'text-ink/95' : 'text-ink/80',
-                            )}>
-                                {conv.contact.name}
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="truncate font-medium">{conv.contact.name}</span>
+                            <span className="shrink-0 text-xs text-ink/40">
+                                {formatTime(conv.last_message_at) || formatRelativeDate(conv.last_message_at)}
                             </span>
-                            <div className="flex shrink-0 items-center gap-1.5">
-                                {conv.protocol_number && (
-                                    <span className="text-[10px] font-mono text-ink/30">
-                                        #{conv.protocol_number}
-                                    </span>
-                                )}
-                                <span className="text-[10px] text-ink/35">
-                                    {formatRelativeDate(conv.last_message_at)}
-                                </span>
-                            </div>
                         </div>
-
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                            <ChannelBadge type={conv.channel_type} name={conv.channel_name} />
-
-                            {conv.sector && (
-                                <Badge variant="outline" className="h-4 border-ink/15 px-1.5 text-[10px] font-normal text-ink/50">
-                                    {conv.sector.name}
-                                </Badge>
+                        <div className="flex items-center gap-1 overflow-hidden text-sm text-ink/48">
+                            {conv.survey_completed && (
+                                <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
                             )}
-
-                            {conv.tags?.slice(0, 2).map((tag) => (
-                                <span
-                                    key={tag.id}
-                                    className={`inline-flex h-4 max-w-[7rem] min-w-0 items-center rounded-full border px-1.5 text-[10px] font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
-                                    title={tag.name}
-                                >
-                                    <span className="min-w-0 truncate">{tag.name}</span>
-                                </span>
-                            ))}
-
-                            {conv.bot_only ? (
-                                <span className="inline-flex h-4 items-center gap-0.5 rounded-full bg-accent/10 px-1.5 text-[10px] font-medium text-accent">
-                                    <Bot className="h-2.5 w-2.5" />
-                                    Bot
-                                </span>
-                            ) : conv.assigned_user ? (
-                                <span className="flex items-center gap-0.5 text-[10px] text-ink/40">
-                                    <UserRound className="h-2.5 w-2.5" />
-                                    {conv.assigned_user.name}
-                                </span>
-                            ) : null}
-
-                            {conv.duration_minutes !== null && (
-                                <span className="flex items-center gap-0.5 text-[10px] text-ink/30">
-                                    <Clock className="h-2.5 w-2.5" />
-                                    {formatDuration(conv.duration_minutes)}
-                                </span>
-                            )}
-
-                            {conv.survey_completed && conv.survey_answer && (
-                                <span className="flex items-center gap-0.5 text-[10px] text-amber-500">
-                                    <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
-                                    {conv.survey_answer}
-                                </span>
-                            )}
+                            <span className="truncate">{preview}</span>
                         </div>
                     </div>
+                </div>
+
+                <div className="mt-2 flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium leading-none">
+                    {conv.bot_only ? (
+                        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-ink/15 bg-sky-400/12 px-2 font-semibold text-sky-700 dark:border-sky-400/35 dark:bg-sky-400/12 dark:text-sky-300">
+                            <Bot className="h-3 w-3" />
+                            Automação
+                        </span>
+                    ) : (
+                        <Badge variant="outline" className="h-5 shrink-0 px-2 py-0 text-[10px] leading-none">
+                            Encerrado
+                        </Badge>
+                    )}
+
+                    {conv.sector && (
+                        <span
+                            className="inline-flex h-5 max-w-[12rem] min-w-0 items-center gap-1 rounded-full bg-accent/[0.07] px-1.5 text-accent"
+                            title={conv.sector.name}
+                        >
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/80" />
+                            <span className="min-w-0 truncate">{conv.sector.name}</span>
+                        </span>
+                    )}
+
+                    {conv.tags?.slice(0, 2).map((tag) => (
+                        <span
+                            key={tag.id}
+                            className={`inline-flex h-5 max-w-[8rem] min-w-0 items-center rounded-full border px-1.5 text-[10px] font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
+                            title={tag.name}
+                        >
+                            <span className="min-w-0 truncate">{tag.name}</span>
+                        </span>
+                    ))}
+
+                    {(conv.tags?.length ?? 0) > 2 && (
+                        <span className="text-[10px] text-ink/35">+{conv.tags!.length - 2}</span>
+                    )}
+
+                    {conv.assigned_user && (
+                        <span
+                            className="inline-flex h-5 max-w-[9rem] min-w-0 items-center gap-1 text-ink/50"
+                            title={conv.assigned_user.name}
+                        >
+                            <UserRound className="h-3 w-3 shrink-0 opacity-60" />
+                            <span className="min-w-0 truncate">
+                                {conv.assigned_user.name.split(' ')[0]}
+                            </span>
+                        </span>
+                    )}
                 </div>
             </button>
         </li>
@@ -495,16 +511,25 @@ function DetailPanel({ detail }: { detail: Detail }) {
     return (
         <>
             {/* Header */}
-            <div className="shrink-0 border-b border-accent/10 bg-ink/[0.015] px-4 py-2.5">
-                <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-canvas shadow-sm shadow-accent/30">
+            <div className="shrink-0 border-b border-ink/[0.08] bg-gradient-to-r from-accent/[0.08] via-ink/[0.03] to-transparent px-4 py-2.5">
+                <div className="flex min-h-14 items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-canvas shadow-md shadow-accent/25">
                         {initials(detail.contact.name)}
                     </div>
 
                     <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-ink/90">{detail.contact.name}</p>
-                        <div className="flex items-center gap-2">
-                            <p className="text-[10px] text-ink/40">{detail.contact.wa_id}</p>
+                        <div className="truncate text-sm font-semibold text-ink/95">
+                            {detail.contact.name}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <span className="text-[11px] font-medium text-ink/55">
+                                {detail.channel_type === 'telegram'
+                                    ? `ID: ${detail.contact.wa_id}`
+                                    : detail.channel_type === 'web'
+                                      ? 'Chat Web'
+                                      : detail.contact.wa_id}
+                            </span>
+
                             {detail.protocol_number && (
                                 <button
                                     type="button"
@@ -513,48 +538,78 @@ function DetailPanel({ detail }: { detail: Detail }) {
                                         navigator.clipboard.writeText(detail.protocol_number!);
                                         toast.success('Protocolo copiado!');
                                     }}
-                                    className="inline-flex items-center gap-1 rounded border border-ink/[0.10] bg-ink/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-ink/50 transition-colors hover:bg-ink/[0.08] hover:text-ink/80"
+                                    className="group inline-flex items-center gap-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-accent transition-colors hover:bg-accent/15"
                                 >
                                     #{detail.protocol_number}
-                                    <Copy className="h-2.5 w-2.5" />
+                                    <Copy className="h-2.5 w-2.5 opacity-70 transition-opacity group-hover:opacity-100" />
                                 </button>
                             )}
-                        </div>
-                    </div>
 
-                    <div className="flex shrink-0 items-center gap-1.5">
-                        {detail.sector && (
-                            <span className="inline-flex h-5 items-center rounded-md border border-ink/10 bg-ink/[0.04] px-2 text-[10px] text-ink/50">
-                                {detail.sector.name}
-                            </span>
-                        )}
-                        {detail.assigned_user ? (
-                            <span className="inline-flex h-5 items-center gap-1 rounded-md border border-ink/10 bg-ink/[0.04] px-2 text-[10px] text-ink/50">
-                                <UserRound className="h-2.5 w-2.5" />
-                                {detail.assigned_user.name}
-                            </span>
-                        ) : (
-                            <span className="inline-flex h-5 items-center gap-1 rounded-md border border-accent/20 bg-accent/8 px-2 text-[10px] text-accent">
-                                <Bot className="h-2.5 w-2.5" />
-                                Bot
-                            </span>
-                        )}
-                        <span className="inline-flex h-5 items-center gap-1 rounded-md border border-ink/10 bg-ink/[0.04] px-2 text-[10px] text-ink/45">
-                            <Clock className="h-2.5 w-2.5" />
-                            {formatDuration(detail.duration_minutes)}
-                        </span>
-                        <span className="hidden text-[10px] text-ink/30 xl:block">
-                            {formatDateTime(detail.created_at)}
-                            {detail.last_message_at && detail.last_message_at !== detail.created_at && (
-                                <> → {formatDateTime(detail.last_message_at)}</>
+                            {detail.channel_type === 'telegram' ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-950/30 dark:text-blue-400">
+                                    <TelegramIcon className="h-2.5 w-2.5" />
+                                    {detail.channel_name ?? 'Telegram'}
+                                </span>
+                            ) : detail.channel_type === 'web' ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:bg-violet-950/30 dark:text-violet-400">
+                                    <WebIcon className="h-2.5 w-2.5" />
+                                    {detail.channel_name ?? 'Chat Web'}
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:bg-green-950/30 dark:text-green-400">
+                                    <WhatsAppIcon className="h-2.5 w-2.5" />
+                                    {detail.channel_name ?? 'WhatsApp'}
+                                </span>
                             )}
-                        </span>
+
+                            <span className="inline-flex items-center rounded-full bg-ink/[0.08] px-1.5 py-0.5 text-[10px] font-medium text-ink/65">
+                                Encerrado
+                            </span>
+
+                            {detail.sector && (
+                                <span className="inline-flex items-center rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                                    {detail.sector.name}
+                                </span>
+                            )}
+
+                            {detail.assigned_user ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-950/30 dark:text-sky-300">
+                                    <UserRound className="h-2.5 w-2.5" />
+                                    {detail.assigned_user.name}
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-950/30 dark:text-violet-400">
+                                    <Bot className="h-2.5 w-2.5" />
+                                    Automação
+                                </span>
+                            )}
+
+                            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
+                                <Clock className="h-2.5 w-2.5" />
+                                {formatDuration(detail.duration_minutes)}
+                            </span>
+
+                            {detail.survey?.status === 'completed' && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+                                    <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                                    Pesquisa
+                                </span>
+                            )}
+
+                            <span className="inline-flex items-center gap-1 rounded-full border border-ink/[0.10] bg-ink/[0.04] px-1.5 py-0.5 text-[10px] font-medium text-ink/60">
+                                <Calendar className="h-2.5 w-2.5 text-accent/70" />
+                                {formatDateTime(detail.created_at)}
+                                {detail.last_message_at && detail.last_message_at !== detail.created_at && (
+                                    <> → {formatDateTime(detail.last_message_at)}</>
+                                )}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Thread */}
-            <div ref={threadRef} className="scrollbar-thin flex-1 overflow-y-auto px-5 py-5">
+            <div ref={threadRef} className="chat-bg scrollbar-thin flex-1 overflow-y-auto px-5 py-5">
                 <Divider label={`Início · ${formatDateTime(detail.created_at)}`} variant="muted" />
 
                 {timeline.map((event, i) => {
@@ -690,6 +745,39 @@ export default function HistoricoIndex({
         return route('historico.export') + '?' + p.toString();
     })();
 
+    const setPreset = (preset: 'today' | 'week' | 'month') => {
+        const now = new Date();
+        const to = now.toISOString().slice(0, 10);
+        let from = to;
+        if (preset === 'week') {
+            const d = new Date(now);
+            d.setDate(d.getDate() - d.getDay());
+            from = d.toISOString().slice(0, 10);
+        } else if (preset === 'month') {
+            from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+        }
+        go({ date_from: from, date_to: to, conversation: undefined });
+    };
+
+    const activeFilterCount = [
+        filters.sector_id,
+        filters.user_id,
+        filters.tag_id,
+        filters.channel,
+        filters.search,
+    ].filter(Boolean).length;
+
+    const clearFilters = () => {
+        const now = new Date();
+        const to = now.toISOString().slice(0, 10);
+        const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+        setLocalSearch('');
+        router.get(route('historico.index'), { date_from: from, date_to: to }, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
     return (
         <AuthenticatedLayout header={<h2>Histórico</h2>}>
             <Head title="Histórico" />
@@ -697,169 +785,205 @@ export default function HistoricoIndex({
             <div className="flex h-full flex-col overflow-hidden">
 
                 {/* ── Stats + Filters ── */}
-                <div className="shrink-0 space-y-3 border-b border-accent/10 px-5 py-4">
+                <div className="shrink-0 space-y-3 border-b border-accent/10 px-4 py-3.5 lg:px-5">
 
                     {/* Stats */}
-                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 lg:gap-3">
                         <StatCard
                             label="Atendimentos"
                             value={stats.total.toLocaleString('pt-BR')}
                             sub="no período"
-                            icon={MessageCircle}
-                            iconClass="bg-accent/10 text-accent"
+                            icon={<MessageCircle className="h-4 w-4 text-green-600 dark:text-green-400" />}
+                            iconBg="bg-green-50 dark:bg-green-900/20"
                         />
                         <StatCard
                             label="Tempo médio"
                             value={formatDuration(stats.avg_duration_minutes)}
                             sub="por conversa"
-                            icon={Clock}
-                            iconClass="bg-blue-500/10 text-blue-500"
+                            icon={<Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
+                            iconBg="bg-blue-50 dark:bg-blue-900/20"
                         />
                         <StatCard
                             label="Bot resolveu"
                             value={`${stats.bot_only_pct}%`}
                             sub="sem atendente humano"
-                            icon={Bot}
-                            iconClass="bg-violet-500/10 text-violet-500"
+                            icon={<Bot className="h-4 w-4 text-violet-600 dark:text-violet-400" />}
+                            iconBg="bg-violet-50 dark:bg-violet-900/20"
                         />
                         <StatCard
                             label="Pesquisas"
                             value={stats.survey_completed.toLocaleString('pt-BR')}
                             sub="respondidas"
-                            icon={Star}
-                            iconClass="bg-amber-500/10 text-amber-500"
+                            icon={<Star className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+                            iconBg="bg-amber-50 dark:bg-amber-900/20"
                         />
                     </div>
 
                     {/* Filters */}
-                    <div className="scrollbar-thin flex items-center gap-1.5 overflow-x-auto pb-px">
+                    <Card>
+                        <CardContent className="space-y-3 p-3.5 lg:p-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/40" />
+                                    <Input
+                                        className="h-9 pl-9 text-xs"
+                                        placeholder="Buscar contato ou protocolo..."
+                                        value={localSearch}
+                                        onChange={(e) => handleSearch(e.target.value)}
+                                    />
+                                </div>
 
-                        {/* Search */}
-                        <div className="relative shrink-0">
-                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/35" />
-                            <Input
-                                className="h-8 w-48 pl-8 text-xs"
-                                placeholder="Contato ou protocolo..."
-                                value={localSearch}
-                                onChange={(e) => handleSearch(e.target.value)}
-                            />
-                        </div>
+                                <div className="grid grid-cols-[7.25rem_auto_7.25rem] items-center gap-x-3 rounded-xl border border-accent/15 bg-ink/[0.03] px-3 py-1">
+                                    <label className="sr-only" htmlFor="date-from">Data inicial</label>
+                                    <Input
+                                        id="date-from"
+                                        type="date"
+                                        title="Data inicial"
+                                        className="date-range-input h-8 w-full cursor-pointer border-0 bg-transparent px-0 text-center text-xs font-medium text-ink/80 shadow-none focus-visible:ring-0"
+                                        value={filters.date_from}
+                                        onChange={(e) => go({ date_from: e.target.value, conversation: undefined })}
+                                    />
+                                    <span className="flex h-8 items-center justify-center text-xs leading-none text-ink/30 select-none">até</span>
+                                    <label className="sr-only" htmlFor="date-to">Data final</label>
+                                    <Input
+                                        id="date-to"
+                                        type="date"
+                                        title="Data final"
+                                        className="date-range-input h-8 w-full cursor-pointer border-0 bg-transparent px-0 text-center text-xs font-medium text-ink/80 shadow-none focus-visible:ring-0"
+                                        value={filters.date_to}
+                                        onChange={(e) => go({ date_to: e.target.value, conversation: undefined })}
+                                    />
+                                </div>
 
-                        <div className="mx-0.5 h-4 w-px shrink-0 bg-ink/12" />
+                                <Select
+                                    value={filters.sector_id ? String(filters.sector_id) : 'all'}
+                                    onValueChange={(v) => go({ sector_id: v === 'all' ? null : Number(v), conversation: undefined })}
+                                >
+                                    <SelectTrigger className="h-9 w-[9.5rem] text-xs">
+                                        <SelectValue placeholder="Setor" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos os setores</SelectItem>
+                                        {sectors.map((s) => (
+                                            <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
 
-                        {/* Date range */}
-                        <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-ink/10 bg-ink/[0.025] px-2.5 py-1.5">
-                            <Calendar className="h-3 w-3 shrink-0 text-ink/35" />
-                            <Input
-                                type="date"
-                                className="h-5 w-[5.75rem] border-0 bg-transparent p-0 text-[11px] shadow-none focus-visible:ring-0"
-                                value={filters.date_from}
-                                onChange={(e) => go({ date_from: e.target.value, conversation: undefined })}
-                            />
-                            <span className="text-[11px] text-ink/25">–</span>
-                            <Input
-                                type="date"
-                                className="h-5 w-[5.75rem] border-0 bg-transparent p-0 text-[11px] shadow-none focus-visible:ring-0"
-                                value={filters.date_to}
-                                onChange={(e) => go({ date_to: e.target.value, conversation: undefined })}
-                            />
-                        </div>
+                                <Select
+                                    value={filters.user_id ? String(filters.user_id) : 'all'}
+                                    onValueChange={(v) => go({ user_id: v === 'all' ? null : Number(v), conversation: undefined })}
+                                >
+                                    <SelectTrigger className="h-9 w-[9.5rem] text-xs">
+                                        <SelectValue placeholder="Atendente" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos os atendentes</SelectItem>
+                                        {users.map((u) => (
+                                            <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
 
-                        <div className="mx-0.5 h-4 w-px shrink-0 bg-ink/12" />
+                                <Select
+                                    value={filters.channel ?? 'all'}
+                                    onValueChange={(v) => go({ channel: v === 'all' ? null : v, conversation: undefined })}
+                                >
+                                    <SelectTrigger className="h-9 w-[9rem] text-xs">
+                                        <SelectValue placeholder="Canal" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos os canais</SelectItem>
+                                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                                        <SelectItem value="telegram">Telegram</SelectItem>
+                                    </SelectContent>
+                                </Select>
 
-                        {/* Selects */}
-                        <Select
-                            value={filters.sector_id ? String(filters.sector_id) : 'all'}
-                            onValueChange={(v) => go({ sector_id: v === 'all' ? null : Number(v), conversation: undefined })}
-                        >
-                            <SelectTrigger className="h-8 w-36 shrink-0 text-xs">
-                                <SelectValue placeholder="Setor" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos os setores</SelectItem>
-                                {sectors.map((s) => (
-                                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                {tags.length > 0 && (
+                                    <Select
+                                        value={filters.tag_id ? String(filters.tag_id) : 'all'}
+                                        onValueChange={(v) => go({ tag_id: v === 'all' ? null : Number(v), conversation: undefined })}
+                                    >
+                                        <SelectTrigger className="h-9 w-[9rem] text-xs">
+                                            <SelectValue placeholder="Etiqueta" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todas as etiquetas</SelectItem>
+                                            {tags.map((t) => (
+                                                <SelectItem key={t.id} value={String(t.id)}>
+                                                    {t.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+
+                                <a href={exportUrl} download className="shrink-0">
+                                    <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs">
+                                        <Download className="h-3.5 w-3.5" />
+                                        Exportar
+                                    </Button>
+                                </a>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 border-t border-accent/8 pt-3">
+                                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-ink/40">
+                                    <SlidersHorizontal className="h-3 w-3" />
+                                    Período
+                                </span>
+                                {(['today', 'week', 'month'] as const).map((preset) => (
+                                    <Button
+                                        key={preset}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 rounded-full px-3 text-xs hover:bg-accent/10 hover:text-accent"
+                                        onClick={() => setPreset(preset)}
+                                    >
+                                        {preset === 'today' ? 'Hoje' : preset === 'week' ? 'Esta semana' : 'Este mês'}
+                                    </Button>
                                 ))}
-                            </SelectContent>
-                        </Select>
-
-                        <Select
-                            value={filters.user_id ? String(filters.user_id) : 'all'}
-                            onValueChange={(v) => go({ user_id: v === 'all' ? null : Number(v), conversation: undefined })}
-                        >
-                            <SelectTrigger className="h-8 w-36 shrink-0 text-xs">
-                                <SelectValue placeholder="Atendente" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos os atendentes</SelectItem>
-                                {users.map((u) => (
-                                    <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                        <Select
-                            value={filters.channel ?? 'all'}
-                            onValueChange={(v) => go({ channel: v === 'all' ? null : v, conversation: undefined })}
-                        >
-                            <SelectTrigger className="h-8 w-36 shrink-0 text-xs">
-                                <SelectValue placeholder="Canal" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Todos os canais</SelectItem>
-                                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                                <SelectItem value="telegram">Telegram</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        {tags.length > 0 && (
-                            <Select
-                                value={filters.tag_id ? String(filters.tag_id) : 'all'}
-                                onValueChange={(v) => go({ tag_id: v === 'all' ? null : Number(v), conversation: undefined })}
-                            >
-                                <SelectTrigger className="h-8 w-36 shrink-0 text-xs">
-                                    <SelectValue placeholder="Etiqueta" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Todas as etiquetas</SelectItem>
-                                    {tags.map((t) => (
-                                        <SelectItem key={t.id} value={String(t.id)}>
-                                            {t.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
-
-                        {/* Spacer + Export */}
-                        <div className="flex-1" />
-                        <a href={exportUrl} download className="shrink-0">
-                            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                                <Download className="h-3.5 w-3.5" />
-                                CSV
-                            </Button>
-                        </a>
-                    </div>
+                                {activeFilterCount > 0 && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="ml-auto h-7 gap-1 text-xs text-ink/50 hover:text-ink/80"
+                                        onClick={clearFilters}
+                                    >
+                                        <X className="h-3 w-3" />
+                                        Limpar filtros ({activeFilterCount})
+                                    </Button>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* ── Content ── */}
-                <div className="flex min-h-0 flex-1 overflow-hidden">
+                <div className="flex min-h-0 flex-1 gap-0 overflow-hidden p-2 lg:gap-2 lg:p-3">
 
                     {/* Left: Conversation list */}
-                    <div className="flex w-[300px] shrink-0 flex-col overflow-hidden border-r border-accent/10">
+                    <Card className="flex w-[min(100%,340px)] shrink-0 flex-col overflow-hidden md:w-[340px]">
+
+                        <div className="flex shrink-0 items-center justify-between border-b border-ink/[0.08] px-4 py-2.5">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-ink/60">
+                                <Filter className="h-3.5 w-3.5" />
+                                {conversations.total.toLocaleString('pt-BR')}{' '}
+                                {conversations.total === 1 ? 'atendimento' : 'atendimentos'}
+                            </span>
+                        </div>
 
                         {conversations.data.length === 0 ? (
                             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-                                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-ink/[0.04]">
-                                    <History className="h-7 w-7 text-ink/20" />
+                                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-ink/[0.04] ring-1 ring-ink/10">
+                                    <History className="h-7 w-7 text-ink/25" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-ink/40">Nenhum atendimento</p>
-                                    <p className="mt-0.5 text-xs text-ink/25">Tente ajustar os filtros</p>
+                                    <p className="text-sm font-medium text-ink/50">Nenhum atendimento encontrado</p>
+                                    <p className="mt-1 text-xs text-ink/35">Ajuste o período ou os filtros acima</p>
                                 </div>
                             </div>
                         ) : (
-                            <ul className="scrollbar-thin flex-1 overflow-y-auto divide-y divide-accent/[0.07]">
+                            <ul className="scrollbar-thin flex-1 overflow-y-auto">
                                 {conversations.data.map((c) => (
                                     <ConvRow
                                         key={c.id}
@@ -873,8 +997,8 @@ export default function HistoricoIndex({
 
                         {conversations.last_page > 1 && (
                             <div className="flex shrink-0 items-center justify-between border-t border-accent/10 px-3 py-2">
-                                <span className="text-[11px] text-ink/35">
-                                    {conversations.total.toLocaleString('pt-BR')} · {conversations.current_page}/{conversations.last_page}
+                                <span className="text-[11px] text-ink/40">
+                                    Página {conversations.current_page} de {conversations.last_page}
                                 </span>
                                 <div className="flex gap-0.5">
                                     <Button
@@ -898,20 +1022,20 @@ export default function HistoricoIndex({
                                 </div>
                             </div>
                         )}
-                    </div>
+                    </Card>
 
-                    {/* Right: Detail */}
-                    <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                    {/* Right: Detail — painel de trabalho, sem glow */}
+                    <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-accent/10 bg-ink/[0.015]">
                         {selected ? (
                             <DetailPanel detail={selected} />
                         ) : (
                             <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
                                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-accent/15 bg-accent/5">
-                                    <MessageCircle className="h-8 w-8 text-accent/30" />
+                                    <MessageCircle className="h-8 w-8 text-accent/40" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-ink/35">Selecione um atendimento</p>
-                                    <p className="mt-0.5 text-xs text-ink/25">para visualizar o histórico completo</p>
+                                    <p className="font-manrope text-sm font-semibold text-ink/55">Selecione um atendimento</p>
+                                    <p className="mt-1 text-xs text-ink/35">Clique em uma conversa para ver o histórico completo</p>
                                 </div>
                             </div>
                         )}

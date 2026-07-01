@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Contracts\MessagingChannel;
 use App\Models\AppSetting;
 use App\Models\Conversation;
+use App\Models\Flow;
 use App\Services\WhatsApp\MessageSender;
 
 class OutOfHoursGate
@@ -19,6 +20,14 @@ class OutOfHoursGate
     public function blocksBotFlow(Conversation $conversation, MessagingChannel $channel): bool
     {
         if ($this->businessHours->isOpen($conversation->sector_id)) {
+            return false;
+        }
+
+        $flow = $conversation->flow_id
+            ? Flow::find($conversation->flow_id)
+            : Flow::defaultFlow();
+
+        if ($flow?->hasBusinessHoursCheck()) {
             return false;
         }
 

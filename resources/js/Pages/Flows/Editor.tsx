@@ -29,6 +29,7 @@ import ReactFlow, {
     type Edge,
     type Node,
     type NodeProps,
+    type ReactFlowInstance,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -36,7 +37,7 @@ import 'reactflow/dist/style.css';
 // Types
 // ---------------------------------------------------------------------------
 
-type FlowNodeType = 'start' | 'message' | 'question' | 'ixc_action' | 'handoff' | 'end';
+type FlowNodeType = 'start' | 'message' | 'question' | 'ixc_action' | 'business_hours_check' | 'handoff' | 'end';
 
 interface QuestionOption {
     id: string;
@@ -49,6 +50,7 @@ interface FlowNodeData {
     action?: 'invoice_second_copy' | 'trust_unlock';
     confirm_message?: string;
     document_message?: string;
+    hours_scope?: 'global' | 'conversation' | 'sector';
     sector_id?: number | null;
     sector_name?: string;
     max_retries?: number;
@@ -112,6 +114,7 @@ const PALETTE: Record<'light' | 'dark', Record<FlowNodeType, NodeColors>> = {
         message:  { bg: '#eff6ff', border: '#93c5fd', selectedBorder: '#2563eb', shadow: '#2563eb22', headerBg: '#2563eb', headerText: '#fff', bodyText: '#1e3a8a', mutedText: '#93c5fd', optionBg: '', optionText: '', optionMuted: '', handleColor: '#2563eb' },
         question: { bg: '#faf5ff', border: '#c4b5fd', selectedBorder: '#7c3aed', shadow: '#7c3aed22', headerBg: '#7c3aed', headerText: '#fff', bodyText: '#4c1d95', mutedText: '#c4b5fd', optionBg: '#ede9fe', optionText: '#5b21b6', optionMuted: '#a78bfa', handleColor: '#7c3aed' },
         ixc_action: { bg: '#ecfeff', border: '#67e8f9', selectedBorder: '#0891b2', shadow: '#0891b222', headerBg: '#0891b2', headerText: '#fff', bodyText: '#164e63', mutedText: '#67e8f9', optionBg: '#cffafe', optionText: '#155e75', optionMuted: '#22d3ee', handleColor: '#0891b2' },
+        business_hours_check: { bg: '#fef2f2', border: '#fca5a5', selectedBorder: '#dc2626', shadow: '#dc262622', headerBg: '#dc2626', headerText: '#fff', bodyText: '#991b1b', mutedText: '#fca5a5', optionBg: '#fee2e2', optionText: '#b91c1c', optionMuted: '#f87171', handleColor: '#dc2626' },
         handoff:  { bg: '#fffbeb', border: '#fcd34d', selectedBorder: '#d97706', shadow: '#d9770622', headerBg: '#d97706', headerText: '#fff', bodyText: '#78350f', mutedText: '#fcd34d', optionBg: '', optionText: '', optionMuted: '', handleColor: '#d97706' },
         end:      { bg: '#f8fafc', border: '#cbd5e1', selectedBorder: '#64748b', shadow: '#64748b22', headerBg: '#64748b', headerText: '#fff', bodyText: '#475569', mutedText: '#94a3b8', optionBg: '', optionText: '', optionMuted: '', handleColor: '#64748b' },
     },
@@ -120,16 +123,46 @@ const PALETTE: Record<'light' | 'dark', Record<FlowNodeType, NodeColors>> = {
         message:  { bg: '#0c1a3a', border: '#1e40af', selectedBorder: '#60a5fa', shadow: '#60a5fa33', headerBg: '#1d4ed8', headerText: '#dbeafe', bodyText: '#93c5fd', mutedText: '#1e40af', optionBg: '', optionText: '', optionMuted: '', handleColor: '#60a5fa' },
         question: { bg: '#1e0a3c', border: '#5b21b6', selectedBorder: '#a78bfa', shadow: '#a78bfa33', headerBg: '#6d28d9', headerText: '#ede9fe', bodyText: '#c4b5fd', mutedText: '#5b21b6', optionBg: '#2e1065', optionText: '#ddd6fe', optionMuted: '#7c3aed', handleColor: '#a78bfa' },
         ixc_action: { bg: '#062832', border: '#155e75', selectedBorder: '#22d3ee', shadow: '#22d3ee33', headerBg: '#0e7490', headerText: '#cffafe', bodyText: '#67e8f9', mutedText: '#155e75', optionBg: '#164e63', optionText: '#cffafe', optionMuted: '#0891b2', handleColor: '#22d3ee' },
+        business_hours_check: { bg: '#1c0a0a', border: '#991b1b', selectedBorder: '#f87171', shadow: '#f8717133', headerBg: '#b91c1c', headerText: '#fee2e2', bodyText: '#fca5a5', mutedText: '#991b1b', optionBg: '#450a0a', optionText: '#fecaca', optionMuted: '#ef4444', handleColor: '#f87171' },
         handoff:  { bg: '#1c1000', border: '#92400e', selectedBorder: '#fbbf24', shadow: '#fbbf2433', headerBg: '#b45309', headerText: '#fef3c7', bodyText: '#fcd34d', mutedText: '#92400e', optionBg: '', optionText: '', optionMuted: '', handleColor: '#fbbf24' },
         end:      { bg: '#1e293b', border: '#334155', selectedBorder: '#94a3b8', shadow: '#94a3b833', headerBg: '#334155', headerText: '#e2e8f0', bodyText: '#94a3b8', mutedText: '#334155', optionBg: '', optionText: '', optionMuted: '', handleColor: '#94a3b8' },
     },
 };
+
+const HANDLE_LABELS: Record<string, string> = {
+    open:    'Aberto',
+    closed:  'Fechado',
+    success: 'Sucesso',
+    failure: 'Falha',
+};
+
+function edgeLabel(edge: Edge, nodes: Node<FlowNodeData>[]): string {
+    const src = nodes.find(n => n.id === edge.source);
+    const tgt = nodes.find(n => n.id === edge.target);
+    const srcType = src?.type as FlowNodeType | undefined;
+    const tgtType = tgt?.type as FlowNodeType | undefined;
+    const srcLabel = srcType ? NODE_LABELS[srcType] : edge.source;
+    const tgtLabel = tgtType ? NODE_LABELS[tgtType] : edge.target;
+
+    let handle = '';
+    if (edge.sourceHandle) {
+        if (HANDLE_LABELS[edge.sourceHandle]) {
+            handle = ` · ${HANDLE_LABELS[edge.sourceHandle]}`;
+        } else {
+            const opt = src?.data?.options?.find(o => o.id === edge.sourceHandle);
+            if (opt?.label) handle = ` · ${opt.label}`;
+        }
+    }
+
+    return `${srcLabel}${handle} → ${tgtLabel}`;
+}
 
 const NODE_LABELS: Record<FlowNodeType, string> = {
     start:    'Início',
     message:  'Mensagem',
     question: 'Pergunta',
     ixc_action: 'Ação IXC',
+    business_hours_check: 'Horário de atendimento',
     handoff:  'Atendente',
     end:      'Encerrar',
 };
@@ -145,6 +178,7 @@ const NODE_SIZES: Record<FlowNodeType, { w: number; h: number }> = {
     message:  { w: 240, h:  90 },
     question: { w: 240, h: 130 },
     ixc_action: { w: 240, h: 108 },
+    business_hours_check: { w: 240, h: 108 },
     handoff:  { w: 200, h:  68 },
     end:      { w: 180, h:  58 },
 };
@@ -159,6 +193,7 @@ const newId = (prefix = 'n') => `${prefix}_${++_nodeCounter}_${Math.random().toS
 const defaultData = (type: FlowNodeType): FlowNodeData => {
     if (type === 'question') return { message: '', options: [{ id: newId('opt'), label: '' }] };
     if (type === 'ixc_action') return { action: 'invoice_second_copy' };
+    if (type === 'business_hours_check') return { hours_scope: 'conversation', sector_id: null, sector_name: '' };
     if (type === 'handoff') return { sector_id: null, sector_name: '' };
     return { message: '' };
 };
@@ -337,6 +372,64 @@ const IxcActionNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
 });
 IxcActionNode.displayName = 'IxcActionNode';
 
+function hoursScopeLabel(data: FlowNodeData): string {
+    const scope = data.hours_scope ?? (data.sector_id != null ? 'sector' : 'conversation');
+    if (scope === 'global') return 'Padrão';
+    if (scope === 'conversation') return 'Setor da conversa';
+    return data.sector_name || 'Setor';
+}
+
+function hoursSelectValue(data: FlowNodeData): string {
+    const scope = data.hours_scope ?? (data.sector_id != null ? 'sector' : 'conversation');
+    if (scope === 'global') return '__global__';
+    if (scope === 'conversation') return '__conversation__';
+    return String(data.sector_id);
+}
+
+const BusinessHoursCheckNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
+    const c = useColors('business_hours_check');
+    const label = hoursScopeLabel(data);
+
+    return (
+        <div style={nodeShell(c, selected ?? false)}>
+            <NodeHeader type="business_hours_check" c={c} />
+            <Handle type="target" position={Position.Left} style={{ background: c.handleColor, border: 'none' }} />
+            <div style={{ padding: '8px 10px', fontSize: 12, color: c.bodyText, maxWidth: 220 }}>
+                <strong>{label}</strong>
+            </div>
+            <div style={{ padding: '0 10px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {[
+                    ['open', 'Aberto'],
+                    ['closed', 'Fechado'],
+                ].map(([id, label]) => (
+                    <div
+                        key={id}
+                        style={{
+                            position: 'relative',
+                            background: c.optionBg,
+                            border: `1px solid ${c.border}`,
+                            borderRadius: 6,
+                            padding: '3px 28px 3px 8px',
+                            fontSize: 11,
+                            color: c.optionText,
+                            fontWeight: 500,
+                        }}
+                    >
+                        {label}
+                        <Handle
+                            type="source"
+                            position={Position.Right}
+                            id={id}
+                            style={{ background: c.handleColor, border: 'none', right: -8, top: '50%', transform: 'translateY(-50%)', position: 'absolute' }}
+                        />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+});
+BusinessHoursCheckNode.displayName = 'BusinessHoursCheckNode';
+
 const HandoffNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
     const c = useColors('handoff');
     return (
@@ -373,16 +466,66 @@ const nodeTypes = {
     message:  MessageNode,
     question: QuestionNode,
     ixc_action: IxcActionNode,
+    business_hours_check: BusinessHoursCheckNode,
     handoff:  HandoffNode,
     end:      EndNode,
 };
 
 // ---------------------------------------------------------------------------
-// Config Panel
+// Side panels
 // ---------------------------------------------------------------------------
 
+function EmptyPanel() {
+    return (
+        <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-ink/40">
+            <p>Selecione um nó ou uma ligação para editá-la</p>
+            <p className="text-xs text-ink/30">Clique na linha entre dois nós para remover a ligação</p>
+        </div>
+    );
+}
+
+interface EdgePanelProps {
+    edge: Edge;
+    nodes: Node<FlowNodeData>[];
+    onDelete: (id: string) => void;
+}
+
+function EdgePanel({ edge, nodes, onDelete }: EdgePanelProps) {
+    return (
+        <div className="flex h-full flex-col">
+            <div className="flex items-center justify-between border-b border-ink/[0.08] px-4 py-3">
+                <span className="text-sm font-semibold text-ink/70">Ligação</span>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-red-400 hover:text-red-600"
+                    onClick={() => onDelete(edge.id)}
+                >
+                    <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+            </div>
+            <div className="flex-1 space-y-4 p-4">
+                <p className="text-sm font-medium text-ink/80">{edgeLabel(edge, nodes)}</p>
+                <p className="text-xs text-ink/45">
+                    Remove apenas a conexão entre os nós. Os nós permanecem no fluxo.
+                </p>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/50 dark:hover:bg-red-950/40"
+                    onClick={() => onDelete(edge.id)}
+                >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    Remover ligação
+                </Button>
+                <p className="text-[10px] text-ink/35">Atalho: Delete ou Backspace</p>
+            </div>
+        </div>
+    );
+}
+
 interface ConfigPanelProps {
-    node: Node<FlowNodeData> | null;
+    node: Node<FlowNodeData>;
     sectors: Sector[];
     onChange: (id: string, data: FlowNodeData) => void;
     onDelete: (id: string) => void;
@@ -390,14 +533,6 @@ interface ConfigPanelProps {
 
 function ConfigPanel({ node, sectors, onChange, onDelete }: ConfigPanelProps) {
     const dark = useContext(DarkCtx);
-
-    if (!node) {
-        return (
-            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-sm text-ink/40">
-                <p>Selecione um nó para configurá-lo</p>
-            </div>
-        );
-    }
 
     const type = node.type as FlowNodeType;
     const data = node.data;
@@ -618,6 +753,41 @@ function ConfigPanel({ node, sectors, onChange, onDelete }: ConfigPanelProps) {
                     </>
                 )}
 
+                {type === 'business_hours_check' && (
+                    <>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">Horário a verificar</Label>
+                            <Select
+                                value={hoursSelectValue(data)}
+                                onValueChange={val => {
+                                    if (val === '__global__') {
+                                        set({ hours_scope: 'global', sector_id: null, sector_name: 'Padrão' });
+                                    } else if (val === '__conversation__') {
+                                        set({ hours_scope: 'conversation', sector_id: null, sector_name: '' });
+                                    } else {
+                                        const s = sectors.find(s => String(s.id) === val);
+                                        set({ hours_scope: 'sector', sector_id: Number(val), sector_name: s?.name ?? '' });
+                                    }
+                                }}
+                            >
+                                <SelectTrigger className="h-8 text-sm">
+                                    <SelectValue placeholder="Setor da conversa" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__conversation__">Setor da conversa</SelectItem>
+                                    <SelectItem value="__global__">Padrão</SelectItem>
+                                    {sectors.map(s => (
+                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <p className="text-[10px] text-ink/40">
+                            Padrão usa a aba Padrão em Horários. Setor da conversa segue o setor atribuído ao atendimento.
+                        </p>
+                    </>
+                )}
+
                 {type === 'handoff' && (
                     <div className="space-y-1.5">
                         <Label className="text-xs">Setor de destino</Label>
@@ -689,29 +859,89 @@ export default function FlowEditor({ flow, sectors }: Props) {
     );
     const [edges, setEdges, onEdgesChange] = useEdgesState(flow?.definition?.edges ?? []);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
     const [flowName, setFlowName]             = useState(flow?.name ?? 'Novo fluxo');
     const [isActive, setIsActive]             = useState(flow?.is_active ?? false);
     const [isDefault, setIsDefault]           = useState(flow?.is_default ?? false);
     const [saving, setSaving]                 = useState(false);
-    const rfInstance = useRef<{ fitView: (opts?: object) => void } | null>(null);
+    const rfInstance   = useRef<ReactFlowInstance | null>(null);
+    const canvasRef    = useRef<HTMLDivElement | null>(null);
+    const addNodeOffset = useRef(0);
 
     const onConnect = useCallback(
         (connection: Connection) => setEdges(eds => addEdge({ ...connection, animated: false }, eds)),
         [setEdges],
     );
 
-    const onNodeClick  = useCallback((_: React.MouseEvent, node: Node) => setSelectedNodeId(node.id), []);
-    const onPaneClick  = useCallback(() => setSelectedNodeId(null), []);
+    const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+        setSelectedNodeId(node.id);
+        setSelectedEdgeId(null);
+    }, []);
 
-    const addNode = (type: FlowNodeType) => {
-        const i = nodes.length;
-        setNodes(nds => [...nds, {
-            id:       newId(type),
-            type,
-            position: { x: 300 + i * 220, y: 160 + (i % 3) * 40 },
-            data:     defaultData(type),
-        }]);
-    };
+    const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
+        setSelectedEdgeId(edge.id);
+        setSelectedNodeId(null);
+    }, []);
+
+    const onPaneClick = useCallback(() => {
+        setSelectedNodeId(null);
+        setSelectedEdgeId(null);
+    }, []);
+
+    const deleteEdge = useCallback((edgeId: string) => {
+        setEdges(eds => eds.filter(e => e.id !== edgeId));
+        setSelectedEdgeId(null);
+    }, [setEdges]);
+
+    const onEdgesDelete = useCallback((deleted: Edge[]) => {
+        if (deleted.some(e => e.id === selectedEdgeId)) {
+            setSelectedEdgeId(null);
+        }
+    }, [selectedEdgeId]);
+
+    const addNode = useCallback((type: FlowNodeType) => {
+        const id = newId(type);
+        const size = NODE_SIZES[type];
+        let position = { x: 300, y: 160 };
+
+        const selected = selectedNodeId ? nodes.find(n => n.id === selectedNodeId) : null;
+        if (selected) {
+            const selectedSize = NODE_SIZES[(selected.type as FlowNodeType) ?? 'message'];
+            position = {
+                x: selected.position.x + selectedSize.w + 60,
+                y: selected.position.y,
+            };
+        } else {
+            const instance = rfInstance.current;
+            const canvas = canvasRef.current;
+
+            if (instance && canvas) {
+                const bounds = canvas.getBoundingClientRect();
+                const center = instance.screenToFlowPosition({
+                    x: bounds.left + bounds.width / 2,
+                    y: bounds.top + bounds.height / 2,
+                });
+                const offset = addNodeOffset.current;
+                position = {
+                    x: center.x - size.w / 2 + (offset % 3) * 28,
+                    y: center.y - size.h / 2 + Math.floor(offset / 3) * 28,
+                };
+                addNodeOffset.current += 1;
+            } else if (nodes.length > 0) {
+                const rightmost = nodes.reduce((best, n) =>
+                    n.position.x > best.position.x ? n : best, nodes[0]);
+                const rightSize = NODE_SIZES[(rightmost.type as FlowNodeType) ?? 'message'];
+                position = {
+                    x: rightmost.position.x + rightSize.w + 80,
+                    y: rightmost.position.y,
+                };
+            }
+        }
+
+        setNodes(nds => [...nds, { id, type, position, data: defaultData(type) }]);
+        setSelectedNodeId(id);
+        setSelectedEdgeId(null);
+    }, [nodes, selectedNodeId, setNodes]);
 
     const updateNodeData = (nodeId: string, data: FlowNodeData) => {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data } : n));
@@ -728,6 +958,7 @@ export default function FlowEditor({ flow, sectors }: Props) {
         setNodes(nds => nds.filter(n => n.id !== nodeId));
         setEdges(eds => eds.filter(e => e.source !== nodeId && e.target !== nodeId));
         setSelectedNodeId(null);
+        setSelectedEdgeId(null);
     };
 
     const autoLayout = useCallback(() => {
@@ -758,6 +989,9 @@ export default function FlowEditor({ flow, sectors }: Props) {
                 const m = new Map<string, number>();
                 (n.data.options as QuestionOption[]).forEach((o, i) => m.set(o.id, i));
                 optOrderMap.set(n.id, m);
+            }
+            if (n.type === 'business_hours_check') {
+                optOrderMap.set(n.id, new Map([['open', 0], ['closed', 1]]));
             }
         }
         const sortedAdj = new Map<string, string[]>();
@@ -845,6 +1079,7 @@ export default function FlowEditor({ flow, sectors }: Props) {
     };
 
     const selectedNode = nodes.find(n => n.id === selectedNodeId) ?? null;
+    const selectedEdge = edges.find(e => e.id === selectedEdgeId) ?? null;
 
     // Canvas colours that match the theme
     const canvasBg     = dark ? '#0d1117' : '#f1f5f9';
@@ -899,7 +1134,7 @@ export default function FlowEditor({ flow, sectors }: Props) {
                         {/* Left palette */}
                         <div className="flex w-40 shrink-0 flex-col gap-2 border-r border-ink/[0.08] p-3">
                             <p className="text-[10px] font-semibold uppercase tracking-widest text-ink/40">Nós</p>
-                            {(['message', 'question', 'ixc_action', 'handoff', 'end'] as FlowNodeType[]).map(type => (
+                            {(['message', 'question', 'ixc_action', 'business_hours_check', 'handoff', 'end'] as FlowNodeType[]).map(type => (
                                 <PaletteItem key={type} type={type} dark={dark} onClick={() => addNode(type)} />
                             ))}
                             <div className="mt-1 border-t border-ink/[0.08] pt-2">
@@ -916,19 +1151,33 @@ export default function FlowEditor({ flow, sectors }: Props) {
                         </div>
 
                         {/* Canvas */}
-                        <div className="min-w-0 flex-1" style={{ background: canvasBg }}>
+                        <div ref={canvasRef} className="flow-editor-canvas min-w-0 flex-1" style={{ background: canvasBg }}>
+                            <style>{`
+                                .flow-editor-canvas .react-flow__edge.selected .react-flow__edge-path {
+                                    stroke: ${dark ? '#60a5fa' : '#2563eb'};
+                                    stroke-width: 2.5;
+                                }
+                            `}</style>
                             <ReactFlow
-                                nodes={nodes}
+                                nodes={nodes.map(n => ({ ...n, deletable: false }))}
                                 edges={edges}
                                 onNodesChange={onNodesChange}
                                 onEdgesChange={onEdgesChange}
                                 onConnect={onConnect}
                                 onNodeClick={onNodeClick}
+                                onEdgeClick={onEdgeClick}
                                 onPaneClick={onPaneClick}
+                                onEdgesDelete={onEdgesDelete}
                                 nodeTypes={nodeTypes}
                                 onInit={instance => { rfInstance.current = instance; }}
                                 fitView
-                                deleteKeyCode="Delete"
+                                edgesFocusable
+                                deleteKeyCode={['Delete', 'Backspace']}
+                                defaultEdgeOptions={{
+                                    interactionWidth: 24,
+                                    deletable: true,
+                                    style: { strokeWidth: 1.5 },
+                                }}
                                 proOptions={{ hideAttribution: true }}
                             >
                                 <Background
@@ -955,12 +1204,22 @@ export default function FlowEditor({ flow, sectors }: Props) {
 
                         {/* Right config panel */}
                         <div className="w-72 shrink-0 border-l border-ink/[0.08]">
-                            <ConfigPanel
-                                node={selectedNode}
-                                sectors={sectors}
-                                onChange={updateNodeData}
-                                onDelete={deleteNode}
-                            />
+                            {selectedEdge ? (
+                                <EdgePanel
+                                    edge={selectedEdge}
+                                    nodes={nodes}
+                                    onDelete={deleteEdge}
+                                />
+                            ) : selectedNode ? (
+                                <ConfigPanel
+                                    node={selectedNode}
+                                    sectors={sectors}
+                                    onChange={updateNodeData}
+                                    onDelete={deleteNode}
+                                />
+                            ) : (
+                                <EmptyPanel />
+                            )}
                         </div>
                     </div>
                 </div>
