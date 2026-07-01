@@ -341,44 +341,46 @@ export default function Index({ conversations: initialConversations, selected, u
                 {/* Lista de conversas */}
                 <aside
                     className={cn(
-                        'relative flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-accent/10 bg-canvas/50',
+                        'relative flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-accent/10',
                         mobileShowThread && active ? 'hidden md:flex' : 'flex',
                     )}
                 >
                     <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-                        <div className="sticky top-0 z-10 space-y-2 border-b border-accent/10 bg-canvas/50 px-3 py-2">
-                            <div className="flex items-center justify-between gap-3">
-                                <span className="text-sm font-semibold text-ink/70">Conversas</span>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 shrink-0 gap-1.5 text-xs"
-                                    onClick={() => setNewChatOpen(true)}
-                                >
-                                    <MessageSquarePlus className="h-3.5 w-3.5" />
-                                    Nova
-                                </Button>
-                            </div>
-                            <div className="relative">
-                                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/35" />
-                                <Input
-                                    value={listSearch}
-                                    onChange={(e) => setListSearch(e.target.value)}
-                                    placeholder="Buscar conversas..."
-                                    aria-label="Buscar conversas"
-                                    className="h-8 rounded-lg border-transparent bg-ink/[0.04] pl-8 pr-8 text-xs shadow-none placeholder:text-ink/40 focus-visible:border-accent/30 focus-visible:bg-canvas focus-visible:ring-1 focus-visible:ring-accent/25"
-                                />
-                                {listSearch !== '' && (
-                                    <button
+                        <div className="sticky top-0 z-10 border-b border-accent/10 bg-canvas px-2 py-2">
+                            <div className="space-y-2 rounded-xl border border-accent/10 bg-canvas/50 p-2 dark:bg-ink/[0.02]">
+                                <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm font-semibold text-ink/70">Conversas</span>
+                                    <Button
                                         type="button"
-                                        onClick={() => setListSearch('')}
-                                        aria-label="Limpar busca"
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-ink/35 transition-colors hover:bg-ink/[0.06] hover:text-ink/70"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 shrink-0 gap-1.5 text-xs"
+                                        onClick={() => setNewChatOpen(true)}
                                     >
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                )}
+                                        <MessageSquarePlus className="h-3.5 w-3.5" />
+                                        Nova
+                                    </Button>
+                                </div>
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink/35" />
+                                    <Input
+                                        value={listSearch}
+                                        onChange={(e) => setListSearch(e.target.value)}
+                                        placeholder="Buscar conversas..."
+                                        aria-label="Buscar conversas"
+                                        className="h-8 rounded-lg border-transparent bg-ink/[0.04] pl-8 pr-8 text-xs shadow-none placeholder:text-ink/40 focus-visible:border-accent/30 focus-visible:bg-canvas focus-visible:ring-1 focus-visible:ring-accent/25"
+                                    />
+                                    {listSearch !== '' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setListSearch('')}
+                                            aria-label="Limpar busca"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-ink/35 transition-colors hover:bg-ink/[0.06] hover:text-ink/70"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -402,6 +404,7 @@ export default function Index({ conversations: initialConversations, selected, u
                         )}
                         {visibleConversations.map((conv) => {
                             const isActive = active?.id === conv.id;
+                            const unread = isActive ? 0 : conv.unread_count;
                             const preview = conv.last_message
                                 ? conv.type === 'general' && conv.last_message_user_name
                                     ? `${conv.last_message_user_name}: ${conv.last_message}`
@@ -414,39 +417,67 @@ export default function Index({ conversations: initialConversations, selected, u
                                     type="button"
                                     onClick={() => openConversation(conv.id)}
                                     className={cn(
-                                        'flex w-full items-start gap-3 border-b border-accent/5 px-4 py-3 text-left transition hover:bg-ink/[0.04]',
-                                        isActive && 'bg-accent/10',
+                                        'group relative w-full border-b border-accent/5 px-4 py-3 text-left text-ink transition hover:bg-ink/[0.04]',
+                                        isActive ? 'bg-accent/10' : 'hover:bg-ink/[0.04]',
                                     )}
                                 >
-                                    {conv.type === 'general' ? (
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/35 bg-accent/15 text-accent">
-                                            <Users className="h-4 w-4" />
-                                        </div>
-                                    ) : (
-                                        <UserAvatar
-                                            name={conv.title}
-                                            photoUrl={conv.other_user?.profile_photo_url}
-                                            size="lg"
-                                        />
+                                    {isActive && (
+                                        <span className="absolute inset-y-0 left-0 z-10 w-[3px] rounded-r-full bg-accent" />
                                     )}
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="truncate text-sm font-medium text-ink/85">
-                                                {conv.title}
-                                            </span>
-                                            <span className="shrink-0 text-[10px] text-ink/35">
-                                                {fmtListTime(conv.last_message_at)}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-2">
-                                            <p className="truncate text-xs text-ink/45">{preview}</p>
-                                            {conv.unread_count > 0 && (
-                                                <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-canvas dark:text-black">
-                                                    {conv.unread_count > 99
-                                                        ? '99+'
-                                                        : conv.unread_count}
-                                                </span>
+                                    <div className="flex items-start gap-3">
+                                        <div className="relative mt-0.5 shrink-0">
+                                            {conv.type === 'general' ? (
+                                                <div
+                                                    className={cn(
+                                                        'flex h-10 w-10 items-center justify-center rounded-full transition-colors',
+                                                        isActive
+                                                            ? 'bg-accent text-canvas shadow-sm shadow-accent/30 dark:text-black'
+                                                            : 'border border-accent/25 bg-accent/10 text-accent',
+                                                    )}
+                                                >
+                                                    <Users className="h-4 w-4" />
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    className={cn(
+                                                        'h-10 w-10 overflow-hidden rounded-full transition-colors',
+                                                        isActive
+                                                            ? 'bg-accent shadow-sm shadow-accent/30'
+                                                            : 'border border-accent/25 bg-accent/10',
+                                                    )}
+                                                >
+                                                    <UserAvatar
+                                                        embedded
+                                                        name={conv.title}
+                                                        photoUrl={conv.other_user?.profile_photo_url}
+                                                        className={
+                                                            isActive
+                                                                ? 'text-canvas dark:text-black'
+                                                                : 'text-accent'
+                                                        }
+                                                    />
+                                                </div>
                                             )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="truncate text-sm font-medium text-ink/85">
+                                                    {conv.title}
+                                                </span>
+                                                <span className="shrink-0 text-[10px] text-ink/35">
+                                                    {fmtListTime(conv.last_message_at)}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="truncate text-xs text-ink/45">
+                                                    {preview}
+                                                </p>
+                                                {unread > 0 && (
+                                                    <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-canvas dark:text-black">
+                                                        {unread > 99 ? '99+' : unread}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </button>
@@ -545,6 +576,9 @@ export default function Index({ conversations: initialConversations, selected, u
                                                 !isMe && active.type === 'general'
                                                     ? msg.user_name
                                                     : undefined
+                                            }
+                                            headerInside={
+                                                !isMe && active.type === 'general'
                                             }
                                             footer={
                                                 <>

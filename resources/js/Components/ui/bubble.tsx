@@ -24,15 +24,15 @@ const bubbleContentVariants = cva(
         variants: {
             variant: {
                 incoming:
-                    'border-black/[0.08] bg-white text-gray-800 dark:border-white/[0.10] dark:bg-zinc-700 dark:text-zinc-100',
+                    'border-transparent bg-white text-gray-800 dark:bg-zinc-700 dark:text-zinc-100',
                 'outgoing-attendant':
-                    'border-green-400/50 bg-green-50 text-green-950 dark:border-green-500/40 dark:bg-green-900 dark:text-green-50',
+                    'border-transparent bg-green-50 text-green-950 dark:bg-green-900 dark:text-green-50',
                 'outgoing-automation':
-                    'border-sky-400/50 bg-sky-50 text-sky-950 dark:border-sky-500/40 dark:bg-sky-900 dark:text-sky-50',
+                    'border-transparent bg-sky-50 text-sky-950 dark:bg-sky-900 dark:text-sky-50',
                 'outgoing-accent':
                     'border-transparent bg-accent text-canvas dark:text-black',
                 'incoming-muted':
-                    'border-black/[0.08] bg-white text-gray-800 dark:border-white/[0.10] dark:bg-zinc-700 dark:text-zinc-100',
+                    'border-transparent bg-white text-gray-800 dark:bg-zinc-700 dark:text-zinc-100',
             },
             align: {
                 start: 'rounded-bl-sm',

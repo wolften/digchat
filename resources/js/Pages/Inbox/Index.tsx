@@ -358,9 +358,9 @@ const MESSAGE_ROLE_META = {
         tickRead: 'text-gray-800 dark:text-ink',
     },
     attendant: {
-        metaText: 'text-green-800/55 dark:text-green-200/60',
-        tick: 'text-green-950/70 dark:text-white/70',
-        tickRead: 'text-green-950 dark:text-white',
+        metaText: 'text-canvas/70 dark:text-black/65',
+        tick: 'text-canvas/70 dark:text-black/65',
+        tickRead: 'text-canvas dark:text-black',
     },
     automation: {
         metaText: 'text-sky-800/55 dark:text-sky-200/60',
@@ -378,7 +378,7 @@ const MESSAGE_ROLE_META = {
 
 const BUBBLE_VARIANT: Record<MessageRole, ChatBubbleVariant> = {
     client: 'incoming',
-    attendant: 'outgoing-attendant',
+    attendant: 'outgoing-accent',
     automation: 'outgoing-automation',
 };
 
@@ -415,7 +415,12 @@ function InboxMessageBubble({
                     )}
                 >
                     {role === 'automation' && (
-                        <Bot className="h-3 w-3 shrink-0 opacity-60" />
+                        <span className="flex items-center gap-1 opacity-70">
+                            <Bot className="h-3 w-3 shrink-0" />
+                            <span className="text-[9px] font-medium leading-none">
+                                automação
+                            </span>
+                        </span>
                     )}
                     <div className="flex items-center gap-1">
                         {formatTime(m.created_at)}

@@ -94,8 +94,12 @@ function darkPalette(
         '--input': `${hue} 20% 14%`,
         '--ring': accentHsl,
         '--default-border-color': `rgb(${accentRgb} / 0.12)`,
-        '--chat-bg-color': `hsl(${hue} 6% 10%)`,
-        '--chat-bg-image': chatWallpaperPattern('255 255 255', 0.03),
+        '--chat-bg-color': `hsl(${hue} 14% 9%)`,
+        '--chat-bg-image': chatWallpaperPattern(accentRgb, 0.14, {
+            strokeWidth: 1.25,
+            fillOpacityFactor: 0.7,
+            dotOpacity: 0.9,
+        }),
     });
 }
 
@@ -137,8 +141,8 @@ function lightPalette(
         '--input': `${hue} 22% 85%`,
         '--ring': accentHsl,
         '--default-border-color': `rgb(${inkRgb} / 0.10)`,
-        '--chat-bg-color': `hsl(${hue} 5% 96%)`,
-        '--chat-bg-image': chatWallpaperPatternLight(inkRgb, accentRgb),
+        '--chat-bg-color': `hsl(${hue} 10% 96%)`,
+        '--chat-bg-image': chatWallpaperPatternLight(accentRgb),
     });
 }
 

@@ -129,13 +129,11 @@ export function chatWallpaperPattern(
     return svgDataUri(svg);
 }
 
-/**
- * Light surfaces need dark strokes — bright accent colors wash out on pale backgrounds.
- */
-export function chatWallpaperPatternLight(inkRgb: string, _accentRgb?: string): string {
-    return chatWallpaperPattern(inkRgb, 0.07, {
-        strokeWidth: 1.3,
-        fillOpacityFactor: 0.75,
-        dotOpacity: 0.95,
+/** Padrão para fundos claros — traços na cor accent do tema. */
+export function chatWallpaperPatternLight(accentRgb: string): string {
+    return chatWallpaperPattern(accentRgb, 0.22, {
+        strokeWidth: 1.45,
+        fillOpacityFactor: 0.8,
+        dotOpacity: 1,
     });
 }

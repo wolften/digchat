@@ -39,8 +39,7 @@
         --input: 160 20% 14%;
         --ring: var(--accent-hsl);
         --radius: 0.75rem;
-        --chat-bg: rgba(0, 0, 0, 0.08);
-        --chat-bg-color: #0a1014;
+        --chat-bg-color: hsl(160 14% 9%);
         --default-border-color: rgb(var(--accent-rgb) / 0.12);
     }
 

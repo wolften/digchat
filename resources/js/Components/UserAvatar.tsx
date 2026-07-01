@@ -16,6 +16,8 @@ interface UserAvatarProps {
     photoUrl?: string | null;
     size?: UserAvatarSize;
     className?: string;
+    /** Usado dentro do wrapper da lista de conversas (Atendimento / Chat Interno). */
+    embedded?: boolean;
 }
 
 export function UserAvatar({
@@ -23,6 +25,7 @@ export function UserAvatar({
     photoUrl,
     size = 'md',
     className,
+    embedded = false,
 }: UserAvatarProps) {
     const sizeClass = SIZE_CLASSES[size];
     const [imageFailed, setImageFailed] = useState(false);
@@ -32,6 +35,18 @@ export function UserAvatar({
     }, [photoUrl]);
 
     if (photoUrl && !imageFailed) {
+        if (embedded) {
+            return (
+                <img
+                    src={photoUrl}
+                    alt=""
+                    loading="lazy"
+                    onError={() => setImageFailed(true)}
+                    className={cn('h-full w-full object-cover', className)}
+                />
+            );
+        }
+
         return (
             <img
                 src={photoUrl}
@@ -39,7 +54,7 @@ export function UserAvatar({
                 loading="lazy"
                 onError={() => setImageFailed(true)}
                 className={cn(
-                    'shrink-0 rounded-full border border-accent/35 bg-canvas object-cover',
+                    'shrink-0 rounded-full border border-accent/25 bg-accent/10 object-cover',
                     sizeClass,
                     className,
                 )}
@@ -47,10 +62,23 @@ export function UserAvatar({
         );
     }
 
+    if (embedded) {
+        return (
+            <div
+                className={cn(
+                    'flex h-full w-full items-center justify-center text-xs font-semibold text-accent',
+                    className,
+                )}
+            >
+                {userInitials(name) || 'DC'}
+            </div>
+        );
+    }
+
     return (
         <div
             className={cn(
-                'flex shrink-0 items-center justify-center rounded-full border border-accent/35 bg-canvas font-manrope font-bold text-accent',
+                'flex shrink-0 items-center justify-center rounded-full border border-accent/25 bg-accent/10 font-manrope font-bold text-accent',
                 sizeClass,
                 className,
             )}

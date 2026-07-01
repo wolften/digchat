@@ -279,8 +279,10 @@ function MessageBubble({ msg }: { msg: Msg }) {
     const variant = isIn
         ? 'incoming'
         : isHuman
-          ? 'outgoing-attendant'
+          ? 'outgoing-accent'
           : 'outgoing-automation';
+
+    const isAutomation = !isIn && !isHuman;
 
     return (
         <ChatMessage
@@ -288,8 +290,32 @@ function MessageBubble({ msg }: { msg: Msg }) {
             align={isIn ? 'start' : 'end'}
             variant={variant}
             contentClassName="max-w-[78%]"
-            header={!isIn ? (msg.sender?.name ?? 'Bot') : undefined}
-            footer={<span className="text-ink/30">{formatTime(msg.created_at)}</span>}
+            header={isHuman ? msg.sender?.name : undefined}
+            headerInside={isHuman}
+            footerInside={isAutomation}
+            footer={
+                isAutomation ? (
+                    <div className="flex w-full items-center justify-between gap-2 text-[10px] text-sky-800/55 dark:text-sky-200/60">
+                        <span className="flex items-center gap-1 opacity-80">
+                            <Bot className="h-3 w-3 shrink-0" />
+                            <span className="text-[9px] font-medium leading-none">
+                                automação
+                            </span>
+                        </span>
+                        <span>{formatTime(msg.created_at)}</span>
+                    </div>
+                ) : (
+                    <span
+                        className={cn(
+                            isHuman
+                                ? 'text-ink/70 dark:text-white/75'
+                                : 'text-ink/30',
+                        )}
+                    >
+                        {formatTime(msg.created_at)}
+                    </span>
+                )
+            }
         >
             {mediaLabel && MediaIcon ? (
                 <span className="flex items-center gap-2 opacity-70">
