@@ -29,6 +29,7 @@ import {
     MessageSquare,
     Moon,
     Radio,
+    ScrollText,
     Settings,
     Building2,
     Sun,
@@ -192,11 +193,18 @@ export default function Authenticated({
             icon: Clock,
             managerOnly: true,
         },
-{
+        {
             label: 'Usuários',
             routeName: 'users.index',
             activePattern: 'users.*',
             icon: Users,
+            managerOnly: true,
+        },
+        {
+            label: 'Auditoria',
+            routeName: 'auditoria.index',
+            activePattern: 'auditoria.*',
+            icon: ScrollText,
             managerOnly: true,
         },
         {

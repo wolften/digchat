@@ -158,7 +158,7 @@ class SurveyQuestionSenderTest extends TestCase
         $conversation->forceFill(['survey_response_id' => $response->id])->save();
 
         $recording = new RecordingMessagingChannel;
-        $runner = new SurveyRunner(new MessageSender($recording));
+        $runner = new SurveyRunner(new MessageSender($recording), app(\App\Services\Audit\ActivityLogger::class));
 
         $runner->handle($conversation, '5', [
             'interactive' => [

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuditoriaController;
 use App\Http\Controllers\BusinessHoursController;
 use App\Http\Controllers\InternalChatController;
 use App\Http\Controllers\ChannelController;
@@ -88,6 +89,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Gestão administrativa — somente admin e gestor.
     Route::middleware('role:admin,gestor')->group(function () {
         Route::get('/presenca', [PresenceController::class, 'index'])->name('presence.index');
+        Route::get('/auditoria', [AuditoriaController::class, 'index'])->name('auditoria.index');
+        Route::get('/auditoria/export', [AuditoriaController::class, 'export'])->name('auditoria.export');
 
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');

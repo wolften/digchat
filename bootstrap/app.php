@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('conversations:close-inactive')->everyMinute();
         $schedule->command('conversations:distribute-queued')->everyMinute();
         $schedule->command('conversations:wake-snoozed')->everyMinute();
+        $schedule->command('presence:track-transitions')->everyFiveMinutes();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Channel;
+use App\Services\Audit\ActivityLogger;
 use App\Services\Telegram\TelegramService;
 use App\Services\WebChat\WebChatService;
 use App\Services\WhatsApp\WhatsAppService;
@@ -57,6 +58,8 @@ class ChannelController extends Controller
             }
         }
 
+        app(ActivityLogger::class)->channelCreated($request->user(), $channel);
+
         return redirect()->route('canais.index')
             ->with('success', 'Canal criado com sucesso.');
     }
@@ -66,6 +69,8 @@ class ChannelController extends Controller
         $data = $this->validated($request, isUpdate: true);
 
         $config = $this->mergeUnchangedSecrets($channel, $data['config']);
+        $before = $channel->only(['type', 'name', 'is_active']);
+        $configChanged = json_encode($channel->config ?? []) !== json_encode($config);
 
         $channel->update([
             'type'      => $data['type'],
@@ -73,6 +78,19 @@ class ChannelController extends Controller
             'config'    => $config,
             'is_active' => $data['is_active'] ?? $channel->is_active,
         ]);
+
+        $changes = [];
+        foreach ($before as $key => $value) {
+            if ($channel->{$key} != $value) {
+                $changes[$key] = ['from' => $value, 'to' => $channel->{$key}];
+            }
+        }
+
+        if ($configChanged) {
+            $changes['config'] = ['from' => null, 'to' => 'updated'];
+        }
+
+        app(ActivityLogger::class)->channelUpdated($request->user(), $channel, $changes);
 
         if ($channel->type === Channel::TYPE_TELEGRAM && ! empty($config['bot_token'])) {
             $telegram = new TelegramService($channel->fresh());
@@ -93,6 +111,8 @@ class ChannelController extends Controller
         if ($channel->type === Channel::TYPE_TELEGRAM) {
             (new TelegramService($channel))->deleteWebhook();
         }
+
+        app(ActivityLogger::class)->channelDeleted(request()->user(), $channel);
 
         $channel->delete();
 

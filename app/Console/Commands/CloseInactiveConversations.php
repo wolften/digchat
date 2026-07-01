@@ -7,6 +7,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Survey;
 use App\Models\SurveyResponse;
+use App\Services\Audit\ActivityLogger;
 use App\Services\Survey\SurveyQuestionSender;
 use App\Services\WhatsApp\MessageSender;
 use Illuminate\Console\Command;
@@ -17,7 +18,7 @@ class CloseInactiveConversations extends Command
 
     protected $description = 'Close open conversations when the customer has not replied within the configured inactivity window.';
 
-    public function handle(): int
+    public function handle(ActivityLogger $activity): int
     {
         if (! AppSetting::bool('auto_close_inactive_conversations_enabled')) {
             $this->components->info('Auto close is disabled.');
@@ -48,7 +49,7 @@ class CloseInactiveConversations extends Command
         Conversation::query()
             ->where('status', Conversation::STATUS_OPEN)
             ->where('last_message_at', '<=', $cutoff)
-            ->chunkById(100, function ($conversations) use (&$closed, $cutoff, $survey): void {
+            ->chunkById(100, function ($conversations) use (&$closed, $cutoff, $survey, $activity): void {
                 foreach ($conversations as $conversation) {
                     $lastMessage = $conversation->messages()->latest()->first();
 
@@ -79,6 +80,13 @@ class CloseInactiveConversations extends Command
                             'survey_response_id' => $response->id,
                         ])->save();
 
+                        $activity->conversationClosed(
+                            null,
+                            $conversation,
+                            'surveying',
+                            Conversation::STATUS_SURVEYING,
+                        );
+
                         $firstQuestion = $survey->questions->first();
                         $sender = MessageSender::forConversation($conversation);
                         (new SurveyQuestionSender($sender))
@@ -88,6 +96,8 @@ class CloseInactiveConversations extends Command
                             'status'    => Conversation::STATUS_CLOSED,
                             'sector_id' => null,
                         ])->save();
+
+                        $activity->conversationClosed(null, $conversation, 'auto_inactive');
                     }
 
                     $closed++;

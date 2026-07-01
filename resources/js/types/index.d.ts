@@ -43,6 +43,19 @@ export interface PaginationLink {
     active: boolean;
 }
 
+export interface ActivityLogEntry {
+    id: number;
+    event: string;
+    event_label: string;
+    event_category: string;
+    description: string;
+    actor: UserSummary | null;
+    subject_type: string | null;
+    subject_id: number | null;
+    properties: Record<string, unknown>;
+    created_at: string;
+}
+
 export interface Paginated<T> {
     data: T[];
     current_page: number;

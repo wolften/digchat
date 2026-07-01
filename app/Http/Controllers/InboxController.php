@@ -16,6 +16,7 @@ use App\Models\Survey;
 use App\Models\SurveyResponse;
 use App\Models\User;
 use App\Events\ConversationViewing;
+use App\Services\Audit\ActivityLogger;
 use App\Services\Conversation\ConversationSlaService;
 use App\Services\Conversation\ConversationSnoozeService;
 use App\Services\Conversation\ConversationViewingService;
@@ -42,6 +43,7 @@ class InboxController extends Controller
         private ConversationSlaService $sla,
         private ConversationViewingService $viewing,
         private ConversationSnoozeService $snooze,
+        private ActivityLogger $activity,
     ) {
     }
 
@@ -160,6 +162,8 @@ class InboxController extends Controller
             'status' => Conversation::STATUS_OPEN,
         ])->save();
         $conversation->closeSiblingActiveConversations();
+
+        $this->activity->conversationAssigned($assignee, $conversation, $assignee, 'manual');
 
         $sender->sendText(
             $conversation,
@@ -514,7 +518,7 @@ class InboxController extends Controller
     {
         abort_unless($conversation->canBeWokenBy($request->user()), 403);
 
-        $this->snooze->wake($conversation);
+        $this->snooze->wake($conversation, actor: $request->user());
 
         return back()->with('success', 'Conversa retomada.');
     }
@@ -530,6 +534,12 @@ class InboxController extends Controller
 
         $this->snooze->clearSnoozeFields($conversation);
 
+        $conversation->loadMissing(['assignedUser:id,name', 'sector:id,name']);
+        $fromUserId = $conversation->assigned_user_id;
+        $fromUserName = $conversation->assignedUser?->name;
+        $fromSectorId = $conversation->sector_id;
+        $fromSectorName = $conversation->sector?->name;
+
         $validated = $request->validate([
             'sector_id' => ['nullable', 'exists:sectors,id'],
             'user_id'   => ['nullable', 'exists:users,id'],
@@ -543,6 +553,18 @@ class InboxController extends Controller
                 'status'           => Conversation::STATUS_OPEN,
             ])->save();
 
+            $this->activity->conversationTransferred(
+                $request->user(),
+                $conversation,
+                $fromUserId,
+                $fromUserName,
+                $fromSectorId,
+                $fromSectorName,
+                $targetUser->id,
+                $targetUser->name,
+                mode: 'user',
+            );
+
             return back()->with('success', 'Conversa transferida para ' . $targetUser->name . '.');
         }
 
@@ -555,6 +577,18 @@ class InboxController extends Controller
             'status'           => Conversation::STATUS_QUEUED,
             'assigned_user_id' => null,
         ])->save();
+
+        $this->activity->conversationTransferred(
+            $request->user(),
+            $conversation,
+            $fromUserId,
+            $fromUserName,
+            $fromSectorId,
+            $fromSectorName,
+            toSectorId: $sector->id,
+            toSectorName: $sector->name,
+            mode: 'sector',
+        );
 
         if (AppSetting::bool('notify_customer_on_transfer', true)) {
             $sender->sendText(
@@ -587,6 +621,7 @@ class InboxController extends Controller
                 'status'    => Conversation::STATUS_CLOSED,
                 'sector_id' => null,
             ])->save();
+            $this->activity->conversationClosed($request->user(), $conversation, 'auto_inactive');
             return back()->with('success', 'Atendimento encerrado por inatividade.');
         }
 
@@ -614,6 +649,13 @@ class InboxController extends Controller
                     'survey_response_id' => $response->id,
                 ])->save();
 
+                $this->activity->conversationClosed(
+                    $request->user(),
+                    $conversation,
+                    'surveying',
+                    Conversation::STATUS_SURVEYING,
+                );
+
                 $firstQuestion = $survey->questions->first();
                 (new SurveyQuestionSender($sender))
                     ->send($conversation, $firstQuestion, $survey->name);
@@ -626,6 +668,12 @@ class InboxController extends Controller
             'status'    => Conversation::STATUS_CLOSED,
             'sector_id' => null,
         ])->save();
+
+        $this->activity->conversationClosed(
+            $request->user(),
+            $conversation,
+            $isAutoClose ? 'auto_inactive' : 'manual',
+        );
 
         return back()->with('success', 'Atendimento encerrado.');
     }
@@ -641,6 +689,8 @@ class InboxController extends Controller
             'survey_response_id' => null,
             'sector_id'          => null,
         ])->save();
+
+        $this->activity->conversationForceClosed(request()->user(), $conversation);
 
         return back()->with('success', 'Atendimento encerrado forçadamente.');
     }

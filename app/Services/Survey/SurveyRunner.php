@@ -6,12 +6,15 @@ use App\Models\Conversation;
 use App\Models\SurveyAnswer;
 use App\Models\SurveyQuestion;
 use App\Models\SurveyResponse;
+use App\Services\Audit\ActivityLogger;
 use App\Services\WhatsApp\MessageSender;
 
 class SurveyRunner
 {
-    public function __construct(private MessageSender $sender)
-    {
+    public function __construct(
+        private MessageSender $sender,
+        private ActivityLogger $activity,
+    ) {
     }
 
     /**
@@ -89,5 +92,7 @@ class SurveyRunner
             'survey_response_id' => null,
             'sector_id'          => null,
         ])->save();
+
+        $this->activity->conversationClosed(null, $conversation, 'survey_completed');
     }
 }

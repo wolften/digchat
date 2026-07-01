@@ -4,11 +4,15 @@ namespace App\Services\Conversation;
 
 use App\Models\Conversation;
 use App\Models\User;
+use App\Services\Audit\ActivityLogger;
 use Carbon\CarbonInterface;
 use Illuminate\Validation\ValidationException;
 
 class ConversationSnoozeService
 {
+    public function __construct(private ActivityLogger $activity)
+    {
+    }
     public const WAKE_MANUAL = 'manual';
     public const WAKE_EXPIRED = 'expired';
     public const WAKE_CUSTOMER_MESSAGE = 'customer_message';
@@ -42,11 +46,16 @@ class ConversationSnoozeService
             'snooze_note' => $note ? trim($note) : null,
         ])->save();
 
+        $this->activity->conversationSnoozed($user, $conversation, $until, $note);
+
         return $conversation->fresh();
     }
 
-    public function wake(Conversation $conversation, string $reason = self::WAKE_MANUAL): Conversation
-    {
+    public function wake(
+        Conversation $conversation,
+        string $reason = self::WAKE_MANUAL,
+        ?User $actor = null,
+    ): Conversation {
         if ($conversation->status !== Conversation::STATUS_SNOOZED) {
             return $conversation;
         }
@@ -58,6 +67,8 @@ class ConversationSnoozeService
             'snoozed_by_user_id' => null,
             'snooze_note' => null,
         ])->save();
+
+        $this->activity->conversationWoken($conversation, $reason, $actor);
 
         return $conversation->fresh();
     }

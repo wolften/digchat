@@ -1,5 +1,5 @@
-export function userInitials(name: string): string {
-    const parts = name
+export function userInitials(name?: string | null): string {
+    const parts = (name ?? '')
         .trim()
         .split(/\s+/)
         .filter(Boolean);

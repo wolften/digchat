@@ -344,4 +344,24 @@
     .date-range-input:hover {
         color: rgb(var(--accent-rgb));
     }
+
+    .date-filter-input {
+        position: relative;
+    }
+
+    .date-filter-input::-webkit-calendar-picker-indicator {
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 2rem;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .date-filter-input:hover {
+        color: rgb(var(--accent-rgb));
+    }
 }

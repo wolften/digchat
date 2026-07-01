@@ -98,7 +98,8 @@ class ProcessTelegramMessage implements ShouldQueue
 
         if ($conversation->status === Conversation::STATUS_SURVEYING) {
             $telegram->sendChatAction($chatId);
-            (new SurveyRunner(new MessageSender($telegram)))->handle($conversation, $body, $rawMessage);
+            app(SurveyRunner::class, ['sender' => new MessageSender($telegram)])
+                ->handle($conversation, $body, $rawMessage);
         } elseif ($conversation->status === Conversation::STATUS_BOT) {
             if ((new OutOfHoursGate())->blocksBotFlow($conversation, $telegram)) {
                 return;
@@ -172,7 +173,8 @@ class ProcessTelegramMessage implements ShouldQueue
 
         if ($conversation->status === Conversation::STATUS_SURVEYING) {
             $telegram->sendChatAction($chatId);
-            (new SurveyRunner(new MessageSender($telegram)))->handle($conversation, $data, $rawMessage);
+            app(SurveyRunner::class, ['sender' => new MessageSender($telegram)])
+                ->handle($conversation, $data, $rawMessage);
         } elseif ($conversation->status === Conversation::STATUS_BOT) {
             if ((new OutOfHoursGate())->blocksBotFlow($conversation, $telegram)) {
                 return;

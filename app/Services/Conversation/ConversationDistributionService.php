@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\Channel;
 use App\Models\Conversation;
 use App\Models\User;
+use App\Services\Audit\ActivityLogger;
 use App\Services\Telegram\TelegramService;
 use App\Services\WebChat\WebChatService;
 use App\Services\WhatsApp\MessageSender;
@@ -16,6 +17,10 @@ use Illuminate\Support\Facades\Log;
 
 class ConversationDistributionService
 {
+    public function __construct(private ActivityLogger $activity)
+    {
+    }
+
     public const STRATEGY_ROUND_ROBIN = 'round_robin';
     public const STRATEGY_LEAST_BUSY = 'least_busy';
 
@@ -61,6 +66,7 @@ class ConversationDistributionService
         $conversation->refresh();
         $conversation->closeSiblingActiveConversations();
 
+        $this->activity->conversationAssigned(null, $conversation, $assignee, 'auto_assign');
         $this->rememberRoundRobinCursor($conversation, $assignee);
         $this->notifyCustomer($conversation, $assignee);
 

@@ -89,7 +89,8 @@ class ProcessWebChatMessage implements ShouldQueue
         $inputValue = $isButton ? $this->buttonId : $this->text;
 
         if ($conversation->status === Conversation::STATUS_SURVEYING) {
-            (new SurveyRunner(new MessageSender($webchat)))->handle($conversation, $inputValue, $rawMessage);
+            app(SurveyRunner::class, ['sender' => new MessageSender($webchat)])
+                ->handle($conversation, $inputValue, $rawMessage);
         } elseif ($conversation->status === Conversation::STATUS_BOT) {
             if ((new OutOfHoursGate())->blocksBotFlow($conversation, $webchat)) {
                 return;

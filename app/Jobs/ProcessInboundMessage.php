@@ -147,7 +147,8 @@ class ProcessInboundMessage implements ShouldQueue
         $whatsApp->markAsRead($waMessageId);
 
         if ($conversation->status === Conversation::STATUS_SURVEYING) {
-            (new SurveyRunner(new MessageSender($whatsApp)))->handle($conversation, $body, $waMessage);
+            app(SurveyRunner::class, ['sender' => new MessageSender($whatsApp)])
+                ->handle($conversation, $body, $waMessage);
         } elseif ($conversation->status === Conversation::STATUS_BOT) {
             if ((new OutOfHoursGate())->blocksBotFlow($conversation, $whatsApp)) {
                 return;

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AppSetting;
 use App\Models\IntegrationConfig;
 use App\Models\Survey;
+use App\Services\Audit\ActivityLogger;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -59,6 +60,14 @@ class SettingsController extends Controller
         unset($toSave['auto_transcribe_audio']);
 
         AppSetting::setMany($toSave);
+
+        if ($toSave !== []) {
+            app(ActivityLogger::class)->settingsUpdated(
+                $request->user(),
+                array_keys($toSave),
+                'integrations',
+            );
+        }
 
         return back()->with('success', 'Configurações salvas.');
     }
@@ -209,6 +218,30 @@ class SettingsController extends Controller
             $path = $request->file('app_icon')->store('icons', 'public');
             AppSetting::set('app_icon_path', $path);
             AppSetting::set('app_icon_url', asset(Storage::url($path)));
+        }
+
+        $keysChanged = array_values(array_filter([
+            $request->filled('app_name') ? 'app_name' : null,
+            $request->filled('app_subtitle') ? 'app_subtitle' : null,
+            $request->has('notify_customer_on_transfer') ? 'notify_customer_on_transfer' : null,
+            $request->has('auto_close_inactive_conversations_enabled') ? 'auto_close_inactive_conversations_enabled' : null,
+            $request->has('auto_close_inactive_conversations_minutes') ? 'auto_close_inactive_conversations_minutes' : null,
+            $request->has('survey_on_close_enabled') ? 'survey_on_close_enabled' : null,
+            $request->has('survey_on_close_survey_id') ? 'survey_on_close_survey_id' : null,
+            $request->has('survey_on_inactivity_close_enabled') ? 'survey_on_inactivity_close_enabled' : null,
+            $request->has('ooh_notify_interval_hours') ? 'ooh_notify_interval_hours' : null,
+            $request->has('auto_assign_conversations_enabled') ? 'auto_assign_conversations_enabled' : null,
+            $request->has('auto_assign_strategy') ? 'auto_assign_strategy' : null,
+            $request->has('auto_assign_online_only') ? 'auto_assign_online_only' : null,
+            $request->has('auto_assign_max_open_per_agent') ? 'auto_assign_max_open_per_agent' : null,
+            $request->has('sla_first_response_minutes') ? 'sla_first_response_minutes' : null,
+            $request->has('open_conversation_alert_enabled') ? 'open_conversation_alert_enabled' : null,
+            $request->has('open_conversation_alert_hours') ? 'open_conversation_alert_hours' : null,
+            $request->hasFile('app_icon') ? 'app_icon' : null,
+        ]));
+
+        if ($keysChanged !== []) {
+            app(ActivityLogger::class)->settingsUpdated($request->user(), $keysChanged, 'system');
         }
 
         return back()->with('success', 'Configurações do sistema salvas.');

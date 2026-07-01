@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Presence\PresenceTransitionTracker;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,8 @@ class UpdateLastSeenAt
                     ->update(['last_seen_at' => now()]);
 
                 $request->session()->put('_last_seen_update', now()->timestamp);
+
+                app(PresenceTransitionTracker::class)->syncUser($user);
             }
         }
 

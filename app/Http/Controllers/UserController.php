@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Audit\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -45,13 +46,15 @@ class UserController extends Controller
 
         $this->authorizeRoleAssignment($request, $validated['role']);
 
-        User::create([
+        $created = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'role' => $validated['role'],
             'is_active' => $validated['is_active'] ?? true,
             'password' => Hash::make($validated['password']),
         ]);
+
+        app(ActivityLogger::class)->userCreated($request->user(), $created);
 
         return back()->with('success', 'Usuário criado com sucesso.');
     }
@@ -68,6 +71,8 @@ class UserController extends Controller
 
         $this->authorizeRoleAssignment($request, $validated['role']);
 
+        $before = $user->only(['name', 'email', 'role', 'is_active']);
+
         $user->fill([
             'name' => $validated['name'],
             'email' => $validated['email'],
@@ -75,11 +80,21 @@ class UserController extends Controller
             'is_active' => $validated['is_active'] ?? false,
         ]);
 
-        if (! empty($validated['password'])) {
+        $passwordChanged = ! empty($validated['password']);
+
+        if ($passwordChanged) {
             $user->password = Hash::make($validated['password']);
         }
 
         $user->save();
+
+        $changes = $this->diffAttributes($before, $user->only(['name', 'email', 'role', 'is_active']));
+
+        if ($passwordChanged) {
+            $changes['password'] = ['from' => null, 'to' => '***'];
+        }
+
+        app(ActivityLogger::class)->userUpdated($request->user(), $user, $changes);
 
         return back()->with('success', 'Usuário atualizado com sucesso.');
     }
@@ -90,9 +105,28 @@ class UserController extends Controller
             return back()->with('error', 'Você não pode excluir o próprio usuário.');
         }
 
+        app(ActivityLogger::class)->userDeleted($request->user(), $user);
+
         $user->delete();
 
         return back()->with('success', 'Usuário removido com sucesso.');
+    }
+
+    /** @param  array<string, mixed>  $before
+     * @param  array<string, mixed>  $after
+     * @return array<string, array{from: mixed, to: mixed}>
+     */
+    private function diffAttributes(array $before, array $after): array
+    {
+        $changes = [];
+
+        foreach ($after as $key => $value) {
+            if (($before[$key] ?? null) != $value) {
+                $changes[$key] = ['from' => $before[$key] ?? null, 'to' => $value];
+            }
+        }
+
+        return $changes;
     }
 
     /**

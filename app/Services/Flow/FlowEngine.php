@@ -7,6 +7,7 @@ use App\Models\Conversation;
 use App\Models\Flow;
 use App\Models\Message;
 use App\Contracts\MessagingChannel;
+use App\Services\Audit\ActivityLogger;
 use App\Services\BusinessHoursService;
 use Illuminate\Support\Facades\Log;
 
@@ -189,6 +190,7 @@ class FlowEngine
                         'flow_id'         => null,
                         'current_node_id' => null,
                     ]);
+                    app(ActivityLogger::class)->conversationClosed(null, $conversation->fresh(), 'flow_end');
                     return;
 
                 default:

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Services\Audit\ActivityLogger;
+use App\Services\Presence\PresenceTransitionTracker;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -33,6 +35,11 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        if ($user = $request->user()) {
+            app(ActivityLogger::class)->userLoggedIn($user, $request);
+            app(PresenceTransitionTracker::class)->markOnline($user);
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 
@@ -41,6 +48,11 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        if ($user = $request->user()) {
+            app(PresenceTransitionTracker::class)->markOffline($user);
+            app(ActivityLogger::class)->userLoggedOut($user);
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Sector;
 use App\Models\User;
+use App\Services\Audit\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -51,7 +52,9 @@ class SectorController extends Controller
             unset($validated['sla_first_response_minutes']);
         }
 
-        Sector::create($validated);
+        $sector = Sector::create($validated);
+
+        app(ActivityLogger::class)->sectorCreated($request->user(), $sector);
 
         return back()->with('success', 'Setor criado.');
     }
@@ -69,18 +72,30 @@ class SectorController extends Controller
             $validated['sla_first_response_minutes'] = null;
         }
 
+        $before = $sector->only(['name', 'description', 'is_active', 'sla_first_response_minutes']);
         $sector->update($validated);
+
+        $changes = [];
+        foreach ($before as $key => $value) {
+            if ($sector->{$key} != $value) {
+                $changes[$key] = ['from' => $value, 'to' => $sector->{$key}];
+            }
+        }
+
+        app(ActivityLogger::class)->sectorUpdated($request->user(), $sector, $changes);
 
         return back()->with('success', 'Setor atualizado.');
     }
 
-    public function destroy(Sector $sector): RedirectResponse
+    public function destroy(Request $request, Sector $sector): RedirectResponse
     {
         $active = $sector->conversations()->whereIn('status', ['queued', 'open'])->exists();
 
         if ($active) {
             return back()->withErrors(['sector' => 'Existem conversas ativas neste setor. Transfira-as antes de excluir.']);
         }
+
+        app(ActivityLogger::class)->sectorDeleted($request->user(), $sector);
 
         $sector->delete();
 
