@@ -95,9 +95,15 @@ function MessageScrollerButton({
             )}
             render={
                 <Button
-                    variant="outline"
+                    variant="ghost"
                     size="icon"
-                    className="h-9 w-9 rounded-full border-ink/15 bg-canvas text-ink shadow-md hover:border-accent/40 hover:bg-canvas hover:text-accent"
+                    className={cn(
+                        'h-9 w-9 rounded-full border shadow-md',
+                        'border-ink/15 bg-white text-ink',
+                        'hover:border-accent/40 hover:bg-white hover:text-accent',
+                        'dark:border-white/15 dark:bg-zinc-800 dark:text-zinc-100',
+                        'dark:hover:border-accent/40 dark:hover:bg-zinc-800 dark:hover:text-accent',
+                    )}
                 />
             }
             {...props}
