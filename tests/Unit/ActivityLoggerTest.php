@@ -60,4 +60,35 @@ class ActivityLoggerTest extends TestCase
         $this->assertDatabaseCount('activity_logs', 1);
         $this->assertInstanceOf(ActivityLog::class, $log);
     }
+
+    public function test_settings_updated_truncates_long_description(): void
+    {
+        $user = User::factory()->create(['name' => 'Administrador FIBRON']);
+
+        $keys = [
+            'app_name',
+            'app_subtitle',
+            'notify_customer_on_transfer',
+            'auto_close_inactive_conversations_enabled',
+            'auto_close_inactive_conversations_minutes',
+            'survey_on_close_enabled',
+            'survey_on_close_survey_id',
+            'survey_on_inactivity_close_enabled',
+            'ooh_notify_interval_hours',
+            'auto_assign_conversations_enabled',
+            'auto_assign_strategy',
+            'auto_assign_online_only',
+            'auto_assign_max_open_per_agent',
+            'sla_first_response_minutes',
+            'open_conversation_alert_enabled',
+            'open_conversation_alert_hours',
+        ];
+
+        $log = $this->logger->settingsUpdated($user, $keys, 'system');
+
+        $this->assertSame(ActivityEvent::SettingsUpdated->value, $log->event);
+        $this->assertLessThanOrEqual(500, mb_strlen($log->description));
+        $this->assertStringContainsString('e mais 13', $log->description);
+        $this->assertSame($keys, $log->properties['keys']);
+    }
 }

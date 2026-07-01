@@ -438,7 +438,7 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                 type="button"
                 onClick={onClick}
                 className={cn(
-                    'group relative w-full border-b border-ink/[0.07] px-4 py-3 text-left text-ink transition',
+                    'group relative w-full border-b border-ink/[0.07] px-3.5 py-2.5 text-left text-ink transition',
                     selected ? 'bg-accent/[0.08]' : 'hover:bg-ink/[0.05]',
                 )}
             >
@@ -446,11 +446,11 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                     <span className="absolute inset-y-0 left-0 z-10 w-[3px] rounded-r-full bg-accent" />
                 )}
 
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-2.5">
                     <div className="relative mt-0.5 shrink-0">
                         <div
                             className={cn(
-                                'h-10 w-10 overflow-hidden rounded-full transition-colors',
+                                'h-9 w-9 overflow-hidden rounded-full transition-colors',
                                 selected
                                     ? 'bg-accent shadow-sm shadow-accent/30'
                                     : 'border border-accent/25 bg-accent/10',
@@ -458,7 +458,7 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                         >
                             <div
                                 className={cn(
-                                    'flex h-full w-full items-center justify-center text-xs font-semibold',
+                                    'flex h-full w-full items-center justify-center text-[10px] font-semibold',
                                     selected ? 'text-canvas' : 'text-accent',
                                 )}
                             >
@@ -467,7 +467,7 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                         </div>
                         <span
                             className={cn(
-                                'absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-canvas',
+                                'absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2 ring-canvas',
                                 conv.channel_type === 'telegram'
                                     ? 'bg-blue-500 text-white'
                                     : conv.channel_type === 'web'
@@ -487,39 +487,41 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                     </div>
 
                     <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-3">
-                            <span className="truncate font-medium">{conv.contact.name}</span>
-                            <span className="shrink-0 text-xs text-ink/40">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-medium text-ink/85">
+                                {conv.contact.name}
+                            </span>
+                            <span className="shrink-0 text-[10px] text-ink/35">
                                 {formatTime(conv.last_message_at) || formatRelativeDate(conv.last_message_at)}
                             </span>
                         </div>
-                        <div className="flex items-center gap-1 overflow-hidden text-sm text-ink/48">
+                        <div className="flex items-center gap-1 overflow-hidden text-xs text-ink/45">
                             {conv.survey_completed && (
-                                <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />
+                                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />
                             )}
                             <span className="truncate">{preview}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="mt-2 flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium leading-none">
+                <div className="mt-1.5 flex w-full flex-wrap items-center gap-x-1.5 gap-y-1 text-[9px] font-medium leading-none">
                     {conv.bot_only ? (
-                        <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-ink/15 bg-sky-400/12 px-2 font-semibold text-sky-700 dark:border-sky-400/35 dark:bg-sky-400/12 dark:text-sky-300">
-                            <Bot className="h-3 w-3" />
+                        <span className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full border border-ink/15 bg-sky-400/12 px-1.5 font-semibold text-sky-700 dark:border-sky-400/35 dark:bg-sky-400/12 dark:text-sky-300">
+                            <Bot className="h-2.5 w-2.5" />
                             Automação
                         </span>
                     ) : (
-                        <Badge variant="outline" className="h-5 shrink-0 px-2 py-0 text-[10px] leading-none">
+                        <Badge variant="outline" className="h-4 shrink-0 px-1.5 py-0 text-[9px] leading-none">
                             {conv.status ? (STATUS_LABEL[conv.status] ?? conv.status) : 'Encerrado'}
                         </Badge>
                     )}
 
                     {conv.sector && (
                         <span
-                            className="inline-flex h-5 max-w-[12rem] min-w-0 items-center gap-1 rounded-full bg-accent/[0.07] px-1.5 text-accent"
+                            className="inline-flex h-4 max-w-[10rem] min-w-0 items-center gap-1 rounded-full bg-accent/[0.07] px-1.5 text-accent"
                             title={conv.sector.name}
                         >
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/80" />
+                            <span className="h-1 w-1 shrink-0 rounded-full bg-accent/80" />
                             <span className="min-w-0 truncate">{conv.sector.name}</span>
                         </span>
                     )}
@@ -527,7 +529,7 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                     {conv.tags?.slice(0, 2).map((tag) => (
                         <span
                             key={tag.id}
-                            className={`inline-flex h-5 max-w-[8rem] min-w-0 items-center rounded-full border px-1.5 text-[10px] font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
+                            className={`inline-flex h-4 max-w-[7rem] min-w-0 items-center rounded-full border px-1.5 text-[9px] font-medium ${TAG_BADGE_CLASSES[tag.color] ?? TAG_BADGE_CLASSES.blue}`}
                             title={tag.name}
                         >
                             <span className="min-w-0 truncate">{tag.name}</span>
@@ -535,19 +537,19 @@ function ConvRow({ conv, selected, onClick }: { conv: ConvItem; selected: boolea
                     ))}
 
                     {(conv.tags?.length ?? 0) > 2 && (
-                        <span className="text-[10px] text-ink/35">+{conv.tags!.length - 2}</span>
+                        <span className="text-[9px] text-ink/35">+{conv.tags!.length - 2}</span>
                     )}
 
                     {conv.assigned_user && (
                         <span
-                            className="inline-flex h-5 max-w-[9rem] min-w-0 items-center gap-1 text-ink/50"
+                            className="inline-flex h-4 max-w-[8rem] min-w-0 items-center gap-1 text-ink/50"
                             title={conv.assigned_user.name}
                         >
                             <UserAvatar
                                 name={conv.assigned_user.name}
                                 photoUrl={conv.assigned_user.profile_photo_url}
                                 size="xs"
-                                className="h-4 w-4 text-[8px]"
+                                className="h-3.5 w-3.5 text-[7px]"
                             />
                             <span className="min-w-0 truncate">
                                 {conv.assigned_user.name.split(' ')[0]}

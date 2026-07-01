@@ -368,6 +368,18 @@ class ActivityLogger
     /** @param  list<string>  $keysChanged */
     public function settingsUpdated(User $actor, array $keysChanged, string $scope = 'general'): ActivityLog
     {
+        $scopeLabel = match ($scope) {
+            'system' => 'do sistema',
+            'integrations' => 'de integrações',
+            default => '',
+        };
+
+        $keysSummary = $this->summarizeSettingKeys($keysChanged);
+
+        $description = $scopeLabel !== ''
+            ? sprintf('%s alterou configurações %s (%s).', $actor->name, $scopeLabel, $keysSummary)
+            : sprintf('%s alterou configurações (%s).', $actor->name, $keysSummary);
+
         return $this->record(
             ActivityEvent::SettingsUpdated,
             $actor,
@@ -376,8 +388,26 @@ class ActivityLogger
                 'scope' => $scope,
                 'keys' => $keysChanged,
             ],
-            sprintf('%s alterou configurações (%s).', $actor->name, implode(', ', $keysChanged)),
+            $description,
         );
+    }
+
+    /** @param  list<string>  $keys */
+    private function summarizeSettingKeys(array $keys): string
+    {
+        $count = count($keys);
+
+        if ($count === 0) {
+            return 'nenhuma';
+        }
+
+        if ($count <= 3) {
+            return implode(', ', $keys);
+        }
+
+        $preview = implode(', ', array_slice($keys, 0, 3));
+
+        return sprintf('%s e mais %d', $preview, $count - 3);
     }
 
     /** @param  array<string, mixed>  $properties */
@@ -394,8 +424,17 @@ class ActivityLogger
             'subject_type' => $subject?->getMorphClass(),
             'subject_id' => $subject?->getKey(),
             'properties' => $properties,
-            'description' => $description,
+            'description' => $this->truncateDescription($description),
         ]);
+    }
+
+    private function truncateDescription(string $description, int $maxLength = 500): string
+    {
+        if (mb_strlen($description) <= $maxLength) {
+            return $description;
+        }
+
+        return mb_substr($description, 0, $maxLength - 3).'...';
     }
 
     /** @return array<string, mixed> */
